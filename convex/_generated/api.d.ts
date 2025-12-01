@@ -9,6 +9,8 @@
  */
 
 import type * as apiKeys from "../apiKeys.js";
+import type * as gateway from "../gateway.js";
+import type * as http from "../http.js";
 import type * as invites from "../invites.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as users from "../users.js";
@@ -30,6 +32,8 @@ import type {
  */
 declare const fullApi: ApiFromModules<{
   apiKeys: typeof apiKeys;
+  gateway: typeof gateway;
+  http: typeof http;
   invites: typeof invites;
   "lib/auth": typeof lib_auth;
   users: typeof users;

@@ -98,27 +98,42 @@ export default defineSchema({
   providers: defineTable({
     workspaceId: v.id("workspaces"),
     name: v.string(),
-    baseUrl: v.string(),
+    host: v.string(), // Domain host for matching (e.g., "api.novaai.com")
+    baseUrl: v.optional(v.string()),
     type: v.string(), // "openai", "anthropic", "custom", etc.
     isActive: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_workspaceId", ["workspaceId"])
-    .index("by_workspace_active", ["workspaceId", "isActive"]),
+    .index("by_workspace_active", ["workspaceId", "isActive"])
+    .index("by_workspace_host", ["workspaceId", "host"]),
 
   // Payment records
   payments: defineTable({
     workspaceId: v.id("workspaces"),
     apiKeyId: v.id("apiKeys"),
     providerId: v.optional(v.id("providers")),
-    amountMnee: v.number(), // Amount in milli-units
+    providerHost: v.string(), // Host derived from request URL
+    // x402 invoice details
+    invoiceId: v.string(),
+    originalAmount: v.number(), // Amount in original currency
+    originalCurrency: v.string(), // e.g., "USDC"
+    originalNetwork: v.string(), // e.g., "base"
+    payTo: v.string(), // Payment address
+    // MNEE conversion
+    mneeAmount: v.number(), // Amount in MNEE after FX conversion
+    fxRate: v.number(), // FX rate used for conversion
+    // Status and lifecycle
     status: v.union(
-      v.literal("pending"),
-      v.literal("completed"),
-      v.literal("failed"),
+      v.literal("allowed"), // Quote approved, ready for payment
+      v.literal("denied"), // Quote rejected by policy
+      v.literal("pending"), // Payment initiated
+      v.literal("completed"), // Payment successful
+      v.literal("failed"), // Payment failed
       v.literal("refunded")
     ),
+    denialReason: v.optional(v.string()), // Reason for denial (e.g., "AGENT_DAILY_LIMIT")
     txHash: v.optional(v.string()),
     metadata: v.optional(v.any()),
     createdAt: v.number(),
@@ -126,6 +141,7 @@ export default defineSchema({
   })
     .index("by_workspaceId", ["workspaceId"])
     .index("by_apiKeyId", ["apiKeyId"])
+    .index("by_invoiceId", ["invoiceId"])
     .index("by_workspace_status", ["workspaceId", "status"])
     .index("by_workspace_created", ["workspaceId", "createdAt"]),
 

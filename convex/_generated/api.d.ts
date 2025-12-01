@@ -8,7 +8,11 @@
  * @module
  */
 
-import type * as myFunctions from "../myFunctions.js";
+import type * as apiKeys from "../apiKeys.js";
+import type * as invites from "../invites.js";
+import type * as lib_auth from "../lib/auth.js";
+import type * as users from "../users.js";
+import type * as workspaces from "../workspaces.js";
 
 import type {
   ApiFromModules,
@@ -25,7 +29,11 @@ import type {
  * ```
  */
 declare const fullApi: ApiFromModules<{
-  myFunctions: typeof myFunctions;
+  apiKeys: typeof apiKeys;
+  invites: typeof invites;
+  "lib/auth": typeof lib_auth;
+  users: typeof users;
+  workspaces: typeof workspaces;
 }>;
 declare const fullApiWithMounts: typeof fullApi;
 

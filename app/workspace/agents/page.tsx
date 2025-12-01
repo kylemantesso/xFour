@@ -61,7 +61,7 @@ function AgentsContent() {
   const canWrite = role === "owner" || role === "admin" || role === "member";
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+    <div className="min-h-screen bg-[#0a0a0a]">
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Back link */}
         <BackToDashboard />
@@ -73,10 +73,10 @@ function AgentsContent() {
               <KeyIcon className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+              <h1 className="text-2xl font-bold text-white">
                 Agents & API Keys
               </h1>
-              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+              <p className="text-sm text-[#888] mt-1">
                 Create and manage API keys for your agents and SDKs
               </p>
             </div>
@@ -85,18 +85,18 @@ function AgentsContent() {
         </div>
 
         {/* Info Card */}
-        <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4 mb-6">
+        <div className="bg-[#111] border border-[#333] rounded-xl p-4 mb-6">
           <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center flex-shrink-0">
-              <svg className="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <div className="w-8 h-8 rounded-lg bg-[#1a1a1a] flex items-center justify-center flex-shrink-0">
+              <svg className="w-4 h-4 text-[#888]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
             <div>
-              <h3 className="text-sm font-medium text-emerald-900 dark:text-emerald-100">
+              <h3 className="text-sm font-medium text-white">
                 How API Keys Work
               </h3>
-              <p className="text-sm text-emerald-700 dark:text-emerald-300 mt-1">
+              <p className="text-sm text-[#888] mt-1">
                 API keys authenticate your agents when calling the x402 Gateway. Each key is shown only once when created — store it securely. You can disable or delete keys at any time.
               </p>
             </div>
@@ -104,9 +104,9 @@ function AgentsContent() {
         </div>
 
         {/* API Keys List */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+        <div className="bg-[#111] rounded-xl border border-[#333] overflow-hidden">
+          <div className="px-6 py-4 border-b border-[#333]">
+            <h2 className="text-lg font-semibold text-white">
               Your API Keys
             </h2>
           </div>
@@ -183,40 +183,39 @@ function CreateApiKeyButton() {
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors shadow-lg shadow-emerald-500/25"
+        className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-xl transition-colors"
       >
         <PlusIcon className="w-5 h-5" />
         Create API Key
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#111] border border-[#333] rounded-2xl p-6 w-full max-w-md shadow-2xl">
             {newApiKey ? (
-              // Success state - show the API key
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center">
-                    <CheckIcon className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                  <div className="w-12 h-12 rounded-xl bg-emerald-900/50 flex items-center justify-center">
+                    <CheckIcon className="w-6 h-6 text-emerald-400" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    <h3 className="text-lg font-semibold text-white">
                       API Key Created
                     </h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                    <p className="text-sm text-[#888]">
                       Copy your key now — you won't see it again!
                     </p>
                   </div>
                 </div>
 
-                <div className="bg-slate-100 dark:bg-slate-900 rounded-xl p-4">
+                <div className="bg-[#0a0a0a] border border-[#333] rounded-xl p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <code className="text-sm font-mono text-slate-800 dark:text-slate-200 break-all">
+                    <code className="text-sm font-mono text-white break-all">
                       {newApiKey}
                     </code>
                     <button
                       onClick={handleCopy}
-                      className="flex-shrink-0 p-2.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                      className="flex-shrink-0 p-2.5 text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors"
                       title="Copy to clipboard"
                     >
                       {copied ? (
@@ -228,8 +227,8 @@ function CreateApiKeyButton() {
                   </div>
                 </div>
 
-                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
-                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                <div className="bg-amber-900/20 border border-amber-800 rounded-xl p-4">
+                  <p className="text-sm text-amber-200">
                     <strong>Important:</strong> This is the only time you'll see this key. 
                     Store it securely — we only save a hash on our servers.
                   </p>
@@ -237,25 +236,24 @@ function CreateApiKeyButton() {
 
                 <button
                   onClick={handleClose}
-                  className="w-full px-4 py-3 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors"
+                  className="w-full px-4 py-3 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-xl transition-colors"
                 >
                   Done
                 </button>
               </div>
             ) : (
-              // Form state
               <form onSubmit={handleCreate} className="space-y-5">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
                     <KeyIcon className="w-6 h-6 text-white" />
                   </div>
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                  <h3 className="text-lg font-semibold text-white">
                     Create API Key
                   </h3>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  <label className="block text-sm font-medium text-[#888] mb-2">
                     Name <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -263,22 +261,22 @@ function CreateApiKeyButton() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g., dev-bot-1, production-agent"
-                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border border-[#333] rounded-xl bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
                     required
                     autoFocus
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Description <span className="text-slate-400">(optional)</span>
+                  <label className="block text-sm font-medium text-[#888] mb-2">
+                    Description <span className="text-[#666]">(optional)</span>
                   </label>
                   <input
                     type="text"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="What is this key used for?"
-                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border border-[#333] rounded-xl bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
                   />
                 </div>
 
@@ -286,14 +284,14 @@ function CreateApiKeyButton() {
                   <button
                     type="submit"
                     disabled={isCreating || !name.trim()}
-                    className="flex-1 px-4 py-3 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 px-4 py-3 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isCreating ? "Creating..." : "Create Key"}
                   </button>
                   <button
                     type="button"
                     onClick={handleClose}
-                    className="flex-1 px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
+                    className="flex-1 px-4 py-3 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-xl transition-colors"
                   >
                     Cancel
                   </button>
@@ -324,10 +322,10 @@ function ApiKeysList({
       <div className="space-y-4">
         {[1, 2].map((i) => (
           <div key={i} className="animate-pulse flex items-center gap-4 py-4">
-            <div className="w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded-xl" />
+            <div className="w-12 h-12 bg-[#1a1a1a] rounded-xl" />
             <div className="flex-1 space-y-2">
-              <div className="h-4 w-32 bg-slate-200 dark:bg-slate-700 rounded" />
-              <div className="h-3 w-48 bg-slate-200 dark:bg-slate-700 rounded" />
+              <div className="h-4 w-32 bg-[#1a1a1a] rounded" />
+              <div className="h-3 w-48 bg-[#1a1a1a] rounded" />
             </div>
           </div>
         ))}
@@ -338,13 +336,13 @@ function ApiKeysList({
   if (apiKeys.length === 0) {
     return (
       <div className="text-center py-12">
-        <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center mx-auto mb-4">
-          <KeyIcon className="w-8 h-8 text-slate-400" />
+        <div className="w-16 h-16 rounded-2xl bg-[#1a1a1a] flex items-center justify-center mx-auto mb-4">
+          <KeyIcon className="w-8 h-8 text-[#666]" />
         </div>
-        <p className="text-lg font-medium text-slate-900 dark:text-slate-100">
+        <p className="text-lg font-medium text-white">
           No API keys yet
         </p>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+        <p className="text-sm text-[#888] mt-1 max-w-sm mx-auto">
           Create your first API key to connect your agents and SDKs to the x402 Gateway
         </p>
       </div>
@@ -398,7 +396,7 @@ function ApiKeysList({
   };
 
   return (
-    <div className="divide-y divide-slate-200 dark:divide-slate-700">
+    <div className="divide-y divide-[#333]">
       {apiKeys.map((apiKey) => (
         <div
           key={apiKey._id}
@@ -410,52 +408,52 @@ function ApiKeysList({
             <div
               className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
                 apiKey.isActive
-                  ? "bg-emerald-100 dark:bg-emerald-900/50"
-                  : "bg-slate-100 dark:bg-slate-700"
+                  ? "bg-emerald-900/50"
+                  : "bg-[#1a1a1a]"
               }`}
             >
               <KeyIcon
                 className={`w-6 h-6 ${
                   apiKey.isActive
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : "text-slate-400"
+                    ? "text-emerald-400"
+                    : "text-[#666]"
                 }`}
               />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                <p className="text-sm font-semibold text-white">
                   {apiKey.name}
                 </p>
                 <span
                   className={`px-2 py-0.5 text-xs font-medium rounded-full ${
                     apiKey.isActive
-                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400"
-                      : "bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400"
+                      ? "bg-emerald-900/50 text-emerald-400"
+                      : "bg-[#1a1a1a] text-[#666]"
                   }`}
                 >
                   {apiKey.isActive ? "Active" : "Disabled"}
                 </span>
               </div>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <code className="text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded">
+                <code className="text-xs font-mono text-[#666] bg-[#1a1a1a] px-2 py-0.5 rounded">
                   {apiKey.apiKeyPrefix}
                 </code>
-                <span className="text-slate-300 dark:text-slate-600">•</span>
-                <span className="text-xs text-slate-500 dark:text-slate-400">
+                <span className="text-[#333]">•</span>
+                <span className="text-xs text-[#666]">
                   Created {formatDate(apiKey.createdAt)}
                 </span>
                 {apiKey.lastUsedAt && (
                   <>
-                    <span className="text-slate-300 dark:text-slate-600">•</span>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                    <span className="text-[#333]">•</span>
+                    <span className="text-xs text-[#666]">
                       Last used {formatRelativeTime(apiKey.lastUsedAt)}
                     </span>
                   </>
                 )}
               </div>
               {apiKey.description && (
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                <p className="text-xs text-[#666] mt-1">
                   {apiKey.description}
                 </p>
               )}
@@ -469,8 +467,8 @@ function ApiKeysList({
                 disabled={togglingId === apiKey._id}
                 className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 ${
                   apiKey.isActive
-                    ? "text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/30"
-                    : "text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
+                    ? "text-amber-400 hover:bg-amber-900/30"
+                    : "text-emerald-400 hover:bg-emerald-900/30"
                 }`}
               >
                 {togglingId === apiKey._id
@@ -482,7 +480,7 @@ function ApiKeysList({
               <button
                 onClick={() => handleDelete(apiKey)}
                 disabled={deletingId === apiKey._id}
-                className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                className="p-2 text-[#666] hover:text-red-400 rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-50"
                 title="Delete API key"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -504,25 +502,25 @@ function ApiKeysList({
 
 function LoadingSkeleton() {
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+    <div className="min-h-screen bg-[#0a0a0a]">
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="h-4 w-32 bg-slate-200 dark:bg-slate-700 rounded animate-pulse mb-6" />
+        <div className="h-4 w-32 bg-[#1a1a1a] rounded animate-pulse mb-6" />
         <div className="flex items-center gap-4 mb-8">
-          <div className="w-14 h-14 bg-slate-200 dark:bg-slate-700 rounded-2xl animate-pulse" />
+          <div className="w-14 h-14 bg-[#1a1a1a] rounded-2xl animate-pulse" />
           <div className="space-y-2">
-            <div className="h-6 w-48 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
-            <div className="h-4 w-64 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+            <div className="h-6 w-48 bg-[#1a1a1a] rounded animate-pulse" />
+            <div className="h-4 w-64 bg-[#1a1a1a] rounded animate-pulse" />
           </div>
         </div>
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6">
-          <div className="h-6 w-32 bg-slate-200 dark:bg-slate-700 rounded animate-pulse mb-6" />
+        <div className="bg-[#111] rounded-xl border border-[#333] p-6">
+          <div className="h-6 w-32 bg-[#1a1a1a] rounded animate-pulse mb-6" />
           <div className="space-y-4">
             {[1, 2].map((i) => (
               <div key={i} className="animate-pulse flex items-center gap-4">
-                <div className="w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded-xl" />
+                <div className="w-12 h-12 bg-[#1a1a1a] rounded-xl" />
                 <div className="flex-1 space-y-2">
-                  <div className="h-4 w-32 bg-slate-200 dark:bg-slate-700 rounded" />
-                  <div className="h-3 w-48 bg-slate-200 dark:bg-slate-700 rounded" />
+                  <div className="h-4 w-32 bg-[#1a1a1a] rounded" />
+                  <div className="h-3 w-48 bg-[#1a1a1a] rounded" />
                 </div>
               </div>
             ))}
@@ -532,4 +530,3 @@ function LoadingSkeleton() {
     </div>
   );
 }
-

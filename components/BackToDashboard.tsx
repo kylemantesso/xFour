@@ -14,12 +14,10 @@ export function BackToDashboard() {
   return (
     <Link
       href="/"
-      className="inline-flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 mb-6 transition-colors group"
+      className="inline-flex items-center gap-2 text-sm text-[#888] hover:text-white mb-6 transition-colors group"
     >
       <ArrowLeftIcon className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
       Back to Dashboard
     </Link>
   );
 }
-
-

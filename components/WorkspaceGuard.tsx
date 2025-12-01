@@ -68,20 +68,19 @@ export function WorkspaceGuard({ children }: WorkspaceGuardProps) {
 
 function LoadingState({ message }: { message: string }) {
   return (
-    <div className="min-h-[200px] flex flex-col items-center justify-center gap-4">
+    <div className="min-h-[200px] flex flex-col items-center justify-center gap-4 bg-[#0a0a0a]">
       <div className="flex items-center gap-2">
-        <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" />
+        <div className="w-2 h-2 bg-white/40 rounded-full animate-bounce" />
         <div
-          className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce"
+          className="w-2 h-2 bg-white/60 rounded-full animate-bounce"
           style={{ animationDelay: "0.1s" }}
         />
         <div
-          className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce"
+          className="w-2 h-2 bg-white/80 rounded-full animate-bounce"
           style={{ animationDelay: "0.2s" }}
         />
       </div>
-      <p className="text-sm text-slate-600 dark:text-slate-400">{message}</p>
+      <p className="text-sm text-[#888]">{message}</p>
     </div>
   );
 }
-

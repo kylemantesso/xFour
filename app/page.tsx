@@ -14,11 +14,11 @@ export default function Home() {
   // Show loading while Clerk is initializing
   if (!isLoaded) {
     return (
-      <main className="min-h-[calc(100vh-4rem)] flex items-center justify-center bg-slate-50 dark:bg-slate-900">
+      <main className="min-h-[calc(100vh-7rem)] flex items-center justify-center bg-[#0a0a0a]">
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" />
-          <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
-          <div className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
+          <div className="w-2 h-2 bg-white/40 rounded-full animate-bounce" />
+          <div className="w-2 h-2 bg-white/60 rounded-full animate-bounce" style={{ animationDelay: "0.1s" }} />
+          <div className="w-2 h-2 bg-white/80 rounded-full animate-bounce" style={{ animationDelay: "0.2s" }} />
         </div>
       </main>
     );
@@ -39,34 +39,34 @@ export default function Home() {
 
 function LandingPage() {
   return (
-    <main className="min-h-[calc(100vh-4rem)] bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950">
+    <main className="min-h-[calc(100vh-7rem)] bg-[#0a0a0a]">
       <div className="max-w-4xl mx-auto px-4 py-20">
         <div className="text-center space-y-6">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 rounded-full text-sm font-medium">
-            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-[#1a1a1a] border border-[#333] text-[#888] rounded-full text-sm font-medium">
+            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
             Now in Beta
           </div>
 
-          <h1 className="text-5xl md:text-6xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+          <h1 className="text-5xl md:text-6xl font-bold text-white tracking-tight">
             AI Payment Gateway
-            <span className="block text-indigo-600 dark:text-indigo-400">
+            <span className="block bg-gradient-to-r from-blue-400 to-violet-400 bg-clip-text text-transparent">
               for Agent Commerce
             </span>
           </h1>
 
-          <p className="text-xl text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
+          <p className="text-xl text-[#888] max-w-2xl mx-auto">
             Enable your AI agents to make payments, manage budgets, and transact
             autonomously with x402 Gateway.
           </p>
 
           <div className="flex items-center justify-center gap-4 pt-4">
             <SignUpButton mode="modal">
-              <button className="px-8 py-3 text-lg font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors shadow-lg shadow-indigo-500/25">
+              <button className="px-8 py-3 text-lg font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors">
                 Get Started Free
               </button>
             </SignUpButton>
             <SignInButton mode="modal">
-              <button className="px-8 py-3 text-lg font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-xl transition-colors border border-slate-300 dark:border-slate-600">
+              <button className="px-8 py-3 text-lg font-medium text-white hover:bg-[#1a1a1a] rounded-lg transition-colors border border-[#333]">
                 Sign In
               </button>
             </SignInButton>
@@ -106,12 +106,12 @@ function FeatureCard({
   description: string;
 }) {
   return (
-    <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+    <div className="bg-[#111] p-6 rounded-xl border border-[#333] hover:border-[#555] transition-colors">
       <div className="text-3xl mb-4">{icon}</div>
-      <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
+      <h3 className="text-lg font-semibold text-white mb-2">
         {title}
       </h3>
-      <p className="text-slate-600 dark:text-slate-400 text-sm">{description}</p>
+      <p className="text-[#888] text-sm">{description}</p>
     </div>
   );
 }
@@ -122,15 +122,15 @@ function Dashboard() {
 
   if (!userData) {
     return (
-      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center">
+      <div className="min-h-[calc(100vh-7rem)] flex items-center justify-center bg-[#0a0a0a]">
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" />
+          <div className="w-2 h-2 bg-white/40 rounded-full animate-bounce" />
           <div
-            className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce"
+            className="w-2 h-2 bg-white/60 rounded-full animate-bounce"
             style={{ animationDelay: "0.1s" }}
           />
           <div
-            className="w-2 h-2 bg-indigo-600 rounded-full animate-bounce"
+            className="w-2 h-2 bg-white/80 rounded-full animate-bounce"
             style={{ animationDelay: "0.2s" }}
           />
         </div>
@@ -142,30 +142,30 @@ function Dashboard() {
   const hasApiKeys = apiKeys && apiKeys.length > 0;
 
   return (
-    <main className="min-h-[calc(100vh-4rem)] bg-slate-50 dark:bg-slate-900">
+    <main className="min-h-[calc(100vh-7rem)] bg-[#0a0a0a]">
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Welcome Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+          <h1 className="text-2xl font-bold text-white">
             Welcome back
           </h1>
-          <p className="text-slate-600 dark:text-slate-400 mt-1">
+          <p className="text-[#888] mt-1">
             {currentWorkspace?.name || "Your Workspace"} Dashboard
           </p>
         </div>
 
         {/* API Keys Section */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden mb-8">
-          <div className="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <div className="bg-[#111] rounded-xl border border-[#333] overflow-hidden mb-8">
+          <div className="px-6 py-4 border-b border-[#333] flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
                 <KeyIcon className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                <h2 className="text-lg font-semibold text-white">
                   API Keys
                 </h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
+                <p className="text-sm text-[#666]">
                   {apiKeys === undefined ? "Loading..." : `${apiKeys.length} key${apiKeys.length !== 1 ? "s" : ""}`}
                 </p>
               </div>
@@ -174,7 +174,7 @@ function Dashboard() {
               <CreateApiKeyButton />
               <Link
                 href="/workspace/agents"
-                className="px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                className="px-3 py-2 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors"
               >
                 Manage all →
               </Link>
@@ -237,8 +237,8 @@ function Dashboard() {
 
         {/* Getting Started - only show if no API keys */}
         {!hasApiKeys && (
-          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 p-6">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">
+          <div className="bg-[#111] rounded-xl border border-[#333] p-6">
+            <h2 className="text-lg font-semibold text-white mb-4">
               Getting Started
             </h2>
             <div className="space-y-4">
@@ -364,39 +364,39 @@ function CreateApiKeyButton() {
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
+        className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors"
       >
         <PlusIcon className="w-4 h-4" />
         Create Key
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#111] border border-[#333] rounded-xl p-6 w-full max-w-md shadow-2xl">
             {newApiKey ? (
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center">
-                    <CheckIcon className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+                  <div className="w-12 h-12 rounded-lg bg-emerald-900/50 flex items-center justify-center">
+                    <CheckIcon className="w-6 h-6 text-emerald-400" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    <h3 className="text-lg font-semibold text-white">
                       API Key Created
                     </h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                    <p className="text-sm text-[#888]">
                       Copy your key now — you won't see it again!
                     </p>
                   </div>
                 </div>
 
-                <div className="bg-slate-100 dark:bg-slate-900 rounded-xl p-4">
+                <div className="bg-[#0a0a0a] border border-[#333] rounded-lg p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <code className="text-sm font-mono text-slate-800 dark:text-slate-200 break-all">
+                    <code className="text-sm font-mono text-white break-all">
                       {newApiKey}
                     </code>
                     <button
                       onClick={handleCopy}
-                      className="flex-shrink-0 p-2.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                      className="flex-shrink-0 p-2.5 text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors"
                       title="Copy to clipboard"
                     >
                       {copied ? (
@@ -408,8 +408,8 @@ function CreateApiKeyButton() {
                   </div>
                 </div>
 
-                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-4">
-                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                <div className="bg-amber-900/20 border border-amber-800 rounded-lg p-4">
+                  <p className="text-sm text-amber-200">
                     <strong>Important:</strong> This is the only time you'll see this key. 
                     Store it securely — we only save a hash on our servers.
                   </p>
@@ -417,7 +417,7 @@ function CreateApiKeyButton() {
 
                 <button
                   onClick={handleClose}
-                  className="w-full px-4 py-3 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors"
+                  className="w-full px-4 py-3 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors"
                 >
                   Done
                 </button>
@@ -425,16 +425,16 @@ function CreateApiKeyButton() {
             ) : (
               <form onSubmit={handleCreate} className="space-y-5">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
                     <KeyIcon className="w-6 h-6 text-white" />
                   </div>
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                  <h3 className="text-lg font-semibold text-white">
                     Create API Key
                   </h3>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  <label className="block text-sm font-medium text-[#888] mb-2">
                     Name <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -442,22 +442,22 @@ function CreateApiKeyButton() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g., dev-bot-1, production-agent"
-                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
                     required
                     autoFocus
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Description <span className="text-slate-400">(optional)</span>
+                  <label className="block text-sm font-medium text-[#888] mb-2">
+                    Description <span className="text-[#666]">(optional)</span>
                   </label>
                   <input
                     type="text"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="What is this key used for?"
-                    className="w-full px-4 py-3 border border-slate-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    className="w-full px-4 py-3 border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
                   />
                 </div>
 
@@ -465,14 +465,14 @@ function CreateApiKeyButton() {
                   <button
                     type="submit"
                     disabled={isCreating || !name.trim()}
-                    className="flex-1 px-4 py-3 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 px-4 py-3 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isCreating ? "Creating..." : "Create Key"}
                   </button>
                   <button
                     type="button"
                     onClick={handleClose}
-                    className="flex-1 px-4 py-3 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition-colors"
+                    className="flex-1 px-4 py-3 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors"
                   >
                     Cancel
                   </button>
@@ -492,10 +492,10 @@ function DashboardApiKeysList({ apiKeys }: { apiKeys: ApiKeyData[] | undefined }
       <div className="space-y-3">
         {[1, 2].map((i) => (
           <div key={i} className="animate-pulse flex items-center gap-4 py-3">
-            <div className="w-10 h-10 bg-slate-200 dark:bg-slate-700 rounded-lg" />
+            <div className="w-10 h-10 bg-[#1a1a1a] rounded-lg" />
             <div className="flex-1 space-y-2">
-              <div className="h-4 w-32 bg-slate-200 dark:bg-slate-700 rounded" />
-              <div className="h-3 w-24 bg-slate-200 dark:bg-slate-700 rounded" />
+              <div className="h-4 w-32 bg-[#1a1a1a] rounded" />
+              <div className="h-3 w-24 bg-[#1a1a1a] rounded" />
             </div>
           </div>
         ))}
@@ -506,13 +506,13 @@ function DashboardApiKeysList({ apiKeys }: { apiKeys: ApiKeyData[] | undefined }
   if (apiKeys.length === 0) {
     return (
       <div className="text-center py-8">
-        <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center mx-auto mb-3">
-          <KeyIcon className="w-6 h-6 text-slate-400" />
+        <div className="w-12 h-12 rounded-xl bg-[#1a1a1a] flex items-center justify-center mx-auto mb-3">
+          <KeyIcon className="w-6 h-6 text-[#666]" />
         </div>
-        <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+        <p className="text-sm font-medium text-white">
           No API keys yet
         </p>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+        <p className="text-xs text-[#666] mt-1">
           Create an API key to connect your agents and SDKs
         </p>
       </div>
@@ -546,7 +546,7 @@ function DashboardApiKeysList({ apiKeys }: { apiKeys: ApiKeyData[] | undefined }
   const remainingCount = apiKeys.length - 3;
 
   return (
-    <div className="divide-y divide-slate-200 dark:divide-slate-700">
+    <div className="divide-y divide-[#333]">
       {displayedKeys.map((apiKey) => (
         <div
           key={apiKey._id}
@@ -558,41 +558,41 @@ function DashboardApiKeysList({ apiKeys }: { apiKeys: ApiKeyData[] | undefined }
             <div
               className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
                 apiKey.isActive
-                  ? "bg-emerald-100 dark:bg-emerald-900/50"
-                  : "bg-slate-100 dark:bg-slate-700"
+                  ? "bg-emerald-900/50"
+                  : "bg-[#1a1a1a]"
               }`}
             >
               <KeyIcon
                 className={`w-5 h-5 ${
                   apiKey.isActive
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : "text-slate-400"
+                    ? "text-emerald-400"
+                    : "text-[#666]"
                 }`}
               />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                <p className="text-sm font-medium text-white truncate">
                   {apiKey.name}
                 </p>
                 <span
                   className={`px-2 py-0.5 text-xs font-medium rounded-full ${
                     apiKey.isActive
-                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400"
-                      : "bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400"
+                      ? "bg-emerald-900/50 text-emerald-400"
+                      : "bg-[#1a1a1a] text-[#666]"
                   }`}
                 >
                   {apiKey.isActive ? "Active" : "Disabled"}
                 </span>
               </div>
               <div className="flex items-center gap-2 mt-0.5">
-                <code className="text-xs font-mono text-slate-500 dark:text-slate-400">
+                <code className="text-xs font-mono text-[#666]">
                   {apiKey.apiKeyPrefix}
                 </code>
                 {apiKey.lastUsedAt && (
                   <>
-                    <span className="text-slate-300 dark:text-slate-600">•</span>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                    <span className="text-[#333]">•</span>
+                    <span className="text-xs text-[#666]">
                       Last used {formatRelativeTime(apiKey.lastUsedAt)}
                     </span>
                   </>
@@ -606,7 +606,7 @@ function DashboardApiKeysList({ apiKeys }: { apiKeys: ApiKeyData[] | undefined }
         <div className="pt-4 text-center">
           <Link
             href="/workspace/agents"
-            className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 font-medium"
+            className="text-sm text-white hover:text-[#888] font-medium"
           >
             +{remainingCount} more key{remainingCount !== 1 ? "s" : ""}
           </Link>
@@ -630,15 +630,15 @@ function QuickActionCard({
   return (
     <Link
       href={href}
-      className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-600 shadow-sm hover:shadow-md transition-all group"
+      className="bg-[#111] p-6 rounded-xl border border-[#333] hover:border-[#555] transition-all group"
     >
-      <div className="w-12 h-12 rounded-xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+      <div className="w-12 h-12 rounded-lg bg-[#1a1a1a] text-[#888] group-hover:text-white flex items-center justify-center mb-4 group-hover:scale-110 transition-all">
         {icon}
       </div>
-      <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-1">
+      <h3 className="text-lg font-semibold text-white mb-1">
         {title}
       </h3>
-      <p className="text-sm text-slate-600 dark:text-slate-400">{description}</p>
+      <p className="text-sm text-[#888]">{description}</p>
     </Link>
   );
 }
@@ -659,8 +659,8 @@ function StepItem({
       <div
         className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
           completed
-            ? "bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400"
-            : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400"
+            ? "bg-emerald-900/50 text-emerald-400"
+            : "bg-[#1a1a1a] text-[#888]"
         }`}
       >
         {completed ? (
@@ -676,10 +676,10 @@ function StepItem({
         )}
       </div>
       <div>
-        <h4 className="text-sm font-medium text-slate-900 dark:text-slate-100">
+        <h4 className="text-sm font-medium text-white">
           {title}
         </h4>
-        <p className="text-sm text-slate-600 dark:text-slate-400">{description}</p>
+        <p className="text-sm text-[#888]">{description}</p>
       </div>
     </div>
   );

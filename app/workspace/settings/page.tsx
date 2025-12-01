@@ -104,40 +104,39 @@ function CreateApiKeyButton() {
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
+        className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors"
       >
         <PlusIcon className="w-4 h-4" />
         Create API Key
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-[#111] border border-[#333] rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
             {newApiKey ? (
-              // Success state - show the API key
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center">
-                    <CheckIcon className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  <div className="w-10 h-10 rounded-lg bg-emerald-900/50 flex items-center justify-center">
+                    <CheckIcon className="w-5 h-5 text-emerald-400" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                    <h3 className="text-lg font-semibold text-white">
                       API Key Created
                     </h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                    <p className="text-sm text-[#888]">
                       Copy your key now — you won't see it again!
                     </p>
                   </div>
                 </div>
 
-                <div className="bg-slate-100 dark:bg-slate-900 rounded-lg p-4">
+                <div className="bg-[#0a0a0a] border border-[#333] rounded-lg p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <code className="text-sm font-mono text-slate-800 dark:text-slate-200 break-all">
+                    <code className="text-sm font-mono text-white break-all">
                       {newApiKey}
                     </code>
                     <button
                       onClick={handleCopy}
-                      className="flex-shrink-0 p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                      className="flex-shrink-0 p-2 text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors"
                       title="Copy to clipboard"
                     >
                       {copied ? (
@@ -149,8 +148,8 @@ function CreateApiKeyButton() {
                   </div>
                 </div>
 
-                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                <div className="bg-amber-900/20 border border-amber-800 rounded-lg p-3">
+                  <p className="text-sm text-amber-200">
                     <strong>Important:</strong> This is the only time you'll see this key. 
                     Store it securely — we only save a hash on our servers.
                   </p>
@@ -158,25 +157,24 @@ function CreateApiKeyButton() {
 
                 <button
                   onClick={handleClose}
-                  className="w-full px-4 py-2.5 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors"
+                  className="w-full px-4 py-2.5 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors"
                 >
                   Done
                 </button>
               </div>
             ) : (
-              // Form state
               <form onSubmit={handleCreate} className="space-y-4">
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
                     <KeyIcon className="w-5 h-5 text-white" />
                   </div>
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                  <h3 className="text-lg font-semibold text-white">
                     Create API Key
                   </h3>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  <label className="block text-sm font-medium text-[#888] mb-1">
                     Name <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -184,22 +182,22 @@ function CreateApiKeyButton() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g., dev-bot-1, production-agent"
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
                     required
                     autoFocus
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Description <span className="text-slate-400">(optional)</span>
+                  <label className="block text-sm font-medium text-[#888] mb-1">
+                    Description <span className="text-[#666]">(optional)</span>
                   </label>
                   <input
                     type="text"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="What is this key used for?"
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
                   />
                 </div>
 
@@ -207,14 +205,14 @@ function CreateApiKeyButton() {
                   <button
                     type="submit"
                     disabled={isCreating || !name.trim()}
-                    className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="flex-1 px-4 py-2.5 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isCreating ? "Creating..." : "Create Key"}
                   </button>
                   <button
                     type="button"
                     onClick={handleClose}
-                    className="flex-1 px-4 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                    className="flex-1 px-4 py-2.5 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors"
                   >
                     Cancel
                   </button>
@@ -245,10 +243,10 @@ function ApiKeysList({
       <div className="space-y-3">
         {[1, 2].map((i) => (
           <div key={i} className="animate-pulse flex items-center gap-4 py-3">
-            <div className="w-10 h-10 bg-slate-200 dark:bg-slate-700 rounded-lg" />
+            <div className="w-10 h-10 bg-[#1a1a1a] rounded-lg" />
             <div className="flex-1 space-y-2">
-              <div className="h-4 w-32 bg-slate-200 dark:bg-slate-700 rounded" />
-              <div className="h-3 w-24 bg-slate-200 dark:bg-slate-700 rounded" />
+              <div className="h-4 w-32 bg-[#1a1a1a] rounded" />
+              <div className="h-3 w-24 bg-[#1a1a1a] rounded" />
             </div>
           </div>
         ))}
@@ -259,13 +257,13 @@ function ApiKeysList({
   if (apiKeys.length === 0) {
     return (
       <div className="text-center py-8">
-        <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center mx-auto mb-3">
-          <KeyIcon className="w-6 h-6 text-slate-400" />
+        <div className="w-12 h-12 rounded-xl bg-[#1a1a1a] flex items-center justify-center mx-auto mb-3">
+          <KeyIcon className="w-6 h-6 text-[#666]" />
         </div>
-        <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+        <p className="text-sm font-medium text-white">
           No API keys yet
         </p>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+        <p className="text-xs text-[#666] mt-1">
           Create an API key to connect your agents and SDKs
         </p>
       </div>
@@ -319,7 +317,7 @@ function ApiKeysList({
   };
 
   return (
-    <div className="divide-y divide-slate-200 dark:divide-slate-700">
+    <div className="divide-y divide-[#333]">
       {apiKeys.map((apiKey) => (
         <div
           key={apiKey._id}
@@ -331,45 +329,45 @@ function ApiKeysList({
             <div
               className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
                 apiKey.isActive
-                  ? "bg-emerald-100 dark:bg-emerald-900/50"
-                  : "bg-slate-100 dark:bg-slate-700"
+                  ? "bg-emerald-900/50"
+                  : "bg-[#1a1a1a]"
               }`}
             >
               <KeyIcon
                 className={`w-5 h-5 ${
                   apiKey.isActive
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : "text-slate-400"
+                    ? "text-emerald-400"
+                    : "text-[#666]"
                 }`}
               />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                <p className="text-sm font-medium text-white truncate">
                   {apiKey.name}
                 </p>
                 <span
                   className={`px-2 py-0.5 text-xs font-medium rounded-full ${
                     apiKey.isActive
-                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-400"
-                      : "bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400"
+                      ? "bg-emerald-900/50 text-emerald-400"
+                      : "bg-[#1a1a1a] text-[#666]"
                   }`}
                 >
                   {apiKey.isActive ? "Active" : "Disabled"}
                 </span>
               </div>
               <div className="flex items-center gap-2 mt-0.5">
-                <code className="text-xs font-mono text-slate-500 dark:text-slate-400">
+                <code className="text-xs font-mono text-[#666]">
                   {apiKey.apiKeyPrefix}
                 </code>
-                <span className="text-slate-300 dark:text-slate-600">•</span>
-                <span className="text-xs text-slate-500 dark:text-slate-400">
+                <span className="text-[#333]">•</span>
+                <span className="text-xs text-[#666]">
                   Created {formatDate(apiKey.createdAt)}
                 </span>
                 {apiKey.lastUsedAt && (
                   <>
-                    <span className="text-slate-300 dark:text-slate-600">•</span>
-                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                    <span className="text-[#333]">•</span>
+                    <span className="text-xs text-[#666]">
                       Last used {formatRelativeTime(apiKey.lastUsedAt)}
                     </span>
                   </>
@@ -385,8 +383,8 @@ function ApiKeysList({
                 disabled={togglingId === apiKey._id}
                 className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 ${
                   apiKey.isActive
-                    ? "text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/30"
-                    : "text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
+                    ? "text-amber-400 hover:bg-amber-900/30"
+                    : "text-emerald-400 hover:bg-emerald-900/30"
                 }`}
               >
                 {togglingId === apiKey._id
@@ -398,7 +396,7 @@ function ApiKeysList({
               <button
                 onClick={() => handleDelete(apiKey)}
                 disabled={deletingId === apiKey._id}
-                className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                className="p-1.5 text-[#666] hover:text-red-400 rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-50"
                 title="Delete API key"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -441,41 +439,41 @@ function WorkspaceSettings() {
   const canWrite = role === "owner" || role === "admin" || role === "member";
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+    <div className="min-h-screen bg-[#0a0a0a]">
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Back link */}
         <BackToDashboard />
 
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+          <h1 className="text-2xl font-bold text-white">
             Workspace Settings
           </h1>
-          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+          <p className="text-sm text-[#888] mt-1">
             Manage your workspace configuration and team members
           </p>
         </div>
 
         {/* General Settings */}
-        <section className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 mb-6">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">
+        <section className="bg-[#111] rounded-xl border border-[#333] p-6 mb-6">
+          <h2 className="text-lg font-semibold text-white mb-4">
             General
           </h2>
           <WorkspaceNameEditor workspace={workspace} isAdmin={isAdmin} />
         </section>
 
         {/* Agents & API Keys Section */}
-        <section className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 mb-6">
+        <section className="bg-[#111] rounded-xl border border-[#333] p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
                 <KeyIcon className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+                <h2 className="text-lg font-semibold text-white">
                   Agents & API Keys
                 </h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
+                <p className="text-sm text-[#888]">
                   Manage API keys for your agents and SDKs
                 </p>
               </div>
@@ -486,9 +484,9 @@ function WorkspaceSettings() {
         </section>
 
         {/* Members Section */}
-        <section className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 mb-6">
+        <section className="bg-[#111] rounded-xl border border-[#333] p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+            <h2 className="text-lg font-semibold text-white">
               Members ({members.length})
             </h2>
             {isAdmin && <InviteMemberButton />}
@@ -498,8 +496,8 @@ function WorkspaceSettings() {
 
         {/* Pending Invites */}
         {isAdmin && invites && invites.length > 0 && (
-          <section className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 mb-6">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">
+          <section className="bg-[#111] rounded-xl border border-[#333] p-6 mb-6">
+            <h2 className="text-lg font-semibold text-white mb-4">
               Pending Invites ({invites.filter((i) => i.status === "pending").length})
             </h2>
             <InvitesList invites={invites} />
@@ -508,8 +506,8 @@ function WorkspaceSettings() {
 
         {/* Danger Zone */}
         {role === "owner" && (
-          <section className="bg-white dark:bg-slate-800 rounded-xl border border-red-200 dark:border-red-900 p-6">
-            <h2 className="text-lg font-semibold text-red-600 dark:text-red-400 mb-4">
+          <section className="bg-[#111] rounded-xl border border-red-900 p-6">
+            <h2 className="text-lg font-semibold text-red-400 mb-4">
               Danger Zone
             </h2>
             <DeleteWorkspaceButton workspaceId={workspace._id} workspaceName={workspace.name} />
@@ -540,7 +538,7 @@ function WorkspaceNameEditor({
 
   return (
     <div className="flex items-center gap-4">
-      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xl font-bold">
+      <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-pink-500 to-violet-600 flex items-center justify-center text-white text-xl font-bold">
         {workspace.name.charAt(0).toUpperCase()}
       </div>
       <div className="flex-1">
@@ -550,12 +548,12 @@ function WorkspaceNameEditor({
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white focus:outline-none focus:border-[#555]"
               autoFocus
             />
             <button
               onClick={handleSave}
-              className="px-3 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg"
+              className="px-3 py-2 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg"
             >
               Save
             </button>
@@ -564,20 +562,20 @@ function WorkspaceNameEditor({
                 setName(workspace.name);
                 setIsEditing(false);
               }}
-              className="px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
+              className="px-3 py-2 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg"
             >
               Cancel
             </button>
           </div>
         ) : (
           <div className="flex items-center gap-2">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
+            <h3 className="text-lg font-semibold text-white">
               {workspace.name}
             </h3>
             {isAdmin && (
               <button
                 onClick={() => setIsEditing(true)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700"
+                className="p-1.5 text-[#666] hover:text-white rounded-lg hover:bg-[#1a1a1a]"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
@@ -592,7 +590,7 @@ function WorkspaceNameEditor({
           </div>
         )}
         {workspace.slug && (
-          <p className="text-sm text-slate-500 dark:text-slate-400">
+          <p className="text-sm text-[#666]">
             Slug: {workspace.slug}
           </p>
         )}
@@ -614,7 +612,6 @@ function MembersList({
   }>;
   currentRole: string;
 }) {
-  const updateRole = useMutation(api.workspaces.updateMemberRole);
   const removeMember = useMutation(api.workspaces.removeMember);
   const [removingId, setRemovingId] = useState<Id<"workspaceMembers"> | null>(null);
 
@@ -627,28 +624,28 @@ function MembersList({
   };
 
   const roleColors: Record<string, string> = {
-    owner: "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400",
-    admin: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-400",
-    member: "bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300",
-    viewer: "bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400",
+    owner: "bg-amber-900/50 text-amber-400",
+    admin: "bg-[#1a1a1a] text-white",
+    member: "bg-[#1a1a1a] text-[#888]",
+    viewer: "bg-[#1a1a1a] text-[#666]",
   };
 
   return (
-    <div className="divide-y divide-slate-200 dark:divide-slate-700">
+    <div className="divide-y divide-[#333]">
       {members.map((member) => (
         <div
           key={member._id}
           className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
         >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 font-medium">
+            <div className="w-10 h-10 rounded-full bg-[#1a1a1a] flex items-center justify-center text-[#888] font-medium">
               {member.name?.charAt(0).toUpperCase() || member.email.charAt(0).toUpperCase()}
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+              <p className="text-sm font-medium text-white">
                 {member.name || member.email}
               </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">{member.email}</p>
+              <p className="text-xs text-[#666]">{member.email}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -661,7 +658,7 @@ function MembersList({
               <button
                 onClick={() => handleRemove(member._id)}
                 disabled={removingId === member._id}
-                className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50"
+                className="p-1.5 text-[#666] hover:text-red-400 rounded-lg hover:bg-[#1a1a1a] disabled:opacity-50"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
@@ -692,7 +689,6 @@ function InviteMemberButton() {
     if (!email.trim()) return;
 
     const result = await createInvite({ email: email.trim(), role });
-    // Generate invite link (in a real app, you'd send this via email)
     const link = `${window.location.origin}/invite/${result.token}`;
     setInviteLink(link);
     setEmail("");
@@ -708,7 +704,7 @@ function InviteMemberButton() {
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg"
+        className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg"
       >
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path
@@ -722,15 +718,15 @@ function InviteMemberButton() {
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-6 w-full max-w-md mx-4">
-            <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-4">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-[#111] border border-[#333] rounded-xl p-6 w-full max-w-md mx-4">
+            <h3 className="text-lg font-semibold text-white mb-4">
               Invite Team Member
             </h3>
 
             {inviteLink ? (
               <div className="space-y-4">
-                <p className="text-sm text-slate-600 dark:text-slate-400">
+                <p className="text-sm text-[#888]">
                   Share this invite link with your team member:
                 </p>
                 <div className="flex items-center gap-2">
@@ -738,11 +734,11 @@ function InviteMemberButton() {
                     type="text"
                     value={inviteLink}
                     readOnly
-                    className="flex-1 px-3 py-2 text-sm border border-slate-300 dark:border-slate-600 rounded-lg bg-slate-50 dark:bg-slate-700 text-slate-900 dark:text-slate-100"
+                    className="flex-1 px-3 py-2 text-sm border border-[#333] rounded-lg bg-[#0a0a0a] text-white"
                   />
                   <button
                     onClick={handleCopyLink}
-                    className="px-3 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg"
+                    className="px-3 py-2 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg"
                   >
                     Copy
                   </button>
@@ -752,7 +748,7 @@ function InviteMemberButton() {
                     setIsOpen(false);
                     setInviteLink(null);
                   }}
-                  className="w-full px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
+                  className="w-full px-4 py-2 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg"
                 >
                   Done
                 </button>
@@ -760,7 +756,7 @@ function InviteMemberButton() {
             ) : (
               <form onSubmit={handleInvite} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  <label className="block text-sm font-medium text-[#888] mb-1">
                     Email
                   </label>
                   <input
@@ -768,18 +764,18 @@ function InviteMemberButton() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="teammate@example.com"
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
                     required
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  <label className="block text-sm font-medium text-[#888] mb-1">
                     Role
                   </label>
                   <select
                     value={role}
                     onChange={(e) => setRole(e.target.value as "admin" | "member" | "viewer")}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white focus:outline-none focus:border-[#555]"
                   >
                     <option value="admin">Admin - Can manage settings and members</option>
                     <option value="member">Member - Can view and use the workspace</option>
@@ -789,14 +785,14 @@ function InviteMemberButton() {
                 <div className="flex gap-2">
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg"
+                    className="flex-1 px-4 py-2 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg"
                   >
                     Send Invite
                   </button>
                   <button
                     type="button"
                     onClick={() => setIsOpen(false)}
-                    className="flex-1 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
+                    className="flex-1 px-4 py-2 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg"
                   >
                     Cancel
                   </button>
@@ -828,28 +824,28 @@ function InvitesList({
 
   if (pendingInvites.length === 0) {
     return (
-      <p className="text-sm text-slate-500 dark:text-slate-400">No pending invites</p>
+      <p className="text-sm text-[#666]">No pending invites</p>
     );
   }
 
   return (
-    <div className="divide-y divide-slate-200 dark:divide-slate-700">
+    <div className="divide-y divide-[#333]">
       {pendingInvites.map((invite) => (
         <div
           key={invite._id}
           className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
         >
           <div>
-            <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+            <p className="text-sm font-medium text-white">
               {invite.email}
             </p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <p className="text-xs text-[#666]">
               Invited as {invite.role} • {new Date(invite.createdAt).toLocaleDateString()}
             </p>
           </div>
           <button
             onClick={() => revokeInvite({ inviteId: invite._id })}
-            className="px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg"
+            className="px-3 py-1 text-xs font-medium text-red-400 hover:bg-red-900/30 rounded-lg"
           >
             Revoke
           </button>
@@ -879,19 +875,19 @@ function DeleteWorkspaceButton({
 
   return (
     <div>
-      <p className="text-sm text-slate-600 dark:text-slate-400 mb-3">
+      <p className="text-sm text-[#888] mb-3">
         Once you delete a workspace, there is no going back. All data will be permanently deleted.
       </p>
       {isConfirming ? (
         <div className="space-y-3">
-          <p className="text-sm text-red-600 dark:text-red-400">
+          <p className="text-sm text-red-400">
             Type <strong>{workspaceName}</strong> to confirm:
           </p>
           <input
             type="text"
             value={confirmText}
             onChange={(e) => setConfirmText(e.target.value)}
-            className="w-full px-3 py-2 border border-red-300 dark:border-red-900 rounded-lg bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full px-3 py-2 border border-red-900 rounded-lg bg-[#0a0a0a] text-white focus:outline-none focus:border-red-700"
             placeholder={workspaceName}
           />
           <div className="flex gap-2">
@@ -907,7 +903,7 @@ function DeleteWorkspaceButton({
                 setIsConfirming(false);
                 setConfirmText("");
               }}
-              className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg"
+              className="px-4 py-2 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg"
             >
               Cancel
             </button>
@@ -916,7 +912,7 @@ function DeleteWorkspaceButton({
       ) : (
         <button
           onClick={() => setIsConfirming(true)}
-          className="px-4 py-2 text-sm font-medium text-red-600 border border-red-300 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-900/30 rounded-lg"
+          className="px-4 py-2 text-sm font-medium text-red-400 border border-red-900 hover:bg-red-900/30 rounded-lg"
         >
           Delete this workspace
         </button>
@@ -927,18 +923,17 @@ function DeleteWorkspaceButton({
 
 function LoadingSkeleton() {
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
+    <div className="min-h-screen bg-[#0a0a0a]">
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="h-8 w-48 bg-slate-200 dark:bg-slate-700 rounded-lg animate-pulse mb-8" />
-        <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-6 mb-6">
-          <div className="h-6 w-24 bg-slate-200 dark:bg-slate-700 rounded animate-pulse mb-4" />
+        <div className="h-8 w-48 bg-[#1a1a1a] rounded-lg animate-pulse mb-8" />
+        <div className="bg-[#111] rounded-xl border border-[#333] p-6 mb-6">
+          <div className="h-6 w-24 bg-[#1a1a1a] rounded animate-pulse mb-4" />
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-slate-200 dark:bg-slate-700 rounded-xl animate-pulse" />
-            <div className="h-6 w-32 bg-slate-200 dark:bg-slate-700 rounded animate-pulse" />
+            <div className="w-12 h-12 bg-[#1a1a1a] rounded-xl animate-pulse" />
+            <div className="h-6 w-32 bg-[#1a1a1a] rounded animate-pulse" />
           </div>
         </div>
       </div>
     </div>
   );
 }
-

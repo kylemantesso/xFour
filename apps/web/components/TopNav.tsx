@@ -14,13 +14,14 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
 
-const navItems = [
+const navItems: { label: string; href: string; highlight?: boolean }[] = [
   { label: "Overview", href: "/" },
   { label: "Agents", href: "/workspace/agents" },
   { label: "Treasury", href: "/workspace/treasury" },
   { label: "Activity", href: "/workspace/activity" },
   { label: "Usage", href: "/workspace/usage" },
   { label: "Settings", href: "/workspace/settings" },
+  { label: "SDK Demo", href: "/sdk-demo", highlight: true },
 ];
 
 export function TopNav() {
@@ -118,10 +119,17 @@ function NavTabs() {
             className={`relative px-3 py-3 text-sm transition-colors whitespace-nowrap ${
               isActive
                 ? "text-white"
+                : item.highlight
+                ? "text-violet-400 hover:text-violet-300"
                 : "text-[#888] hover:text-white"
             }`}
           >
             {item.label}
+            {item.highlight && !isActive && (
+              <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-medium bg-violet-600 text-white rounded">
+                NEW
+              </span>
+            )}
             {isActive && (
               <span className="absolute bottom-0 left-0 right-0 h-px bg-white" />
             )}

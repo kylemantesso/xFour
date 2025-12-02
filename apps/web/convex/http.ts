@@ -57,6 +57,9 @@ interface PayResponseOk {
   paymentId: string;
   invoiceId: string;
   mneeAmount: number;
+  // Additional fields for on-chain settlement
+  workspaceId: string;
+  payTo: string;
 }
 
 interface PayResponseError {
@@ -405,6 +408,8 @@ const payAction = httpAction(async (ctx, request) => {
       paymentId: paymentId,
       invoiceId: payment.invoiceId,
       mneeAmount: payment.mneeAmount,
+      workspaceId: workspaceId.toString(),
+      payTo: payment.payTo,
     };
     return jsonResponse(response);
   }
@@ -434,6 +439,8 @@ const payAction = httpAction(async (ctx, request) => {
     paymentId: paymentId,
     invoiceId: payment.invoiceId,
     mneeAmount: payment.mneeAmount,
+    workspaceId: workspaceId.toString(),
+    payTo: payment.payTo,
   };
   return jsonResponse(response);
 });

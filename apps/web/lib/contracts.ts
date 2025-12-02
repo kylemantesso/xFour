@@ -53,6 +53,17 @@ export const treasuryAbi = [
     outputs: [],
   },
   {
+    name: "debit",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "workspaceKey", type: "bytes32" },
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
     name: "balances",
     type: "function",
     stateMutability: "view",
@@ -68,6 +79,13 @@ export const treasuryAbi = [
   },
   {
     name: "token",
+    type: "function",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+  },
+  {
+    name: "owner",
     type: "function",
     stateMutability: "view",
     inputs: [],

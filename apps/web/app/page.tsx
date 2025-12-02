@@ -7,6 +7,9 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../convex/_generated/api";
 import { Id } from "../convex/_generated/dataModel";
 import Link from "next/link";
+import { useWorkspaceKey } from "../hooks/useWorkspaceKey";
+import { useTokenBalance } from "../hooks/useTokenBalance";
+import { useTreasuryBalance } from "../hooks/useTreasuryBalance";
 
 export default function Home() {
   const { isLoaded, isSignedIn } = useAuth();
@@ -119,6 +122,9 @@ function FeatureCard({
 function Dashboard() {
   const userData = useQuery(api.users.getCurrentUser);
   const apiKeys = useQuery(api.apiKeys.listApiKeys);
+  const { workspaceKey } = useWorkspaceKey();
+  const { decimals } = useTokenBalance(undefined);
+  const { formattedBalance: treasuryBalance, isLoading: treasuryLoading } = useTreasuryBalance(workspaceKey, decimals);
 
   if (!userData) {
     return (
@@ -185,6 +191,46 @@ function Dashboard() {
           </div>
         </div>
 
+        {/* Treasury Balance */}
+        <div className="bg-[#111] rounded-xl border border-[#333] overflow-hidden mb-8">
+          <div className="px-6 py-4 border-b border-[#333] flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center">
+                <VaultIcon className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-white">
+                  Treasury Balance
+                </h2>
+                <p className="text-sm text-[#666]">
+                  Workspace funds available for payments
+                </p>
+              </div>
+            </div>
+            <Link
+              href="/workspace/treasury"
+              className="px-3 py-2 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors"
+            >
+              Manage →
+            </Link>
+          </div>
+          <div className="p-6">
+            {treasuryLoading ? (
+              <div className="h-10 w-40 bg-[#1a1a1a] rounded animate-pulse" />
+            ) : (
+              <p className="text-3xl font-bold text-white">
+                {parseFloat(treasuryBalance || "0").toLocaleString(undefined, {
+                  maximumFractionDigits: 4,
+                })}{" "}
+                <span className="text-xl text-[#888]">TOKEN</span>
+              </p>
+            )}
+            <p className="text-sm text-[#666] mt-2">
+              Deposit tokens to fund your AI agents
+            </p>
+          </div>
+        </div>
+
         {/* Quick Actions */}
         <div className="grid md:grid-cols-2 gap-6 mb-8">
           <QuickActionCard
@@ -214,9 +260,9 @@ function Dashboard() {
             }
           />
           <QuickActionCard
-            href="#"
-            title="Payments"
-            description="View payment history and analytics"
+            href="/workspace/treasury"
+            title="Treasury"
+            description="Manage workspace funds and deposit tokens"
             icon={
               <svg
                 className="w-6 h-6"
@@ -228,7 +274,7 @@ function Dashboard() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
                 />
               </svg>
             }
@@ -276,6 +322,14 @@ function KeyIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+    </svg>
+  );
+}
+
+function VaultIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
     </svg>
   );
 }

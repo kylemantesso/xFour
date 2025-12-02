@@ -17,6 +17,7 @@ import { Id } from "../convex/_generated/dataModel";
 const navItems = [
   { label: "Overview", href: "/" },
   { label: "Agents", href: "/workspace/agents" },
+  { label: "Treasury", href: "/workspace/treasury" },
   { label: "Activity", href: "/workspace/activity" },
   { label: "Usage", href: "/workspace/usage" },
   { label: "Settings", href: "/workspace/settings" },

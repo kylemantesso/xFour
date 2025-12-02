@@ -316,7 +316,8 @@ export function createGatewayClient(config: GatewayClientConfig): GatewayClient 
       status: "allowed" | "denied";
       paymentId?: string;
       invoiceId?: string;
-      mneeAmount?: number;
+      treasuryAmount?: number;
+      treasuryTokenSymbol?: string;
       fxRate?: number;
       reason?: string;
     }
@@ -336,13 +337,12 @@ export function createGatewayClient(config: GatewayClientConfig): GatewayClient 
     }
 
     // Convert server response to SDK format
-    // Server returns mneeAmount as number, we convert to generic amount/tokenSymbol
     return {
       status: "allowed",
       paymentId: rawResult.paymentId!,
       invoiceId: rawResult.invoiceId!,
-      amount: String(rawResult.mneeAmount ?? 0),
-      tokenSymbol: "MNEE", // Hardcoded until server returns this separately
+      amount: String(rawResult.treasuryAmount ?? 0),
+      tokenSymbol: rawResult.treasuryTokenSymbol ?? "UNKNOWN",
       fxRate: String(rawResult.fxRate ?? 1),
     };
   }
@@ -355,7 +355,8 @@ export function createGatewayClient(config: GatewayClientConfig): GatewayClient 
       status: "ok" | "error";
       paymentId?: string;
       invoiceId?: string;
-      mneeAmount?: number;
+      treasuryAmount?: number;
+      treasuryTokenSymbol?: string;
       txHash?: string;
       code?: string;
       message?: string;
@@ -378,8 +379,8 @@ export function createGatewayClient(config: GatewayClientConfig): GatewayClient 
       status: "ok",
       paymentId: rawResult.paymentId,
       invoiceId: rawResult.invoiceId,
-      amount: rawResult.mneeAmount !== undefined ? String(rawResult.mneeAmount) : undefined,
-      tokenSymbol: rawResult.mneeAmount !== undefined ? "MNEE" : undefined,
+      amount: rawResult.treasuryAmount !== undefined ? String(rawResult.treasuryAmount) : undefined,
+      tokenSymbol: rawResult.treasuryTokenSymbol ?? undefined,
       txHash: rawResult.txHash,
     };
   }

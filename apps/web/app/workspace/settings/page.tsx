@@ -40,6 +40,22 @@ function CheckIcon({ className }: { className?: string }) {
   );
 }
 
+function TokenIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+function TrashIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
+  );
+}
+
 // ============================================
 // API KEYS COMPONENTS
 // ============================================
@@ -483,6 +499,9 @@ function WorkspaceSettings() {
           <ApiKeysList apiKeys={apiKeys} canManage={isAdmin} />
         </section>
 
+        {/* Tokens Section */}
+        <TokensSection canManage={canWrite} />
+
         {/* Members Section */}
         <section className="bg-[#111] rounded-xl border border-[#333] p-6 mb-6">
           <div className="flex items-center justify-between mb-4">
@@ -852,6 +871,190 @@ function InvitesList({
         </div>
       ))}
     </div>
+  );
+}
+
+// ============================================
+// TOKEN MANAGEMENT SECTION
+// ============================================
+
+type SupportedToken = {
+  _id: Id<"supportedTokens">;
+  address: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  chainId: number;
+  isActive: boolean;
+  createdAt: number;
+};
+
+function TokensSection({ canManage }: { canManage: boolean }) {
+  const workspaceTokens = useQuery(api.tokens.listWorkspaceTokens, {});
+  const availableTokens = useQuery(api.tokens.listAvailableTokensForWorkspace, {});
+  const addTokenToWorkspace = useMutation(api.tokens.addTokenToWorkspace);
+  const removeTokenFromWorkspace = useMutation(api.tokens.removeTokenFromWorkspace);
+
+  const [isAdding, setIsAdding] = useState(false);
+  const [selectedTokenId, setSelectedTokenId] = useState<Id<"supportedTokens"> | null>(null);
+  const [removingTokenId, setRemovingTokenId] = useState<Id<"supportedTokens"> | null>(null);
+
+  const handleAddToken = async () => {
+    if (!selectedTokenId) return;
+    setIsAdding(true);
+    try {
+      await addTokenToWorkspace({ tokenId: selectedTokenId });
+      setSelectedTokenId(null);
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  const handleRemoveToken = async (tokenId: Id<"supportedTokens">) => {
+    if (!confirm("Remove this token from your workspace? You can add it back later.")) return;
+    setRemovingTokenId(tokenId);
+    try {
+      await removeTokenFromWorkspace({ tokenId });
+    } finally {
+      setRemovingTokenId(null);
+    }
+  };
+
+  // Group tokens by chain
+  const tokensByChain = (workspaceTokens || []).reduce((acc, token) => {
+    const chainId = token.chainId;
+    if (!acc[chainId]) acc[chainId] = [];
+    acc[chainId].push(token as SupportedToken);
+    return acc;
+  }, {} as Record<number, SupportedToken[]>);
+
+  const chainNames: Record<number, string> = {
+    1: "Ethereum Mainnet",
+    137: "Polygon",
+    8453: "Base",
+    84532: "Base Sepolia",
+    31337: "Localhost",
+  };
+
+  return (
+    <section className="bg-[#111] rounded-xl border border-[#333] p-6 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center">
+            <TokenIcon className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-white">
+              Accepted Tokens
+            </h2>
+            <p className="text-sm text-[#888]">
+              Configure which tokens this workspace accepts for payments
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Add Token - only shown if there are tokens available to add */}
+      {canManage && availableTokens && availableTokens.length > 0 && (
+        <div className="bg-[#0a0a0a] rounded-lg border border-[#333] p-4 mb-4">
+          <label className="block text-sm font-medium text-[#888] mb-2">
+            Add a token to your workspace
+          </label>
+          <div className="flex gap-2">
+            <select
+              value={selectedTokenId?.toString() || ""}
+              onChange={(e) => setSelectedTokenId(e.target.value as Id<"supportedTokens"> || null)}
+              className="flex-1 px-3 py-2 border border-[#333] rounded-lg bg-[#111] text-white focus:outline-none focus:border-[#555]"
+            >
+              <option value="">Select a token...</option>
+              {availableTokens.map((token) => (
+                <option key={token._id} value={token._id}>
+                  {token.symbol} - {token.name} ({chainNames[token.chainId] || `Chain ${token.chainId}`})
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleAddToken}
+              disabled={!selectedTokenId || isAdding}
+              className="px-4 py-2 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isAdding ? "Adding..." : "Add"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Current Workspace Tokens */}
+      {workspaceTokens === undefined ? (
+        <div className="space-y-3">
+          {[1, 2].map((i) => (
+            <div key={i} className="animate-pulse flex items-center gap-4 py-3">
+              <div className="w-10 h-10 bg-[#1a1a1a] rounded-lg" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-32 bg-[#1a1a1a] rounded" />
+                <div className="h-3 w-24 bg-[#1a1a1a] rounded" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : workspaceTokens.length === 0 ? (
+        <div className="text-center py-8">
+          <div className="w-12 h-12 rounded-xl bg-[#1a1a1a] flex items-center justify-center mx-auto mb-3">
+            <TokenIcon className="w-6 h-6 text-[#666]" />
+          </div>
+          <p className="text-sm font-medium text-white">
+            No tokens configured
+          </p>
+          <p className="text-xs text-[#666] mt-1">
+            Add tokens to accept payments in your workspace
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {Object.entries(tokensByChain).map(([chainId, tokens]) => (
+            <div key={chainId}>
+              <h4 className="text-xs font-medium text-[#666] uppercase tracking-wider mb-2">
+                {chainNames[Number(chainId)] || `Chain ${chainId}`}
+              </h4>
+              <div className="divide-y divide-[#333]">
+                {tokens.map((token) => (
+                  <div
+                    key={token._id}
+                    className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500/20 to-teal-600/20 border border-emerald-500/30 flex items-center justify-center">
+                        <span className="text-sm font-bold text-emerald-400">
+                          {token.symbol.slice(0, 2)}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-white">
+                          {token.symbol}
+                        </p>
+                        <p className="text-xs text-[#666]">
+                          {token.name} • {token.decimals} decimals
+                        </p>
+                      </div>
+                    </div>
+                    {canManage && (
+                      <button
+                        onClick={() => handleRemoveToken(token._id)}
+                        disabled={removingTokenId === token._id}
+                        className="p-1.5 text-[#666] hover:text-red-400 rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-50"
+                        title="Remove token"
+                      >
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 

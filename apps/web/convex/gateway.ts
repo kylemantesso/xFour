@@ -7,28 +7,38 @@ import { Id } from "./_generated/dataModel";
 // ============================================
 
 /**
- * Simple FX conversion to MNEE
- * For now, uses a fixed rate. Later can be dynamic based on currency pairs.
+ * Convert amount from one currency to treasury token amount
+ * For now, uses fixed rates. Later can be dynamic based on currency pairs.
  */
-interface ConvertToMneeResult {
-  mneeAmount: number;
+interface ConvertToTreasuryResult {
+  treasuryAmount: number;
   rate: number;
 }
 
-export function convertToMnee(amount: number, fromSymbol: string): ConvertToMneeResult {
+export function convertToTreasuryToken(amount: number, fromSymbol: string, toSymbol: string): ConvertToTreasuryResult {
   // Fixed rates for now - will be dynamic later
+  // These are rates TO the treasury token (e.g., how much treasury token per 1 unit of fromSymbol)
   const rates: Record<string, number> = {
-    USDC: 0.98,
+    USDC: 0.98, // 1 USDC = 0.98 treasury token
     USDT: 0.98,
     USD: 1.0,
-    ETH: 2000.0, // Example rate
+    ETH: 2000.0,
+    MNEE: 1.0, // 1:1 if same currency
   };
 
+  // If converting to same currency, rate is 1:1
+  if (fromSymbol.toUpperCase() === toSymbol.toUpperCase()) {
+    return {
+      treasuryAmount: amount,
+      rate: 1.0,
+    };
+  }
+
   const rate = rates[fromSymbol.toUpperCase()] ?? 1.0;
-  const mneeAmount = amount * rate;
+  const treasuryAmount = amount * rate;
 
   return {
-    mneeAmount: Math.round(mneeAmount * 1000000) / 1000000, // 6 decimal precision
+    treasuryAmount: Math.round(treasuryAmount * 1000000) / 1000000, // 6 decimal precision
     rate,
   };
 }
@@ -73,6 +83,7 @@ export const validateApiKeyInternal = internalQuery({
       apiKeyId: keyRecord._id,
       workspaceId: keyRecord.workspaceId,
       workspaceName: workspace.name,
+      preferredPaymentToken: keyRecord.preferredPaymentToken,
     };
   },
 });
@@ -138,7 +149,9 @@ export const createPaymentQuote = internalMutation({
     originalCurrency: v.string(),
     originalNetwork: v.string(),
     payTo: v.string(),
-    mneeAmount: v.number(),
+    paymentToken: v.optional(v.string()), // Token address from API key preference
+    paymentTokenSymbol: v.optional(v.string()), // Token symbol (e.g., "MNEE", "USDC")
+    treasuryAmount: v.number(), // Amount in treasury token after FX conversion
     fxRate: v.number(),
     status: v.union(v.literal("allowed"), v.literal("denied")),
     denialReason: v.optional(v.string()),
@@ -156,7 +169,9 @@ export const createPaymentQuote = internalMutation({
       originalCurrency: args.originalCurrency,
       originalNetwork: args.originalNetwork,
       payTo: args.payTo,
-      mneeAmount: args.mneeAmount,
+      paymentToken: args.paymentToken,
+      paymentTokenSymbol: args.paymentTokenSymbol,
+      treasuryAmount: args.treasuryAmount,
       fxRate: args.fxRate,
       status: args.status,
       denialReason: args.denialReason,
@@ -216,6 +231,43 @@ export const settlePayment = internalMutation({
     await ctx.db.patch(args.paymentId, {
       status: "settled",
       updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Update swap details on a payment after on-chain swap execution
+ */
+export const updatePaymentSwapDetails = internalMutation({
+  args: {
+    paymentId: v.id("payments"),
+    txHash: v.optional(v.string()),
+    swapTxHash: v.optional(v.string()),
+    swapSellAmount: v.optional(v.number()),
+    swapSellToken: v.optional(v.string()),
+    swapBuyAmount: v.optional(v.number()),
+    swapBuyToken: v.optional(v.string()),
+    swapFee: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const payment = await ctx.db.get(args.paymentId);
+    if (!payment) {
+      return { success: false, error: "Payment not found" };
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(args.paymentId, {
+      txHash: args.txHash,
+      swapTxHash: args.swapTxHash,
+      swapSellAmount: args.swapSellAmount,
+      swapSellToken: args.swapSellToken,
+      swapBuyAmount: args.swapBuyAmount,
+      swapBuyToken: args.swapBuyToken,
+      swapFee: args.swapFee,
+      updatedAt: now,
+      completedAt: now, // Mark as completed when tx details are saved
     });
 
     return { success: true };

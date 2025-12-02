@@ -9,9 +9,18 @@ import { NextRequest, NextResponse } from "next/server";
  * - If X-MOCK-PAID-INVOICE header is present with a valid invoice format → 200 OK
  * - Otherwise → 402 Payment Required with x402 invoice headers
  * 
+ * Configuration via query params:
+ * - currency: Token symbol to request (default: USDC)
+ * - amount: Amount to charge (default: 0.50)
+ * - network: Network to use (default: localhost)
+ * - payTo: Payment address (default: test address)
+ * 
  * Note: This is a MOCK for demo purposes. In production, the provider would
  * verify the invoice ID against their payment records.
  */
+
+// Default test payment address
+const DEFAULT_PAY_TO = "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE0E";
 
 // Generate a random invoice ID
 function generateInvoiceId(): string {
@@ -23,7 +32,28 @@ function isValidInvoiceFormat(invoiceId: string): boolean {
   return invoiceId.startsWith("inv_") && invoiceId.length > 10;
 }
 
+// Extract config from URL params
+function getConfig(url: URL) {
+  return {
+    currency: url.searchParams.get("currency") || "USDC",
+    amount: url.searchParams.get("amount") || "0.50",
+    network: url.searchParams.get("network") || "localhost",
+    payTo: url.searchParams.get("payTo") || DEFAULT_PAY_TO,
+  };
+}
+
+function addCorsHeaders(response: NextResponse) {
+  response.headers.set("Access-Control-Allow-Origin", "*");
+  response.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  response.headers.set("Access-Control-Allow-Headers", "Content-Type, X-MOCK-PAID-INVOICE");
+  response.headers.set("Access-Control-Expose-Headers", "X-402-Invoice-Id, X-402-Amount, X-402-Currency, X-402-Network, X-402-Pay-To");
+  return response;
+}
+
 export async function POST(request: NextRequest) {
+  const url = new URL(request.url);
+  const config = getConfig(url);
+
   // Check for proof of payment header
   const paidInvoiceId = request.headers.get("X-MOCK-PAID-INVOICE");
   
@@ -32,17 +62,23 @@ export async function POST(request: NextRequest) {
     // Payment verified - return success response
     const body = await request.json().catch(() => ({}));
     
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: "Request processed successfully",
       invoiceId: paidInvoiceId,
       timestamp: new Date().toISOString(),
+      payment: {
+        currency: config.currency,
+        amount: config.amount,
+        network: config.network,
+      },
       data: {
         input: body,
         result: "This is the paid content you requested!",
         processingTime: "42ms",
       },
     });
+    return addCorsHeaders(response);
   }
 
   // No valid payment proof - return 402 with invoice headers
@@ -53,40 +89,48 @@ export async function POST(request: NextRequest) {
       error: "Payment Required",
       message: "This API requires payment via x402 protocol",
       invoiceId,
+      requiredPayment: {
+        currency: config.currency,
+        amount: config.amount,
+        network: config.network,
+      },
     },
     { status: 402 }
   );
 
-  // Add x402 invoice headers
+  // Add x402 invoice headers (configurable)
   response.headers.set("X-402-Invoice-Id", invoiceId);
-  response.headers.set("X-402-Amount", "0.50");
-  response.headers.set("X-402-Currency", "USDC");
-  response.headers.set("X-402-Network", "base");
-  response.headers.set("X-402-Pay-To", "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE0E");
-  
-  // CORS headers for browser testing
-  response.headers.set("Access-Control-Allow-Origin", "*");
-  response.headers.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-  response.headers.set("Access-Control-Allow-Headers", "Content-Type, X-MOCK-PAID-INVOICE");
-  response.headers.set("Access-Control-Expose-Headers", "X-402-Invoice-Id, X-402-Amount, X-402-Currency, X-402-Network, X-402-Pay-To");
+  response.headers.set("X-402-Amount", config.amount);
+  response.headers.set("X-402-Currency", config.currency);
+  response.headers.set("X-402-Network", config.network);
+  response.headers.set("X-402-Pay-To", config.payTo);
 
-  return response;
+  return addCorsHeaders(response);
 }
 
 export async function GET(request: NextRequest) {
+  const url = new URL(request.url);
+  const config = getConfig(url);
+
   // Check for proof of payment header
   const paidInvoiceId = request.headers.get("X-MOCK-PAID-INVOICE");
   
   if (paidInvoiceId && isValidInvoiceFormat(paidInvoiceId)) {
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: "Resource accessed successfully",
       invoiceId: paidInvoiceId,
       timestamp: new Date().toISOString(),
+      payment: {
+        currency: config.currency,
+        amount: config.amount,
+        network: config.network,
+      },
       data: {
         resource: "Premium content accessed!",
       },
     });
+    return addCorsHeaders(response);
   }
 
   const invoiceId = generateInvoiceId();
@@ -96,32 +140,25 @@ export async function GET(request: NextRequest) {
       error: "Payment Required",
       message: "This resource requires payment via x402 protocol",
       invoiceId,
+      requiredPayment: {
+        currency: config.currency,
+        amount: config.amount,
+        network: config.network,
+      },
     },
     { status: 402 }
   );
 
   response.headers.set("X-402-Invoice-Id", invoiceId);
-  response.headers.set("X-402-Amount", "0.25");
-  response.headers.set("X-402-Currency", "USDC");
-  response.headers.set("X-402-Network", "base");
-  response.headers.set("X-402-Pay-To", "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE0E");
-  
-  response.headers.set("Access-Control-Allow-Origin", "*");
-  response.headers.set("Access-Control-Allow-Methods", "GET, OPTIONS");
-  response.headers.set("Access-Control-Allow-Headers", "Content-Type, X-MOCK-PAID-INVOICE");
-  response.headers.set("Access-Control-Expose-Headers", "X-402-Invoice-Id, X-402-Amount, X-402-Currency, X-402-Network, X-402-Pay-To");
+  response.headers.set("X-402-Amount", config.amount);
+  response.headers.set("X-402-Currency", config.currency);
+  response.headers.set("X-402-Network", config.network);
+  response.headers.set("X-402-Pay-To", config.payTo);
 
-  return response;
+  return addCorsHeaders(response);
 }
 
 export async function OPTIONS() {
-  return new NextResponse(null, {
-    status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, X-MOCK-PAID-INVOICE",
-      "Access-Control-Expose-Headers": "X-402-Invoice-Id, X-402-Amount, X-402-Currency, X-402-Network, X-402-Pay-To",
-    },
-  });
+  const response = new NextResponse(null, { status: 204 });
+  return addCorsHeaders(response);
 }

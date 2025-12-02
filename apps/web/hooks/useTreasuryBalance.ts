@@ -3,14 +3,21 @@
 import { useReadContract } from "wagmi";
 import { formatUnits } from "viem";
 import { treasuryAbi } from "../lib/contracts";
-import { TREASURY_ADDRESS, localhost } from "../lib/wagmi";
 
 /**
- * Hook that returns the workspace's treasury balance
+ * Hook that returns the workspace's treasury balance for a specific token
+ * @param tokenAddress - The ERC20 token address
+ * @param workspaceKey - The workspace key (bytes32)
+ * @param decimals - Token decimals for formatting
+ * @param treasuryAddress - The treasury contract address (from Convex chain config)
+ * @param chainId - The chain ID to query
  */
 export function useTreasuryBalance(
+  tokenAddress: `0x${string}` | null,
   workspaceKey: `0x${string}` | null,
-  decimals: number | undefined
+  decimals: number | undefined,
+  treasuryAddress?: `0x${string}` | null,
+  chainId?: number
 ) {
   const {
     data: balance,
@@ -18,13 +25,13 @@ export function useTreasuryBalance(
     error,
     refetch,
   } = useReadContract({
-    address: TREASURY_ADDRESS,
+    address: treasuryAddress as `0x${string}`,
     abi: treasuryAbi,
     functionName: "balances",
-    args: workspaceKey ? [workspaceKey] : undefined,
-    chainId: localhost.id,
+    args: tokenAddress && workspaceKey ? [tokenAddress, workspaceKey] : undefined,
+    chainId: chainId,
     query: {
-      enabled: !!workspaceKey && !!TREASURY_ADDRESS,
+      enabled: !!tokenAddress && !!workspaceKey && !!treasuryAddress,
     },
   });
 
@@ -42,4 +49,3 @@ export function useTreasuryBalance(
     refetch,
   };
 }
-

@@ -3,24 +3,27 @@
 import { useReadContract } from "wagmi";
 import { formatUnits } from "viem";
 import { erc20Abi } from "../lib/contracts";
-import { TOKEN_ADDRESS, localhost } from "../lib/wagmi";
 
 /**
- * Hook that returns the ERC-20 token balance for a given address
+ * Hook that returns the ERC-20 token balance for a given address and token
  */
-export function useTokenBalance(address: `0x${string}` | undefined) {
+export function useTokenBalance(
+  tokenAddress: `0x${string}` | undefined,
+  walletAddress: `0x${string}` | undefined,
+  chainId?: number
+) {
   // Fetch token decimals
   const {
     data: decimals,
     isLoading: decimalsLoading,
     error: decimalsError,
   } = useReadContract({
-    address: TOKEN_ADDRESS,
+    address: tokenAddress,
     abi: erc20Abi,
     functionName: "decimals",
-    chainId: localhost.id,
+    chainId: chainId,
     query: {
-      enabled: !!TOKEN_ADDRESS,
+      enabled: !!tokenAddress,
     },
   });
 
@@ -31,13 +34,13 @@ export function useTokenBalance(address: `0x${string}` | undefined) {
     error: balanceError,
     refetch,
   } = useReadContract({
-    address: TOKEN_ADDRESS,
+    address: tokenAddress,
     abi: erc20Abi,
     functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    chainId: localhost.id,
+    args: walletAddress ? [walletAddress] : undefined,
+    chainId: chainId,
     query: {
-      enabled: !!address && !!TOKEN_ADDRESS,
+      enabled: !!walletAddress && !!tokenAddress,
     },
   });
 
@@ -58,23 +61,24 @@ export function useTokenBalance(address: `0x${string}` | undefined) {
 }
 
 /**
- * Hook that returns the current allowance for the treasury contract
+ * Hook that returns the current allowance for a spender on a specific token
  */
 export function useTokenAllowance(
+  tokenAddress: `0x${string}` | undefined,
   owner: `0x${string}` | undefined,
-  spender: `0x${string}` | undefined
+  spender: `0x${string}` | undefined,
+  chainId?: number
 ) {
   const { data: allowance, refetch } = useReadContract({
-    address: TOKEN_ADDRESS,
+    address: tokenAddress,
     abi: erc20Abi,
     functionName: "allowance",
     args: owner && spender ? [owner, spender] : undefined,
-    chainId: localhost.id,
+    chainId: chainId,
     query: {
-      enabled: !!owner && !!spender && !!TOKEN_ADDRESS,
+      enabled: !!owner && !!spender && !!tokenAddress,
     },
   });
 
   return { allowance, refetch };
 }
-

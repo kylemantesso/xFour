@@ -19,6 +19,49 @@ export const inviteStatus = v.union(
 
 export default defineSchema({
   // ============================================
+  // GLOBAL TABLES
+  // ============================================
+
+  // Supported blockchain networks (global, admin-managed)
+  supportedChains: defineTable({
+    chainId: v.number(), // e.g., 8453
+    name: v.string(), // e.g., "Base"
+    networkName: v.string(), // e.g., "base" - used in x402 invoice network field
+    rpcUrl: v.string(), // e.g., "https://mainnet.base.org"
+    explorerUrl: v.optional(v.string()), // e.g., "https://basescan.org"
+    nativeCurrency: v.object({
+      name: v.string(), // e.g., "Ether"
+      symbol: v.string(), // e.g., "ETH"
+      decimals: v.number(), // e.g., 18
+    }),
+    // Contract addresses (deployed per-chain)
+    treasuryAddress: v.optional(v.string()), // Treasury contract address on this chain
+    // Swap configuration
+    swapRouterAddress: v.optional(v.string()), // Mock router for localhost, null for 0x chains
+    zeroxApiUrl: v.optional(v.string()), // e.g., "https://base.api.0x.org"
+    isTestnet: v.boolean(),
+    isActive: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_chainId", ["chainId"])
+    .index("by_networkName", ["networkName"]),
+
+  // Supported ERC-20 tokens (global, admin-managed)
+  supportedTokens: defineTable({
+    address: v.string(), // Token contract address (checksummed)
+    symbol: v.string(), // e.g., "USDC"
+    name: v.string(), // e.g., "USD Coin"
+    decimals: v.number(), // e.g., 6
+    chainId: v.number(), // e.g., 31337
+    isActive: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_address", ["address"])
+    .index("by_chainId", ["chainId"])
+    .index("by_address_chainId", ["address", "chainId"])
+    .index("by_symbol_chainId", ["symbol", "chainId"]),
+
+  // ============================================
   // WORKSPACE TABLES
   // ============================================
 
@@ -67,6 +110,7 @@ export default defineSchema({
     name: v.optional(v.string()),
     defaultWorkspaceId: v.optional(v.id("workspaces")),
     currentWorkspaceId: v.optional(v.id("workspaces")),
+    isAdmin: v.optional(v.boolean()), // Platform-level admin (can manage global tokens)
     createdAt: v.number(),
   })
     .index("by_clerkUserId", ["clerkUserId"])
@@ -83,6 +127,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     apiKey: v.string(), // The actual key (hashed or plain depending on security needs)
     apiKeyPrefix: v.string(), // First 8 chars for display "x402_abc..."
+    preferredPaymentToken: v.optional(v.string()), // Token address for payments (optional for backwards compat, required in UI)
     createdByUserId: v.string(), // Clerk user id who created it
     lastUsedAt: v.optional(v.number()),
     expiresAt: v.optional(v.number()),
@@ -117,13 +162,16 @@ export default defineSchema({
     providerHost: v.string(), // Host derived from request URL
     // x402 invoice details
     invoiceId: v.string(),
-    originalAmount: v.number(), // Amount in original currency
-    originalCurrency: v.string(), // e.g., "USDC"
+    originalAmount: v.number(), // Amount in original currency (what provider requested)
+    originalCurrency: v.string(), // e.g., "USDC" (currency provider requested)
     originalNetwork: v.string(), // e.g., "base"
     payTo: v.string(), // Payment address
-    // MNEE conversion
-    mneeAmount: v.number(), // Amount in MNEE after FX conversion
-    fxRate: v.number(), // FX rate used for conversion
+    // Treasury token (workspace's preferred payment token)
+    paymentToken: v.optional(v.string()), // Token address used from treasury
+    paymentTokenSymbol: v.optional(v.string()), // Token symbol (e.g., "MNEE", "USDC")
+    // Amount debited from treasury (in treasury token)
+    treasuryAmount: v.number(), // Amount debited from treasury after FX conversion
+    fxRate: v.number(), // FX rate used for conversion (originalCurrency → treasuryToken)
     // Status and lifecycle
     status: v.union(
       v.literal("allowed"), // Quote approved, ready for payment
@@ -136,7 +184,14 @@ export default defineSchema({
     ),
     updatedAt: v.optional(v.number()),
     denialReason: v.optional(v.string()), // Reason for denial (e.g., "AGENT_DAILY_LIMIT")
-    txHash: v.optional(v.string()),
+    txHash: v.optional(v.string()), // Main payment transaction hash
+    // Swap details (when treasury token != provider's required token)
+    swapTxHash: v.optional(v.string()), // Swap transaction hash
+    swapSellAmount: v.optional(v.number()), // Amount sold in swap
+    swapSellToken: v.optional(v.string()), // Token address sold
+    swapBuyAmount: v.optional(v.number()), // Amount received from swap
+    swapBuyToken: v.optional(v.string()), // Token address received
+    swapFee: v.optional(v.number()), // Fee paid for swap (in sell token units)
     metadata: v.optional(v.any()),
     createdAt: v.number(),
     completedAt: v.optional(v.number()),
@@ -151,9 +206,9 @@ export default defineSchema({
   agentPolicies: defineTable({
     workspaceId: v.id("workspaces"),
     apiKeyId: v.id("apiKeys"),
-    dailyLimitMnee: v.optional(v.number()),
-    monthlyLimitMnee: v.optional(v.number()),
-    maxRequestMnee: v.optional(v.number()),
+    dailyLimit: v.optional(v.number()), // Daily spend limit (in treasury token)
+    monthlyLimit: v.optional(v.number()), // Monthly spend limit (in treasury token)
+    maxRequest: v.optional(v.number()), // Max per-request amount (in treasury token)
     allowedProviders: v.optional(v.array(v.id("providers"))),
     isActive: v.boolean(),
     createdAt: v.number(),
@@ -166,8 +221,8 @@ export default defineSchema({
   providerPolicies: defineTable({
     workspaceId: v.id("workspaces"),
     providerId: v.id("providers"),
-    monthlyLimitMnee: v.optional(v.number()),
-    dailyLimitMnee: v.optional(v.number()),
+    monthlyLimit: v.optional(v.number()), // Monthly spend limit for this provider (in treasury token)
+    dailyLimit: v.optional(v.number()), // Daily spend limit for this provider (in treasury token)
     isActive: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -186,4 +241,15 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_workspaceId", ["workspaceId"]),
+
+  // Workspace-selected tokens (links workspace to global supportedTokens)
+  workspaceTokens: defineTable({
+    workspaceId: v.id("workspaces"),
+    tokenId: v.id("supportedTokens"), // Reference to global token
+    isActive: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_workspaceId", ["workspaceId"])
+    .index("by_tokenId", ["tokenId"])
+    .index("by_workspace_token", ["workspaceId", "tokenId"]),
 });

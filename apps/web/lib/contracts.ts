@@ -30,6 +30,16 @@ export const erc20Abi = [
     outputs: [{ name: "", type: "bool" }],
   },
   {
+    name: "transfer",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
     name: "decimals",
     type: "function",
     stateMutability: "view",
@@ -39,7 +49,7 @@ export const erc20Abi = [
 ] as const;
 
 /**
- * ERC20WorkspaceTreasury ABI
+ * ERC20WorkspaceTreasury ABI (multi-token version with swap support)
  */
 export const treasuryAbi = [
   {
@@ -47,6 +57,7 @@ export const treasuryAbi = [
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
+      { name: "token", type: "address" },
       { name: "workspaceKey", type: "bytes32" },
       { name: "amount", type: "uint256" },
     ],
@@ -57,8 +68,32 @@ export const treasuryAbi = [
     type: "function",
     stateMutability: "nonpayable",
     inputs: [
+      { name: "token", type: "address" },
       { name: "workspaceKey", type: "bytes32" },
       { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "withdrawForSwap",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "workspaceKey", type: "bytes32" },
+      { name: "to", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [],
+  },
+  {
+    name: "creditFromSwap",
+    type: "function",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "workspaceKey", type: "bytes32" },
       { name: "amount", type: "uint256" },
     ],
     outputs: [],
@@ -67,22 +102,21 @@ export const treasuryAbi = [
     name: "balances",
     type: "function",
     stateMutability: "view",
-    inputs: [{ name: "workspaceKey", type: "bytes32" }],
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "workspaceKey", type: "bytes32" },
+    ],
     outputs: [{ name: "", type: "uint256" }],
   },
   {
     name: "workspaceBalance",
     type: "function",
     stateMutability: "view",
-    inputs: [{ name: "workspaceKey", type: "bytes32" }],
+    inputs: [
+      { name: "token", type: "address" },
+      { name: "workspaceKey", type: "bytes32" },
+    ],
     outputs: [{ name: "", type: "uint256" }],
-  },
-  {
-    name: "token",
-    type: "function",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [{ name: "", type: "address" }],
   },
   {
     name: "owner",

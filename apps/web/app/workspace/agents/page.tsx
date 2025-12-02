@@ -1,11 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { WorkspaceGuard } from "../../../components/WorkspaceGuard";
 import { BackToDashboard } from "../../../components/BackToDashboard";
 import { Id } from "../../../convex/_generated/dataModel";
+
+// Types
+type SupportedToken = {
+  _id: string;
+  address: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  chainId: number;
+  isActive: boolean;
+};
 
 // Icons
 function KeyIcon({ className }: { className?: string }) {
@@ -40,6 +51,14 @@ function CheckIcon({ className }: { className?: string }) {
   );
 }
 
+function ChevronDownIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+    </svg>
+  );
+}
+
 export default function AgentsPage() {
   return (
     <WorkspaceGuard>
@@ -51,6 +70,8 @@ export default function AgentsPage() {
 function AgentsContent() {
   const workspaceData = useQuery(api.workspaces.getCurrentWorkspace);
   const apiKeys = useQuery(api.apiKeys.listApiKeys);
+  // Use workspace tokens (tokens the workspace has enabled)
+  const workspaceTokens = useQuery(api.tokens.listWorkspaceTokens, {});
 
   if (!workspaceData) {
     return <LoadingSkeleton />;
@@ -81,7 +102,7 @@ function AgentsContent() {
               </p>
             </div>
           </div>
-          {canWrite && <CreateApiKeyButton />}
+          {canWrite && <CreateApiKeyButton workspaceTokens={workspaceTokens as SupportedToken[] | undefined} />}
         </div>
 
         {/* Info Card */}
@@ -97,7 +118,7 @@ function AgentsContent() {
                 How API Keys Work
               </h3>
               <p className="text-sm text-[#888] mt-1">
-                API keys authenticate your agents when calling the x402 Gateway. Each key is shown only once when created — store it securely. You can disable or delete keys at any time.
+                API keys authenticate your agents when calling the x402 Gateway. Each key is shown only once when created — store it securely. Each key has a preferred payment token that will be used for all payments made with that key.
               </p>
             </div>
           </div>
@@ -111,7 +132,11 @@ function AgentsContent() {
             </h2>
           </div>
           <div className="p-6">
-            <ApiKeysList apiKeys={apiKeys} canManage={isAdmin} />
+            <ApiKeysList 
+              apiKeys={apiKeys} 
+              canManage={isAdmin} 
+              workspaceTokens={workspaceTokens as SupportedToken[] | undefined}
+            />
           </div>
         </div>
       </div>
@@ -128,6 +153,7 @@ type ApiKeyData = {
   name: string;
   description?: string;
   apiKeyPrefix: string;
+  preferredPaymentToken?: string; // Optional for backwards compat with old keys
   createdByUserId: string;
   lastUsedAt?: number;
   expiresAt?: number;
@@ -136,24 +162,34 @@ type ApiKeyData = {
   updatedAt: number;
 };
 
-function CreateApiKeyButton() {
+function CreateApiKeyButton({ workspaceTokens }: { workspaceTokens: SupportedToken[] | undefined }) {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [selectedToken, setSelectedToken] = useState<SupportedToken | null>(null);
+  const [isTokenDropdownOpen, setIsTokenDropdownOpen] = useState(false);
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const createApiKey = useMutation(api.apiKeys.createApiKey);
 
+  // Set default token when workspaceTokens loads
+  useEffect(() => {
+    if (workspaceTokens && workspaceTokens.length > 0 && !selectedToken) {
+      setSelectedToken(workspaceTokens[0]);
+    }
+  }, [workspaceTokens, selectedToken]);
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || !selectedToken) return;
 
     setIsCreating(true);
     try {
       const result = await createApiKey({
         name: name.trim(),
         description: description.trim() || undefined,
+        preferredPaymentToken: selectedToken.address,
       });
       setNewApiKey(result.apiKey);
       setName("");
@@ -179,11 +215,15 @@ function CreateApiKeyButton() {
     setDescription("");
   };
 
+  const noTokensAvailable = !workspaceTokens || workspaceTokens.length === 0;
+
   return (
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-xl transition-colors"
+        disabled={noTokensAvailable}
+        className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        title={noTokensAvailable ? "No payment tokens configured" : undefined}
       >
         <PlusIcon className="w-5 h-5" />
         Create API Key
@@ -280,10 +320,67 @@ function CreateApiKeyButton() {
                   />
                 </div>
 
+                {/* Payment Token Selector */}
+                <div>
+                  <label className="block text-sm font-medium text-[#888] mb-2">
+                    Payment Token <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsTokenDropdownOpen(!isTokenDropdownOpen)}
+                      className="w-full flex items-center justify-between px-4 py-3 border border-[#333] rounded-xl bg-[#0a0a0a] text-white focus:outline-none focus:border-[#555]"
+                    >
+                      {selectedToken ? (
+                        <div className="flex items-center gap-3">
+                          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-xs font-bold text-white">
+                            {selectedToken.symbol.slice(0, 2)}
+                          </div>
+                          <span>{selectedToken.symbol}</span>
+                          <span className="text-[#666]">-</span>
+                          <span className="text-[#888] text-sm">{selectedToken.name}</span>
+                        </div>
+                      ) : (
+                        <span className="text-[#666]">Select a payment token</span>
+                      )}
+                      <ChevronDownIcon className="w-5 h-5 text-[#888]" />
+                    </button>
+
+                    {isTokenDropdownOpen && workspaceTokens && (
+                      <div className="absolute z-10 mt-2 w-full bg-[#111] border border-[#333] rounded-xl shadow-lg max-h-48 overflow-y-auto">
+                        {workspaceTokens.map((token) => (
+                          <button
+                            key={token._id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedToken(token);
+                              setIsTokenDropdownOpen(false);
+                            }}
+                            className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-[#1a1a1a] transition-colors ${
+                              selectedToken?._id === token._id ? "bg-[#1a1a1a]" : ""
+                            }`}
+                          >
+                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-xs font-bold text-white">
+                              {token.symbol.slice(0, 2)}
+                            </div>
+                            <div className="text-left">
+                              <p className="font-medium text-white">{token.symbol}</p>
+                              <p className="text-xs text-[#888]">{token.name}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-[#666] mt-2">
+                    All payments made with this API key will use this token
+                  </p>
+                </div>
+
                 <div className="flex gap-3 pt-2">
                   <button
                     type="submit"
-                    disabled={isCreating || !name.trim()}
+                    disabled={isCreating || !name.trim() || !selectedToken}
                     className="flex-1 px-4 py-3 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isCreating ? "Creating..." : "Create Key"}
@@ -308,14 +405,22 @@ function CreateApiKeyButton() {
 function ApiKeysList({
   apiKeys,
   canManage,
+  workspaceTokens,
 }: {
   apiKeys: ApiKeyData[] | undefined;
   canManage: boolean;
+  workspaceTokens: SupportedToken[] | undefined;
 }) {
   const updateApiKey = useMutation(api.apiKeys.updateApiKey);
   const deleteApiKey = useMutation(api.apiKeys.deleteApiKey);
   const [togglingId, setTogglingId] = useState<Id<"apiKeys"> | null>(null);
   const [deletingId, setDeletingId] = useState<Id<"apiKeys"> | null>(null);
+
+  // Helper to get token symbol from address
+  const getTokenSymbol = (tokenAddress: string) => {
+    const token = workspaceTokens?.find(t => t.address.toLowerCase() === tokenAddress.toLowerCase());
+    return token?.symbol || tokenAddress.slice(0, 6) + "...";
+  };
 
   if (apiKeys === undefined) {
     return (
@@ -434,6 +539,16 @@ function ApiKeysList({
                 >
                   {apiKey.isActive ? "Active" : "Disabled"}
                 </span>
+                {/* Payment Token Badge */}
+                {apiKey.preferredPaymentToken ? (
+                  <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-900/50 text-blue-400">
+                    {getTokenSymbol(apiKey.preferredPaymentToken)}
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-900/50 text-amber-400">
+                    No token set
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <code className="text-xs font-mono text-[#666] bg-[#1a1a1a] px-2 py-0.5 rounded">

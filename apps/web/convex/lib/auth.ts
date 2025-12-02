@@ -114,6 +114,53 @@ export const ADMIN_ROLES: WorkspaceRole[] = ["owner", "admin"];
 export const WRITE_ROLES: WorkspaceRole[] = ["owner", "admin", "member"];
 export const ALL_ROLES: WorkspaceRole[] = ["owner", "admin", "member", "viewer"];
 
+// ============================================
+// PLATFORM ADMIN FUNCTIONS
+// ============================================
+
+/**
+ * Check if the current user is a platform admin
+ */
+export async function isPlatformAdmin(ctx: QueryCtx | MutationCtx): Promise<boolean> {
+  const clerkUserId = await getClerkUserId(ctx);
+  if (!clerkUserId) return false;
+  
+  const user = await getUser(ctx, clerkUserId);
+  return user?.isAdmin === true;
+}
+
+/**
+ * Require platform admin - throws if user is not a platform admin
+ */
+export async function requirePlatformAdmin(ctx: QueryCtx | MutationCtx): Promise<string> {
+  const clerkUserId = await requireAuth(ctx);
+  const user = await getUser(ctx, clerkUserId);
+  
+  if (!user?.isAdmin) {
+    throw new Error("Platform admin access required");
+  }
+  
+  return clerkUserId;
+}
+
+/**
+ * Get the authenticated user with admin status
+ */
+export async function getAuthenticatedUser(ctx: QueryCtx | MutationCtx) {
+  const clerkUserId = await requireAuth(ctx);
+  const user = await getUser(ctx, clerkUserId);
+  
+  if (!user) {
+    throw new Error("User not found. Please complete onboarding.");
+  }
+  
+  return {
+    user,
+    clerkUserId,
+    isAdmin: user.isAdmin === true,
+  };
+}
+
 /**
  * Generate a random token for invites
  */

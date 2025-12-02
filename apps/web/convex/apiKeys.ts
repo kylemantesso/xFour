@@ -29,6 +29,7 @@ export const listApiKeys = query({
       name: key.name,
       description: key.description,
       apiKeyPrefix: key.apiKeyPrefix,
+      preferredPaymentToken: key.preferredPaymentToken,
       createdByUserId: key.createdByUserId,
       lastUsedAt: key.lastUsedAt,
       expiresAt: key.expiresAt,
@@ -46,6 +47,7 @@ export const createApiKey = mutation({
   args: {
     name: v.string(),
     description: v.optional(v.string()),
+    preferredPaymentToken: v.string(), // Required: token address for payments
     expiresAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
@@ -61,6 +63,7 @@ export const createApiKey = mutation({
       description: args.description,
       apiKey: key,
       apiKeyPrefix: prefix,
+      preferredPaymentToken: args.preferredPaymentToken,
       createdByUserId: clerkUserId,
       expiresAt: args.expiresAt,
       isActive: true,
@@ -81,6 +84,7 @@ export const updateApiKey = mutation({
     apiKeyId: v.id("apiKeys"),
     name: v.optional(v.string()),
     description: v.optional(v.string()),
+    preferredPaymentToken: v.optional(v.string()),
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
@@ -95,12 +99,14 @@ export const updateApiKey = mutation({
     const updates: {
       name?: string;
       description?: string;
+      preferredPaymentToken?: string;
       isActive?: boolean;
       updatedAt: number;
     } = { updatedAt: Date.now() };
 
     if (args.name !== undefined) updates.name = args.name;
     if (args.description !== undefined) updates.description = args.description;
+    if (args.preferredPaymentToken !== undefined) updates.preferredPaymentToken = args.preferredPaymentToken;
     if (args.isActive !== undefined) updates.isActive = args.isActive;
 
     await ctx.db.patch(args.apiKeyId, updates);

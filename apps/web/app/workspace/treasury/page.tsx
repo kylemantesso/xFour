@@ -7,15 +7,27 @@ import {
   useDisconnect,
   useWriteContract,
   useWaitForTransactionReceipt,
-  useSwitchChain,
 } from "wagmi";
 import { parseUnits } from "viem";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import { Id } from "../../../convex/_generated/dataModel";
 import { WorkspaceGuard } from "../../../components/WorkspaceGuard";
 import { useWorkspaceKey } from "../../../hooks/useWorkspaceKey";
 import { useTokenBalance, useTokenAllowance } from "../../../hooks/useTokenBalance";
 import { useTreasuryBalance } from "../../../hooks/useTreasuryBalance";
 import { erc20Abi, treasuryAbi } from "../../../lib/contracts";
-import { TOKEN_ADDRESS, TREASURY_ADDRESS, localhost } from "../../../lib/wagmi";
+
+// Types
+type SupportedToken = {
+  _id: string;
+  address: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  chainId: number;
+  isActive: boolean;
+};
 
 // Icons
 function WalletIcon({ className }: { className?: string }) {
@@ -83,6 +95,38 @@ function ExclamationIcon({ className }: { className?: string }) {
   );
 }
 
+function ChevronDownIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+    </svg>
+  );
+}
+
+function PlusIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+    </svg>
+  );
+}
+
+function TrashIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+    </svg>
+  );
+}
+
+function TokenIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
 type DepositPhase = "idle" | "approving" | "depositing" | "success" | "error";
 
 export default function TreasuryPage() {
@@ -95,56 +139,116 @@ export default function TreasuryPage() {
 
 function TreasuryContent() {
   const { workspace, workspaceKey, isLoading: workspaceLoading } = useWorkspaceKey();
-  const { address, isConnected, chain, chainId } = useAccount();
+  const { address, isConnected, chain, chainId: walletChainId } = useAccount();
   const { connectors, connect, isPending: isConnecting } = useConnect();
   const { disconnect } = useDisconnect();
-  const { switchChain, isPending: isSwitching } = useSwitchChain();
 
-  const isWrongChain = isConnected && chainId !== localhost.id;
+  // Fetch all supported chains from Convex
+  const supportedChains = useQuery(api.chains.listSupportedChains, { includeTestnets: true });
 
-  // Debug logging
+  // Selected chain (defaults to wallet chain, or first available chain)
+  const [selectedChainId, setSelectedChainId] = useState<number | null>(null);
+
+  // Set default selected chain when wallet connects or chains load
   useEffect(() => {
-    console.log("Wallet state:", {
-      isConnected,
-      address,
-      chain,
-      chainId,
-      TOKEN_ADDRESS,
-      TREASURY_ADDRESS,
-    });
-  }, [isConnected, address, chain, chainId]);
+    if (selectedChainId === null) {
+      if (walletChainId) {
+        setSelectedChainId(walletChainId);
+      } else if (supportedChains && supportedChains.length > 0) {
+        setSelectedChainId(supportedChains[0].chainId);
+      }
+    }
+  }, [walletChainId, supportedChains, selectedChainId]);
 
-  // Token balance
+  // Current chain ID for filtering tokens (selected chain or wallet chain)
+  const currentChainId = selectedChainId || walletChainId;
+  const selectedChain = supportedChains?.find((c) => c.chainId === currentChainId);
+
+  // Fetch workspace tokens from Convex for the selected chain
+  const workspaceTokens = useQuery(
+    api.tokens.listWorkspaceTokens, 
+    currentChainId ? { chainId: currentChainId } : "skip"
+  );
+
+  // Fetch available tokens (not yet added to workspace) for selected chain
+  const availableTokens = useQuery(
+    api.tokens.listAvailableTokensForWorkspace,
+    currentChainId ? { chainId: currentChainId } : "skip"
+  );
+
+  // Mutations for token management
+  const addTokenToWorkspace = useMutation(api.tokens.addTokenToWorkspace);
+  const removeTokenFromWorkspace = useMutation(api.tokens.removeTokenFromWorkspace);
+  const [selectedTokenId, setSelectedTokenId] = useState<Id<"supportedTokens"> | null>(null);
+  const [isAddingToken, setIsAddingToken] = useState(false);
+  const [removingTokenId, setRemovingTokenId] = useState<Id<"supportedTokens"> | null>(null);
+
+  const handleAddToken = async () => {
+    if (!selectedTokenId) return;
+    setIsAddingToken(true);
+    try {
+      await addTokenToWorkspace({ tokenId: selectedTokenId });
+      setSelectedTokenId(null);
+    } finally {
+      setIsAddingToken(false);
+    }
+  };
+
+  const handleRemoveToken = async (tokenId: Id<"supportedTokens">) => {
+    if (!confirm("Remove this token from your workspace?")) return;
+    setRemovingTokenId(tokenId);
+    try {
+      await removeTokenFromWorkspace({ tokenId });
+    } finally {
+      setRemovingTokenId(null);
+    }
+  };
+
+  // Selected token for deposit
+  const [selectedToken, setSelectedToken] = useState<SupportedToken | null>(null);
+  const [isTokenDropdownOpen, setIsTokenDropdownOpen] = useState(false);
+
+  // Set default selected token when tokens load
+  useEffect(() => {
+    if (workspaceTokens && workspaceTokens.length > 0 && !selectedToken) {
+      setSelectedToken(workspaceTokens[0] as SupportedToken);
+    }
+  }, [workspaceTokens, selectedToken]);
+
+  const selectedTokenAddress = selectedToken?.address as `0x${string}` | undefined;
+
+  // Token balance for selected token
   const {
     formattedBalance: walletBalance,
     decimals,
     isLoading: tokenLoading,
     error: tokenError,
     refetch: refetchWalletBalance,
-  } = useTokenBalance(address);
+  } = useTokenBalance(selectedTokenAddress, address, walletChainId);
 
-  // Debug token balance
-  useEffect(() => {
-    console.log("Token balance state:", {
-      walletBalance,
-      decimals,
-      tokenLoading,
-      tokenError: tokenError?.message,
-    });
-  }, [walletBalance, decimals, tokenLoading, tokenError]);
+  // Get treasury address from selected chain
+  const treasuryAddress = selectedChain?.treasuryAddress as `0x${string}` | undefined;
 
-  // Treasury balance
+  // Treasury balance for selected token
   const {
     formattedBalance: treasuryBalance,
     isLoading: treasuryLoading,
     error: treasuryError,
     refetch: refetchTreasuryBalance,
-  } = useTreasuryBalance(workspaceKey, decimals);
+  } = useTreasuryBalance(
+    selectedTokenAddress ?? null,
+    workspaceKey,
+    selectedToken?.decimals,
+    treasuryAddress,
+    currentChainId
+  );
 
-  // Allowance
+  // Allowance for selected token
   const { allowance, refetch: refetchAllowance } = useTokenAllowance(
+    selectedTokenAddress,
     address,
-    TREASURY_ADDRESS
+    treasuryAddress,
+    walletChainId
   );
 
   // Deposit form state
@@ -218,15 +322,17 @@ function TreasuryContent() {
   }, [depositError]);
 
   const executeDeposit = () => {
-    if (!workspaceKey || !decimals) return;
+    if (!workspaceKey || !selectedToken || decimals === undefined) return;
 
     const amountInSmallestUnits = parseUnits(amount, decimals);
 
+    if (!treasuryAddress) return;
+
     writeDeposit({
-      address: TREASURY_ADDRESS,
+      address: treasuryAddress,
       abi: treasuryAbi,
       functionName: "deposit",
-      args: [workspaceKey, amountInSmallestUnits],
+      args: [selectedToken.address as `0x${string}`, workspaceKey, amountInSmallestUnits],
     });
   };
 
@@ -235,21 +341,14 @@ function TreasuryContent() {
     setErrorMessage(null);
     setDepositPhase("idle");
 
-    console.log("Deposit clicked", {
-      isConnected,
-      address,
-      workspace: workspace?._id,
-      workspaceKey,
-      amount,
-      decimals,
-      walletBalance,
-      TOKEN_ADDRESS,
-      TREASURY_ADDRESS,
-    });
-
     // Validate
-    if (!TOKEN_ADDRESS || !TREASURY_ADDRESS) {
-      setErrorMessage("Contract addresses not configured. Check environment variables.");
+    if (!selectedToken || !selectedTokenAddress) {
+      setErrorMessage("Please select a token to deposit");
+      return;
+    }
+
+    if (!treasuryAddress) {
+      setErrorMessage("Treasury contract not deployed on this chain. Check admin panel.");
       return;
     }
 
@@ -271,7 +370,7 @@ function TreasuryContent() {
 
     const walletBalanceNum = parseFloat(walletBalance || "0");
     if (amountNum > walletBalanceNum) {
-      setErrorMessage(`Insufficient wallet balance (you have ${walletBalance || 0})`);
+      setErrorMessage(`Insufficient wallet balance (you have ${walletBalance || 0} ${selectedToken.symbol})`);
       return;
     }
 
@@ -281,25 +380,20 @@ function TreasuryContent() {
     }
 
     const amountInSmallestUnits = parseUnits(amount, decimals);
-    console.log("Amount in smallest units:", amountInSmallestUnits.toString());
 
     // Check if we need to approve
-    console.log("Current allowance:", allowance?.toString(), "Need:", amountInSmallestUnits.toString());
-    
     if (allowance !== undefined && allowance >= amountInSmallestUnits) {
       // Skip approval, go straight to deposit
-      console.log("Skipping approval, sufficient allowance");
       setDepositPhase("depositing");
       executeDeposit();
     } else {
       // Need to approve first
-      console.log("Requesting approval...");
       setDepositPhase("approving");
       writeApprove({
-        address: TOKEN_ADDRESS,
+        address: selectedTokenAddress,
         abi: erc20Abi,
         functionName: "approve",
-        args: [TREASURY_ADDRESS, amountInSmallestUnits],
+        args: [treasuryAddress!, amountInSmallestUnits],
       });
     }
   };
@@ -333,7 +427,7 @@ function TreasuryContent() {
     if (depositPhase === "success") {
       return "Success!";
     }
-    return "Deposit to Treasury";
+    return `Deposit ${selectedToken?.symbol || "Token"} to Treasury`;
   };
 
   const hasRpcError = tokenError || treasuryError;
@@ -349,31 +443,6 @@ function TreasuryContent() {
           </p>
         </div>
 
-        {/* Wrong Chain Warning */}
-        {isWrongChain && (
-          <div className="bg-red-900/20 border border-red-800 rounded-xl p-4 mb-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <ExclamationIcon className="w-5 h-5 text-red-400 flex-shrink-0" />
-                <div>
-                  <p className="text-sm font-medium text-red-200">
-                    Wrong network! Switch to {localhost.name}
-                  </p>
-                  <p className="text-xs text-red-200/70 mt-0.5">
-                    You're on chain {chainId}. The treasury is on {localhost.name} (chain {localhost.id}).
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => switchChain({ chainId: localhost.id })}
-                disabled={isSwitching}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50"
-              >
-                {isSwitching ? "Switching..." : "Switch Network"}
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* Wallet Connection Section */}
         <section className="bg-[#111] rounded-xl border border-[#333] p-6 mb-6">
@@ -434,6 +503,65 @@ function TreasuryContent() {
           </div>
         </section>
 
+        {/* Chain Selector */}
+        {supportedChains && supportedChains.length > 0 && (
+          <section className="bg-[#111] rounded-xl border border-[#333] p-6 mb-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500 to-purple-600 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white">Network</h2>
+                  <p className="text-sm text-[#888]">
+                    Manage tokens and deposits for each chain
+                  </p>
+                </div>
+              </div>
+              <select
+                value={currentChainId || ""}
+                onChange={(e) => setSelectedChainId(Number(e.target.value))}
+                className="px-4 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white focus:outline-none focus:border-[#555]"
+              >
+                {supportedChains.map((c) => (
+                  <option key={c.chainId} value={c.chainId}>
+                    {c.name} {c.isTestnet ? "(Testnet)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Wallet chain mismatch info */}
+            {isConnected && walletChainId && walletChainId !== currentChainId && (
+              <div className="mt-4 bg-blue-900/20 border border-blue-800 rounded-lg p-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <p className="text-sm text-blue-200">
+                      Your wallet is on <strong>{chain?.name || `Chain ${walletChainId}`}</strong>. 
+                      You can manage tokens here, but switch your wallet to <strong>{selectedChain?.name}</strong> to deposit.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* No treasury deployed warning */}
+            {selectedChain && !selectedChain.treasuryAddress && (
+              <div className="mt-4 bg-amber-900/20 border border-amber-800 rounded-lg p-3">
+                <p className="text-sm text-amber-200">
+                  <strong>Note:</strong> No treasury contract deployed on {selectedChain.name} yet. 
+                  Deposits will not work until a treasury is deployed.
+                </p>
+              </div>
+            )}
+          </section>
+        )}
+
         {/* RPC Error Warning */}
         {hasRpcError && (
           <div className="bg-amber-900/20 border border-amber-800 rounded-xl p-4 mb-6">
@@ -462,64 +590,166 @@ function TreasuryContent() {
           </div>
         )}
 
-        {/* Balances Section */}
-        {workspace && (
-          <>
-            <div className="grid md:grid-cols-2 gap-6 mb-6">
-              {/* Wallet Balance Card */}
-              <div className="bg-[#111] rounded-xl border border-[#333] p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-lg bg-[#1a1a1a] flex items-center justify-center">
-                    <WalletIcon className="w-5 h-5 text-[#888]" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-medium text-[#888]">Your Wallet Balance</h3>
-                    <p className="text-xs text-[#666]">Available to deposit</p>
-                  </div>
+        {/* Accepted Tokens Management */}
+        {workspace && currentChainId && (
+          <section className="bg-[#111] rounded-xl border border-[#333] p-6 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center">
+                  <TokenIcon className="w-5 h-5 text-white" />
                 </div>
-                {!isConnected ? (
-                  <p className="text-2xl font-bold text-[#666]">—</p>
-                ) : tokenLoading ? (
-                  <div className="h-8 w-32 bg-[#1a1a1a] rounded animate-pulse" />
-                ) : tokenError ? (
-                  <p className="text-2xl font-bold text-[#666]">—</p>
-                ) : (
-                  <p className="text-2xl font-bold text-white">
-                    {parseFloat(walletBalance || "0").toLocaleString(undefined, {
-                      maximumFractionDigits: 4,
-                    })}{" "}
-                    <span className="text-lg text-[#888]">TOKEN</span>
+                <div>
+                  <h2 className="text-lg font-semibold text-white">Accepted Tokens</h2>
+                  <p className="text-sm text-[#888]">
+                    Tokens this workspace accepts for payments on {selectedChain?.name || "this chain"}
                   </p>
-                )}
-              </div>
-
-              {/* Treasury Balance Card */}
-              <div className="bg-[#111] rounded-xl border border-[#333] p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-                    <VaultIcon className="w-5 h-5 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-medium text-[#888]">
-                      Workspace Treasury Balance
-                    </h3>
-                    <p className="text-xs text-[#666]">{workspace.name}</p>
-                  </div>
                 </div>
-                {treasuryLoading ? (
-                  <div className="h-8 w-32 bg-[#1a1a1a] rounded animate-pulse" />
-                ) : treasuryError ? (
-                  <p className="text-2xl font-bold text-[#666]">—</p>
-                ) : (
-                  <p className="text-2xl font-bold text-white">
-                    {parseFloat(treasuryBalance || "0").toLocaleString(undefined, {
-                      maximumFractionDigits: 4,
-                    })}{" "}
-                    <span className="text-lg text-[#888]">TOKEN</span>
-                  </p>
-                )}
               </div>
             </div>
+
+            {/* Add Token - show if there are available tokens */}
+            {availableTokens && availableTokens.length > 0 && (
+              <div className="bg-[#0a0a0a] rounded-lg border border-[#333] p-4 mb-4">
+                <label className="block text-sm font-medium text-[#888] mb-2">
+                  Add a token to your workspace
+                </label>
+                <div className="flex gap-2">
+                  <select
+                    value={selectedTokenId?.toString() || ""}
+                    onChange={(e) => setSelectedTokenId(e.target.value as Id<"supportedTokens"> || null)}
+                    className="flex-1 px-3 py-2 border border-[#333] rounded-lg bg-[#111] text-white focus:outline-none focus:border-[#555]"
+                  >
+                    <option value="">Select a token...</option>
+                    {availableTokens.map((token) => (
+                      <option key={token._id} value={token._id}>
+                        {token.symbol} - {token.name}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleAddToken}
+                    disabled={!selectedTokenId || isAddingToken}
+                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <PlusIcon className="w-4 h-4" />
+                    {isAddingToken ? "Adding..." : "Add"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* No available tokens message */}
+            {availableTokens && availableTokens.length === 0 && workspaceTokens && workspaceTokens.length === 0 && (
+              <div className="bg-amber-900/20 border border-amber-800 rounded-lg p-4 mb-4">
+                <div className="flex items-center gap-3">
+                  <ExclamationIcon className="w-5 h-5 text-amber-400 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-amber-200">
+                      No tokens available for {selectedChain?.name || "this chain"}
+                    </p>
+                    <p className="text-xs text-amber-200/70 mt-0.5">
+                      Ask a platform admin to add supported tokens for Chain ID {currentChainId}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Current Workspace Tokens List */}
+            {workspaceTokens === undefined ? (
+              <div className="space-y-3">
+                {[1, 2].map((i) => (
+                  <div key={i} className="animate-pulse flex items-center gap-4 py-3">
+                    <div className="w-10 h-10 bg-[#1a1a1a] rounded-lg" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 w-32 bg-[#1a1a1a] rounded" />
+                      <div className="h-3 w-24 bg-[#1a1a1a] rounded" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : workspaceTokens.length === 0 ? (
+              <div className="text-center py-6">
+                <div className="w-12 h-12 rounded-xl bg-[#1a1a1a] flex items-center justify-center mx-auto mb-3">
+                  <TokenIcon className="w-6 h-6 text-[#666]" />
+                </div>
+                <p className="text-sm font-medium text-white">No tokens added yet</p>
+                <p className="text-xs text-[#666] mt-1">
+                  {availableTokens && availableTokens.length > 0 
+                    ? "Select a token above to start accepting payments"
+                    : "Waiting for platform admin to add supported tokens"}
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-[#333]">
+                {workspaceTokens.map((token) => (
+                  <div
+                    key={token._id}
+                    className="flex items-center justify-between py-3 first:pt-0 last:pb-0"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500/20 to-teal-600/20 border border-emerald-500/30 flex items-center justify-center">
+                        <span className="text-sm font-bold text-emerald-400">
+                          {token.symbol.slice(0, 2)}
+                        </span>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-white">{token.symbol}</p>
+                        <p className="text-xs text-[#666]">
+                          {token.name} • {token.decimals} decimals
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveToken(token._id)}
+                      disabled={removingTokenId === token._id}
+                      className="p-1.5 text-[#666] hover:text-red-400 rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-50"
+                      title="Remove token"
+                    >
+                      {removingTokenId === token._id ? (
+                        <span className="text-xs">...</span>
+                      ) : (
+                        <TrashIcon className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        {/* Treasury Balances Section */}
+        {workspace && workspaceTokens && workspaceTokens.length > 0 && (
+          <>
+            {/* Treasury Balances - All Tokens */}
+            <section className="bg-[#111] rounded-xl border border-[#333] p-6 mb-6">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+                  <VaultIcon className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-white">
+                    Treasury Balances
+                  </h2>
+                  <p className="text-sm text-[#888]">{workspace.name}</p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {workspaceTokens.map((token) => (
+                  <TokenBalanceCard
+                    key={token._id}
+                    token={token as SupportedToken}
+                    workspaceKey={workspaceKey}
+                    treasuryAddress={treasuryAddress}
+                    chainId={currentChainId}
+                    isSelected={selectedToken?._id === token._id}
+                    onSelect={() => setSelectedToken(token as SupportedToken)}
+                  />
+                ))}
+              </div>
+            </section>
 
             {/* Deposit Form */}
             {isConnected && (
@@ -538,13 +768,30 @@ function TreasuryContent() {
                   </div>
                 </div>
 
+                {/* Chain mismatch - can't deposit */}
+                {walletChainId !== currentChainId && (
+                  <div className="bg-amber-900/20 border border-amber-800 rounded-lg p-4 mb-6">
+                    <div className="flex items-center gap-3">
+                      <ExclamationIcon className="w-5 h-5 text-amber-400 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-amber-200">
+                          Switch wallet to {selectedChain?.name || "the selected chain"} to deposit
+                        </p>
+                        <p className="text-xs text-amber-200/70 mt-0.5">
+                          Your wallet is on {chain?.name || `Chain ${walletChainId}`}. Change network in your wallet to deposit to {selectedChain?.name}.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Success Message */}
                 {depositPhase === "success" && (
                   <div className="bg-emerald-900/20 border border-emerald-800 rounded-lg p-4 mb-6">
                     <div className="flex items-center gap-3">
                       <CheckCircleIcon className="w-5 h-5 text-emerald-400 flex-shrink-0" />
                       <p className="text-sm text-emerald-200">
-                        Successfully deposited tokens to the workspace treasury!
+                        Successfully deposited {selectedToken?.symbol} to the workspace treasury!
                       </p>
                     </div>
                   </div>
@@ -569,6 +816,82 @@ function TreasuryContent() {
                 )}
 
                 <form onSubmit={handleDeposit} className="space-y-4">
+                  {/* Token Selector */}
+                  <div>
+                    <label className="block text-sm font-medium text-[#888] mb-2">
+                      Token
+                    </label>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setIsTokenDropdownOpen(!isTokenDropdownOpen)}
+                        disabled={isTransacting}
+                        className="w-full flex items-center justify-between px-4 py-3 border border-[#333] rounded-lg bg-[#0a0a0a] text-white focus:outline-none focus:border-[#555] disabled:opacity-50"
+                      >
+                        {selectedToken ? (
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-xs font-bold text-white">
+                              {selectedToken.symbol.slice(0, 2)}
+                            </div>
+                            <div className="text-left">
+                              <p className="font-medium">{selectedToken.symbol}</p>
+                              <p className="text-xs text-[#888]">{selectedToken.name}</p>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-[#666]">Select a token</span>
+                        )}
+                        <ChevronDownIcon className="w-5 h-5 text-[#888]" />
+                      </button>
+
+                      {isTokenDropdownOpen && (
+                        <div className="absolute z-10 mt-2 w-full bg-[#111] border border-[#333] rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                          {workspaceTokens.map((token) => (
+                            <button
+                              key={token._id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedToken(token as SupportedToken);
+                                setIsTokenDropdownOpen(false);
+                              }}
+                              className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-[#1a1a1a] transition-colors ${
+                                selectedToken?._id === token._id ? "bg-[#1a1a1a]" : ""
+                              }`}
+                            >
+                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-xs font-bold text-white">
+                                {token.symbol.slice(0, 2)}
+                              </div>
+                              <div className="text-left">
+                                <p className="font-medium text-white">{token.symbol}</p>
+                                <p className="text-xs text-[#888]">{token.name}</p>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Wallet Balance for Selected Token */}
+                  {selectedToken && (
+                    <div className="bg-[#0a0a0a] border border-[#333] rounded-lg p-4">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-[#888]">Your Wallet Balance</span>
+                        {tokenLoading ? (
+                          <div className="h-5 w-24 bg-[#1a1a1a] rounded animate-pulse" />
+                        ) : (
+                          <span className="text-sm font-medium text-white">
+                            {parseFloat(walletBalance || "0").toLocaleString(undefined, {
+                              maximumFractionDigits: 6,
+                            })}{" "}
+                            {selectedToken.symbol}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Amount Input */}
                   <div>
                     <label className="block text-sm font-medium text-[#888] mb-2">
                       Amount
@@ -591,23 +914,18 @@ function TreasuryContent() {
                         MAX
                       </button>
                     </div>
-                    {walletBalance && (
-                      <p className="text-xs text-[#666] mt-1">
-                        Available: {walletBalance} TOKEN
-                      </p>
-                    )}
                   </div>
 
                   <button
                     type="submit"
-                    disabled={isTransacting || depositPhase === "success" || !amount || isWrongChain}
+                    disabled={isTransacting || depositPhase === "success" || !amount || !selectedToken || walletChainId !== currentChainId}
                     className={`w-full px-4 py-3 text-sm font-medium rounded-lg transition-colors disabled:cursor-not-allowed ${
                       depositPhase === "success"
                         ? "bg-emerald-600 text-white"
                         : "bg-white text-black hover:bg-gray-200 disabled:opacity-50"
                     }`}
                   >
-                    {getButtonText()}
+                    {walletChainId !== currentChainId ? `Switch wallet to ${selectedChain?.name || "selected chain"}` : getButtonText()}
                   </button>
                 </form>
 
@@ -651,6 +969,69 @@ function TreasuryContent() {
         )}
       </div>
     </div>
+  );
+}
+
+// Token Balance Card Component
+function TokenBalanceCard({
+  token,
+  workspaceKey,
+  treasuryAddress,
+  chainId,
+  isSelected,
+  onSelect,
+}: {
+  token: SupportedToken;
+  workspaceKey: `0x${string}` | null;
+  treasuryAddress?: `0x${string}`;
+  chainId?: number;
+  isSelected: boolean;
+  onSelect: () => void;
+}) {
+  const {
+    formattedBalance,
+    isLoading,
+    error,
+  } = useTreasuryBalance(
+    token.address as `0x${string}`,
+    workspaceKey,
+    token.decimals,
+    treasuryAddress,
+    chainId
+  );
+
+  return (
+    <button
+      onClick={onSelect}
+      className={`text-left p-4 rounded-lg border transition-all ${
+        isSelected
+          ? "border-emerald-500 bg-emerald-900/20"
+          : "border-[#333] bg-[#0a0a0a] hover:border-[#555]"
+      }`}
+    >
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-sm font-bold text-white">
+          {token.symbol.slice(0, 2)}
+        </div>
+        <div>
+          <p className="font-medium text-white">{token.symbol}</p>
+          <p className="text-xs text-[#888]">{token.name}</p>
+        </div>
+      </div>
+      <div>
+        {isLoading ? (
+          <div className="h-6 w-20 bg-[#1a1a1a] rounded animate-pulse" />
+        ) : error ? (
+          <p className="text-lg font-bold text-[#666]">—</p>
+        ) : (
+          <p className="text-lg font-bold text-white">
+            {parseFloat(formattedBalance || "0").toLocaleString(undefined, {
+              maximumFractionDigits: 4,
+            })}
+          </p>
+        )}
+      </div>
+    </button>
   );
 }
 

@@ -9,11 +9,13 @@
  */
 
 import type * as apiKeys from "../apiKeys.js";
+import type * as chains from "../chains.js";
 import type * as gateway from "../gateway.js";
 import type * as http from "../http.js";
 import type * as invites from "../invites.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as payments from "../payments.js";
+import type * as tokens from "../tokens.js";
 import type * as users from "../users.js";
 import type * as workspaces from "../workspaces.js";
 
@@ -25,11 +27,13 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   apiKeys: typeof apiKeys;
+  chains: typeof chains;
   gateway: typeof gateway;
   http: typeof http;
   invites: typeof invites;
   "lib/auth": typeof lib_auth;
   payments: typeof payments;
+  tokens: typeof tokens;
   users: typeof users;
   workspaces: typeof workspaces;
 }>;

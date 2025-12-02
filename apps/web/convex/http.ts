@@ -1,7 +1,7 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
-import { convertToMnee } from "./gateway";
+import { convertToTreasuryToken } from "./gateway";
 
 const http = httpRouter();
 
@@ -33,7 +33,8 @@ interface QuoteResponseAllowed {
   status: "allowed";
   paymentId: string;
   invoiceId: string;
-  mneeAmount: number;
+  treasuryAmount: number; // Amount in treasury token
+  treasuryTokenSymbol: string; // Treasury token symbol
   fxRate: number;
 }
 
@@ -41,7 +42,8 @@ interface QuoteResponseDenied {
   status: "denied";
   reason: string;
   invoiceId: string | null;
-  mneeAmount: number | null;
+  treasuryAmount: number | null;
+  treasuryTokenSymbol: string | null;
   fxRate: number | null;
 }
 
@@ -56,10 +58,26 @@ interface PayResponseOk {
   status: "ok";
   paymentId: string;
   invoiceId: string;
-  mneeAmount: number;
+  treasuryAmount: number; // Amount debited from treasury (in treasury token)
   // Additional fields for on-chain settlement
   workspaceId: string;
   payTo: string;
+  // Chain info (derived from invoice network field)
+  chainId: number;
+  rpcUrl: string;
+  treasuryAddress?: string; // Treasury contract address on this chain
+  swapRouterAddress?: string; // Mock router for localhost
+  zeroxApiUrl?: string; // 0x API for production chains
+  // Treasury token (what workspace has)
+  treasuryTokenAddress?: string; // Token address from API key preference
+  treasuryTokenSymbol?: string; // Token symbol (e.g., "MNEE", "USDC")
+  treasuryTokenDecimals?: number; // Token decimals
+  // Required token (what provider wants) - looked up from supportedTokens by symbol
+  requiredTokenAddress?: string; // Token address for originalCurrency
+  requiredTokenDecimals?: number; // Token decimals
+  originalCurrency: string; // Currency symbol (e.g., "USDC")
+  originalAmount: number; // Amount in original currency
+  originalNetwork: string; // Network name from invoice (e.g., "base")
 }
 
 interface PayResponseError {
@@ -142,7 +160,7 @@ function errorResponse(message: string, status = 400): Response {
 /**
  * POST /gateway/quote
  * 
- * Evaluates an x402 invoice and returns a quote for MNEE payment.
+ * Evaluates an x402 invoice and returns a quote for payment in the workspace's treasury token.
  * 
  * Request body:
  * {
@@ -162,7 +180,8 @@ function errorResponse(message: string, status = 400): Response {
  *   "status": "allowed",
  *   "paymentId": "pay_abc",
  *   "invoiceId": "inv_123",
- *   "mneeAmount": 0.49,
+ *   "treasuryAmount": 0.49,
+ *   "treasuryTokenSymbol": "MNEE",
  *   "fxRate": 0.98
  * }
  * 
@@ -171,7 +190,8 @@ function errorResponse(message: string, status = 400): Response {
  *   "status": "denied",
  *   "reason": "AGENT_DAILY_LIMIT",
  *   "invoiceId": "inv_123",
- *   "mneeAmount": null,
+ *   "treasuryAmount": null,
+ *   "treasuryTokenSymbol": null,
  *   "fxRate": null
  * }
  */
@@ -220,7 +240,7 @@ const quoteAction = httpAction(async (ctx, request) => {
     return errorResponse(authResult.error, 401);
   }
 
-  const { apiKeyId, workspaceId } = authResult;
+  const { apiKeyId, workspaceId, preferredPaymentToken } = authResult;
 
   // Step 2: Parse invoice headers
   const invoice = parseInvoiceHeaders(invoiceHeaders);
@@ -240,14 +260,29 @@ const quoteAction = httpAction(async (ctx, request) => {
     host,
   });
 
-  // Step 5: Convert to MNEE
-  const { mneeAmount, rate } = convertToMnee(invoice.amount, invoice.currency);
+  // Step 5: Get treasury token details for symbol
+  let treasuryTokenSymbol = "UNKNOWN";
+  if (preferredPaymentToken) {
+    const treasuryToken = await ctx.runQuery(internal.tokens.getTokenByAddressInternal, {
+      address: preferredPaymentToken,
+    });
+    if (treasuryToken) {
+      treasuryTokenSymbol = treasuryToken.symbol;
+    }
+  }
 
-  // Step 6: Apply policies (placeholder - always allow for now)
+  // Step 6: Convert to treasury token amount
+  const { treasuryAmount, rate } = convertToTreasuryToken(
+    invoice.amount, 
+    invoice.currency, 
+    treasuryTokenSymbol
+  );
+
+  // Step 7: Apply policies (placeholder - always allow for now)
   // Later this will check agent daily limits, provider policies, etc.
   const policyResult = { allowed: true, reason: null as string | null };
 
-  // Step 7: Create payment record
+  // Step 8: Create payment record
   const paymentId = await ctx.runMutation(internal.gateway.createPaymentQuote, {
     workspaceId,
     apiKeyId,
@@ -258,22 +293,25 @@ const quoteAction = httpAction(async (ctx, request) => {
     originalCurrency: invoice.currency,
     originalNetwork: invoice.network,
     payTo: invoice.payTo,
-    mneeAmount,
+    paymentToken: preferredPaymentToken,
+    paymentTokenSymbol: treasuryTokenSymbol,
+    treasuryAmount,
     fxRate: rate,
     status: policyResult.allowed ? "allowed" : "denied",
     denialReason: policyResult.reason ?? undefined,
   });
 
-  // Step 8: Update API key last used
+  // Step 9: Update API key last used
   await ctx.runMutation(internal.gateway.markApiKeyUsedInternal, { apiKeyId });
 
-  // Step 9: Return response
+  // Step 10: Return response
   if (policyResult.allowed) {
     const response: QuoteResponseAllowed = {
       status: "allowed",
       paymentId: paymentId.toString(),
       invoiceId: invoice.invoiceId,
-      mneeAmount,
+      treasuryAmount,
+      treasuryTokenSymbol,
       fxRate: rate,
     };
     return jsonResponse(response);
@@ -282,7 +320,8 @@ const quoteAction = httpAction(async (ctx, request) => {
       status: "denied",
       reason: policyResult.reason ?? "UNKNOWN",
       invoiceId: invoice.invoiceId,
-      mneeAmount: null,
+      treasuryAmount: null,
+      treasuryTokenSymbol: null,
       fxRate: null,
     };
     return jsonResponse(response, 403);
@@ -310,7 +349,7 @@ const quoteAction = httpAction(async (ctx, request) => {
  *   "status": "ok",
  *   "paymentId": "<id>",
  *   "invoiceId": "<payment.invoiceId>",
- *   "mneeAmount": <payment.mneeAmount>
+ *   "treasuryAmount": <payment.treasuryAmount>
  * }
  * 
  * Response (error):
@@ -400,18 +439,60 @@ const payAction = httpAction(async (ctx, request) => {
     return jsonResponse(response, 404);
   }
 
-  // Step 4: Check payment status
+  // Step 4: Look up chain from invoice network field
+  const chain = await ctx.runQuery(internal.chains.getChainByNetworkNameInternal, {
+    networkName: payment.originalNetwork,
+  });
+
+  if (!chain) {
+    return errorResponse(`Unsupported network: ${payment.originalNetwork}`, 400);
+  }
+
+  // Step 5: Look up token details from supportedTokens (scoped to chain)
+  // Treasury token (what workspace has) - look up by address
+  let treasuryToken = null;
+  if (payment.paymentToken) {
+    treasuryToken = await ctx.runQuery(internal.tokens.getTokenByAddressInternal, {
+      address: payment.paymentToken,
+      chainId: chain.chainId,
+    });
+  }
+
+  // Required token (what provider wants) - look up by symbol on this chain
+  const requiredToken = await ctx.runQuery(internal.tokens.getTokenBySymbolInternal, {
+    symbol: payment.originalCurrency,
+    chainId: chain.chainId,
+  });
+
+  // Build the response with chain info
+  const buildResponse = (): PayResponseOk => ({
+    status: "ok",
+    paymentId: paymentId,
+    invoiceId: payment.invoiceId,
+    treasuryAmount: payment.treasuryAmount,
+    workspaceId: workspaceId.toString(),
+    payTo: payment.payTo,
+    // Chain info from Convex
+    chainId: chain.chainId,
+    rpcUrl: chain.rpcUrl,
+    treasuryAddress: chain.treasuryAddress,
+    swapRouterAddress: chain.swapRouterAddress,
+    zeroxApiUrl: chain.zeroxApiUrl,
+    // Token info
+    treasuryTokenAddress: payment.paymentToken,
+    treasuryTokenSymbol: payment.paymentTokenSymbol,
+    treasuryTokenDecimals: treasuryToken?.decimals,
+    requiredTokenAddress: requiredToken?.address,
+    requiredTokenDecimals: requiredToken?.decimals,
+    originalCurrency: payment.originalCurrency,
+    originalAmount: payment.originalAmount,
+    originalNetwork: payment.originalNetwork,
+  });
+
+  // Step 6: Check payment status
   // If already settled, return success (idempotent)
   if (payment.status === "settled") {
-    const response: PayResponseOk = {
-      status: "ok",
-      paymentId: paymentId,
-      invoiceId: payment.invoiceId,
-      mneeAmount: payment.mneeAmount,
-      workspaceId: workspaceId.toString(),
-      payTo: payment.payTo,
-    };
-    return jsonResponse(response);
+    return jsonResponse(buildResponse());
   }
 
   // Only allow payments with status "allowed" (quotes ready for payment)
@@ -424,25 +505,84 @@ const payAction = httpAction(async (ctx, request) => {
     return jsonResponse(response, 403);
   }
 
-  // Step 5: Settle the payment
+  // Step 7: Settle the payment
   // For now, no on-chain logic - just update status to "settled"
   await ctx.runMutation(internal.gateway.settlePayment, { 
     paymentId: paymentId as any 
   });
 
-  // Step 6: Update API key last used
+  // Step 8: Update API key last used
   await ctx.runMutation(internal.gateway.markApiKeyUsedInternal, { apiKeyId });
 
-  // Step 7: Return success response
-  const response: PayResponseOk = {
-    status: "ok",
-    paymentId: paymentId,
-    invoiceId: payment.invoiceId,
-    mneeAmount: payment.mneeAmount,
-    workspaceId: workspaceId.toString(),
-    payTo: payment.payTo,
-  };
-  return jsonResponse(response);
+  // Step 9: Return success response with chain and token details
+  return jsonResponse(buildResponse());
+});
+
+// ============================================
+// UPDATE SWAP DETAILS ACTION
+// ============================================
+
+interface UpdateSwapRequest {
+  paymentId: string;
+  txHash?: string;
+  swapTxHash?: string;
+  swapSellAmount?: number;
+  swapSellToken?: string;
+  swapBuyAmount?: number;
+  swapBuyToken?: string;
+  swapFee?: number;
+}
+
+const updateSwapAction = httpAction(async (ctx, request) => {
+  // Handle CORS preflight
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      },
+    });
+  }
+
+  // Only accept POST
+  if (request.method !== "POST") {
+    return errorResponse("Method not allowed", 405);
+  }
+
+  // Parse request body
+  let body: UpdateSwapRequest;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse("Invalid JSON body", 400);
+  }
+
+  // Validate required fields
+  const { paymentId } = body;
+  if (!paymentId || typeof paymentId !== "string") {
+    return errorResponse("Missing or invalid paymentId", 400);
+  }
+
+  try {
+    // Update swap details
+    await ctx.runMutation(internal.gateway.updatePaymentSwapDetails, {
+      paymentId: paymentId as any,
+      txHash: body.txHash,
+      swapTxHash: body.swapTxHash,
+      swapSellAmount: body.swapSellAmount,
+      swapSellToken: body.swapSellToken,
+      swapBuyAmount: body.swapBuyAmount,
+      swapBuyToken: body.swapBuyToken,
+      swapFee: body.swapFee,
+    });
+
+    return jsonResponse({ status: "ok" });
+  } catch (error) {
+    console.error("Failed to update swap details:", error);
+    return errorResponse("Failed to update swap details", 500);
+  }
 });
 
 // ============================================
@@ -475,6 +615,20 @@ http.route({
   path: "/gateway/pay",
   method: "OPTIONS",
   handler: payAction,
+});
+
+// Update swap details endpoint (called by Next.js after on-chain swap)
+http.route({
+  path: "/gateway/update-swap",
+  method: "POST",
+  handler: updateSwapAction,
+});
+
+// CORS preflight for update-swap
+http.route({
+  path: "/gateway/update-swap",
+  method: "OPTIONS",
+  handler: updateSwapAction,
 });
 
 export default http;

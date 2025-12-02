@@ -18,18 +18,34 @@ interface Step {
 
 interface LogEntry {
   id: string;
-  type: "info" | "request" | "response" | "error" | "success";
+  type: "info" | "request" | "response" | "error" | "success" | "swap";
   message: string;
   data?: Record<string, unknown> | null;
   timestamp: number;
 }
 
+// Common test tokens
+const PRESET_TOKENS = [
+  { symbol: "USDC", name: "USD Coin", description: "Request USDC - triggers swap if treasury has different token" },
+  { symbol: "MNEE", name: "MNEE", description: "Request MNEE - no swap if treasury has MNEE" },
+];
+
+const PRESET_NETWORKS = [
+  { key: "localhost", name: "Localhost (31337)", description: "Local Hardhat node" },
+  { key: "base-sepolia", name: "Base Sepolia", description: "Base testnet" },
+  { key: "base", name: "Base Mainnet", description: "Production" },
+];
+
 export default function SDKDemoPage() {
   const [apiKey, setApiKey] = useState("");
+  const [providerCurrency, setProviderCurrency] = useState("USDC");
+  const [providerAmount, setProviderAmount] = useState("0.50");
+  const [providerNetwork, setProviderNetwork] = useState("localhost");
   const [isRunning, setIsRunning] = useState(false);
   const [steps, setSteps] = useState<Step[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [finalResponse, setFinalResponse] = useState<Record<string, unknown> | null>(null);
+  const [swapOccurred, setSwapOccurred] = useState(false);
 
   const addLog = useCallback((type: LogEntry["type"], message: string, data?: Record<string, unknown> | null) => {
     setLogs((prev) => [
@@ -58,6 +74,7 @@ export default function SDKDemoPage() {
 
     setIsRunning(true);
     setFinalResponse(null);
+    setSwapOccurred(false);
     setLogs([]);
 
     // Initialize steps
@@ -71,7 +88,7 @@ export default function SDKDemoPage() {
       {
         id: "receive-402",
         title: "2. Receive 402 Response",
-        description: "API returns Payment Required with x402 headers",
+        description: `API returns Payment Required (${providerAmount} ${providerCurrency})`,
         status: "pending",
       },
       {
@@ -89,7 +106,7 @@ export default function SDKDemoPage() {
       {
         id: "call-pay",
         title: "5. Call Gateway /pay",
-        description: "SDK executes the payment",
+        description: "SDK executes the payment (may include swap)",
         status: "pending",
       },
       {
@@ -111,15 +128,22 @@ export default function SDKDemoPage() {
       ? `${window.location.origin}/api/gateway`
       : "/api/gateway";
     
+    // Build mock provider URL with config params
+    const mockProviderParams = new URLSearchParams({
+      currency: providerCurrency,
+      amount: providerAmount,
+      network: providerNetwork,
+    });
     const mockProviderUrl = typeof window !== "undefined"
-      ? `${window.location.origin}/api/mock-provider`
-      : "/api/mock-provider";
+      ? `${window.location.origin}/api/mock-provider?${mockProviderParams}`
+      : `/api/mock-provider?${mockProviderParams}`;
 
     try {
       // Step 1: Initial Request
       const step1Start = Date.now();
       updateStep("initial-request", { status: "running", timestamp: step1Start });
       addLog("info", "Starting fetchWithX402...");
+      addLog("info", `Provider configured to request: ${providerAmount} ${providerCurrency} on ${providerNetwork}`);
       addLog("request", `POST ${mockProviderUrl}`, {
         headers: { "Content-Type": "application/json" },
         body: { message: "Hello from SDK demo!" },
@@ -141,14 +165,26 @@ export default function SDKDemoPage() {
       updateStep("receive-402", { status: "running", timestamp: step2Start });
 
       if (initialResponse.status === 402) {
+        const headers402: Record<string, string> = {};
+        initialResponse.headers.forEach((value, key) => {
+          if (key.toLowerCase().startsWith("x-402-")) {
+            headers402[key] = value;
+          }
+        });
+        
         addLog("response", `Received 402 Payment Required`, {
           status: 402,
-          headers: Object.fromEntries(initialResponse.headers.entries()),
+          requiredPayment: {
+            currency: providerCurrency,
+            amount: providerAmount,
+            network: providerNetwork,
+          },
+          headers: headers402,
         });
         updateStep("receive-402", {
           status: "success",
           duration: Date.now() - step2Start,
-          data: { status: 402 },
+          data: { status: 402, currency: providerCurrency, amount: providerAmount },
         });
       } else {
         throw new Error(`Expected 402, got ${initialResponse.status}`);
@@ -244,6 +280,20 @@ export default function SDKDemoPage() {
       const payData = await payResponse.json();
       addLog("response", "Pay response", payData);
 
+      // Check if a swap occurred
+      if (payData.swapTxHash) {
+        setSwapOccurred(true);
+        addLog("swap", `Token swap executed!`, {
+          swapTxHash: payData.swapTxHash,
+          sold: payData.swapSellAmount 
+            ? `${payData.swapSellAmount} ${payData.originalCurrency === "USDC" ? "MNEE" : "treasury token"}`
+            : "unknown",
+          received: payData.swapBuyAmount 
+            ? `${payData.swapBuyAmount} ${payData.originalCurrency || "provider token"}`
+            : "unknown",
+        });
+      }
+
       if (payData.status !== "ok") {
         updateStep("call-pay", {
           status: "error",
@@ -322,6 +372,7 @@ export default function SDKDemoPage() {
     setSteps([]);
     setLogs([]);
     setFinalResponse(null);
+    setSwapOccurred(false);
   };
 
   return (
@@ -337,48 +388,123 @@ export default function SDKDemoPage() {
           </Link>
           <h1 className="text-3xl font-bold mt-4">x402 SDK Demo</h1>
           <p className="text-[#888] mt-2">
-            Watch the SDK handle an x402 payment flow step-by-step
+            Watch the SDK handle an x402 payment flow step-by-step, including token swaps
           </p>
         </div>
 
         {/* Config Panel */}
         <div className="bg-[#111] rounded-xl border border-[#333] p-6 mb-8">
           <h2 className="text-lg font-semibold mb-4">Configuration</h2>
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
-              <label className="block text-sm text-[#888] mb-2">
-                API Key
-              </label>
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Paste your API key here"
-                className="w-full px-4 py-3 bg-[#0a0a0a] border border-[#333] rounded-lg text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
-              />
-              <p className="text-xs text-[#666] mt-2">
-                Don&apos;t have a key?{" "}
-                <Link href="/workspace/agents" className="text-violet-400 hover:text-violet-300">
-                  Create one in Agents →
-                </Link>
+          
+          {/* API Key */}
+          <div className="mb-6">
+            <label className="block text-sm text-[#888] mb-2">
+              API Key
+            </label>
+            <input
+              type="password"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              placeholder="Paste your API key here"
+              className="w-full px-4 py-3 bg-[#0a0a0a] border border-[#333] rounded-lg text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
+            />
+            <p className="text-xs text-[#666] mt-2">
+              Don&apos;t have a key?{" "}
+              <Link href="/workspace/agents" className="text-violet-400 hover:text-violet-300">
+                Create one in Agents →
+              </Link>
+            </p>
+          </div>
+
+          {/* Provider Configuration */}
+          <div className="bg-[#0a0a0a] rounded-lg p-4 mb-6 border border-[#222]">
+            <h3 className="text-sm font-medium text-violet-400 mb-3 flex items-center gap-2">
+              <ProviderIcon className="w-4 h-4" />
+              Mock Provider Settings
+            </h3>
+            <p className="text-xs text-[#666] mb-4">
+              Configure what the mock provider will request. If this differs from your treasury&apos;s token, a swap will occur.
+            </p>
+            
+            <div className="grid md:grid-cols-3 gap-4">
+              {/* Network */}
+              <div>
+                <label className="block text-xs text-[#888] mb-1">Network</label>
+                <select
+                  value={providerNetwork}
+                  onChange={(e) => setProviderNetwork(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#111] border border-[#333] rounded-lg text-white text-sm focus:outline-none focus:border-[#555]"
+                >
+                  {PRESET_NETWORKS.map((net) => (
+                    <option key={net.key} value={net.key}>
+                      {net.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Currency */}
+              <div>
+                <label className="block text-xs text-[#888] mb-1">Currency Requested</label>
+                <select
+                  value={providerCurrency}
+                  onChange={(e) => setProviderCurrency(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#111] border border-[#333] rounded-lg text-white text-sm focus:outline-none focus:border-[#555]"
+                >
+                  {PRESET_TOKENS.map((token) => (
+                    <option key={token.symbol} value={token.symbol}>
+                      {token.symbol} - {token.name}
+                    </option>
+                  ))}
+                  <option value="custom">Custom...</option>
+                </select>
+                {providerCurrency === "custom" && (
+                  <input
+                    type="text"
+                    placeholder="Enter token symbol"
+                    onChange={(e) => setProviderCurrency(e.target.value)}
+                    className="w-full mt-2 px-3 py-2 bg-[#111] border border-[#333] rounded-lg text-white text-sm"
+                  />
+                )}
+              </div>
+
+              {/* Amount */}
+              <div>
+                <label className="block text-xs text-[#888] mb-1">Amount</label>
+                <input
+                  type="text"
+                  value={providerAmount}
+                  onChange={(e) => setProviderAmount(e.target.value)}
+                  className="w-full px-3 py-2 bg-[#111] border border-[#333] rounded-lg text-white text-sm focus:outline-none focus:border-[#555]"
+                />
+              </div>
+            </div>
+
+            {/* Swap hint */}
+            <div className="mt-4 p-3 rounded-lg bg-violet-900/20 border border-violet-900/50">
+              <p className="text-xs text-violet-300">
+                <strong>💡 Testing Swaps:</strong> If your workspace treasury holds <strong>MNEE</strong> but the provider requests <strong>USDC</strong>, 
+                the gateway will automatically swap MNEE → USDC to complete the payment.
               </p>
             </div>
-            <div className="flex items-start gap-2 md:pt-7">
-              <button
-                onClick={runDemo}
-                disabled={isRunning || !apiKey.trim()}
-                className="px-6 py-3 bg-white text-black font-medium rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {isRunning ? "Running..." : "Run Demo"}
-              </button>
-              <button
-                onClick={resetDemo}
-                disabled={isRunning}
-                className="px-6 py-3 bg-[#1a1a1a] text-white font-medium rounded-lg hover:bg-[#222] disabled:opacity-50 transition-colors"
-              >
-                Reset
-              </button>
-            </div>
+          </div>
+
+          {/* Run buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={runDemo}
+              disabled={isRunning || !apiKey.trim()}
+              className="px-6 py-3 bg-white text-black font-medium rounded-lg hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {isRunning ? "Running..." : "Run Demo"}
+            </button>
+            <button
+              onClick={resetDemo}
+              disabled={isRunning}
+              className="px-6 py-3 bg-[#1a1a1a] text-white font-medium rounded-lg hover:bg-[#222] disabled:opacity-50 transition-colors"
+            >
+              Reset
+            </button>
           </div>
         </div>
 
@@ -411,6 +537,26 @@ export default function SDKDemoPage() {
             </div>
           </div>
         </div>
+
+        {/* Swap Success Banner */}
+        {swapOccurred && (
+          <div className="mt-8 bg-violet-900/20 border border-violet-800 rounded-xl p-6">
+            <h2 className="text-lg font-semibold text-violet-400 mb-2 flex items-center gap-2">
+              <SwapIcon className="w-5 h-5" />
+              Token Swap Executed!
+            </h2>
+            <p className="text-[#888]">
+              The gateway automatically swapped tokens from your treasury to match the provider&apos;s requested currency.
+              Check the Activity page to see the full swap details.
+            </p>
+            <Link
+              href="/workspace/activity"
+              className="inline-flex items-center gap-1 mt-3 text-sm text-violet-400 hover:text-violet-300"
+            >
+              View Activity →
+            </Link>
+          </div>
+        )}
 
         {/* Final Response */}
         {finalResponse && (
@@ -457,6 +603,7 @@ const response = await client.fetchWithX402(
 // 2. Extracts x402 invoice headers
 // 3. Calls /quote to get authorization
 // 4. Calls /pay to execute payment
+//    ↳ Includes automatic token swaps if needed!
 // 5. Retries with proof header
 // 6. Returns the final response`}</code>
           </pre>
@@ -523,6 +670,7 @@ function LogEntryDisplay({ log }: { log: LogEntry }) {
     response: "text-violet-400",
     error: "text-red-400",
     success: "text-emerald-400",
+    swap: "text-amber-400",
   };
 
   const typeLabels = {
@@ -531,6 +679,7 @@ function LogEntryDisplay({ log }: { log: LogEntry }) {
     response: "RES ←",
     error: "ERR",
     success: "OK",
+    swap: "SWAP",
   };
 
   const time = new Date(log.timestamp).toLocaleTimeString("en-US", {
@@ -542,7 +691,7 @@ function LogEntryDisplay({ log }: { log: LogEntry }) {
   });
 
   return (
-    <div className="mb-2 pb-2 border-b border-[#222] last:border-0">
+    <div className={`mb-2 pb-2 border-b border-[#222] last:border-0 ${log.type === "swap" ? "bg-amber-900/10 -mx-2 px-2 py-1 rounded" : ""}`}>
       <div className="flex items-start gap-2">
         <span className="text-[#666] text-xs">{time}</span>
         <span className={`text-xs font-bold ${typeColors[log.type]}`}>
@@ -559,3 +708,29 @@ function LogEntryDisplay({ log }: { log: LogEntry }) {
   );
 }
 
+// Icons
+function SwapIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+      />
+    </svg>
+  );
+}
+
+function ProviderIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"
+      />
+    </svg>
+  );
+}

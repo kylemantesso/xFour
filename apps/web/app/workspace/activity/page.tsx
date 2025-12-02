@@ -48,18 +48,18 @@ function ActivityContent() {
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+        {/* Summary Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <StatCard
             label="Total Payments"
             value={stats?.totalPayments ?? 0}
             loading={!stats}
           />
           <StatCard
-            label="Total Spent"
-            value={stats?.totalSpent ?? 0}
-            suffix=" TOKEN"
+            label="Settled"
+            value={stats?.settledCount ?? 0}
             loading={!stats}
+            accent="emerald"
           />
           <StatCard
             label="Last 24h"
@@ -68,12 +68,74 @@ function ActivityContent() {
             loading={!stats}
           />
           <StatCard
-            label="24h Spend"
-            value={stats?.recentSpent ?? 0}
-            suffix=" TOKEN"
+            label="Swaps"
+            value={stats?.swapCount ?? 0}
+            subtitle="conversions"
             loading={!stats}
+            accent="violet"
           />
         </div>
+
+        {/* Token Spend Breakdown */}
+        {stats && (stats.spendByToken?.length > 0 || stats.paidByToken?.length > 0) && (
+          <div className="grid md:grid-cols-2 gap-4 mb-6">
+            {/* Spent from Treasury */}
+            {stats.spendByToken && stats.spendByToken.length > 0 && (
+              <div className="bg-[#111] border border-[#333] rounded-xl p-4">
+                <h3 className="text-sm font-medium text-[#888] mb-3 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-500" />
+                  Spent from Treasury
+                </h3>
+                <div className="space-y-2">
+                  {stats.spendByToken.map((token) => (
+                    <div key={token.address} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-amber-900/50 flex items-center justify-center">
+                          <span className="text-xs font-bold text-amber-400">
+                            {token.symbol.slice(0, 2)}
+                          </span>
+                        </div>
+                        <span className="text-sm text-white">{token.symbol}</span>
+                        <span className="text-xs text-[#666]">({token.count} txns)</span>
+                      </div>
+                      <span className="text-sm font-medium text-white">
+                        {token.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Paid to Providers */}
+            {stats.paidByToken && stats.paidByToken.length > 0 && (
+              <div className="bg-[#111] border border-[#333] rounded-xl p-4">
+                <h3 className="text-sm font-medium text-[#888] mb-3 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  Paid to Providers
+                </h3>
+                <div className="space-y-2">
+                  {stats.paidByToken.map((token) => (
+                    <div key={token.address} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-emerald-900/50 flex items-center justify-center">
+                          <span className="text-xs font-bold text-emerald-400">
+                            {token.symbol.slice(0, 2)}
+                          </span>
+                        </div>
+                        <span className="text-sm text-white">{token.symbol}</span>
+                        <span className="text-xs text-[#666]">({token.count} txns)</span>
+                      </div>
+                      <span className="text-sm font-medium text-white">
+                        {token.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Filters */}
         <div className="flex items-center gap-2 mb-6">
@@ -142,11 +204,24 @@ interface PaymentData {
   providerHost: string;
   originalAmount: number;
   originalCurrency: string;
-  mneeAmount: number;
+  originalNetwork: string;
+  treasuryAmount: number;
   status: string;
   createdAt: number;
   txHash?: string;
   payTo: string;
+  // Token info
+  paymentToken?: string;
+  treasuryTokenSymbol: string;
+  paidTokenSymbol: string;
+  hadSwap: boolean;
+  // Swap details
+  swapTxHash?: string;
+  swapSellAmount?: number;
+  swapSellToken?: string;
+  swapBuyAmount?: number;
+  swapBuyToken?: string;
+  swapFee?: number;
 }
 
 function PaymentRow({ payment }: { payment: PaymentData }) {
@@ -194,9 +269,17 @@ function PaymentRow({ payment }: { payment: PaymentData }) {
           <div className="w-8 h-8 rounded-lg bg-[#1a1a1a] flex items-center justify-center flex-shrink-0">
             <ReceiptIcon className="w-4 h-4 text-[#666]" />
           </div>
-          <p className="text-sm text-white font-mono truncate">
-            {payment.invoiceId.slice(0, 20)}...
-          </p>
+          <div className="min-w-0">
+            <p className="text-sm text-white font-mono truncate">
+              {payment.invoiceId.slice(0, 20)}...
+            </p>
+            {payment.hadSwap && (
+              <span className="text-xs text-violet-400 flex items-center gap-1">
+                <SwapIcon className="w-3 h-3" />
+                Swapped
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Agent */}
@@ -212,12 +295,26 @@ function PaymentRow({ payment }: { payment: PaymentData }) {
         {/* Amount */}
         <div className="col-span-2 flex items-center justify-end">
           <div className="text-right">
-            <p className="text-sm text-white font-medium">
-              {payment.mneeAmount.toFixed(4)}
-            </p>
-            <p className="text-xs text-[#666]">
-              {payment.originalAmount} {payment.originalCurrency}
-            </p>
+            {payment.hadSwap ? (
+              <>
+                <p className="text-sm text-white font-medium">
+                  {payment.originalAmount.toLocaleString(undefined, { maximumFractionDigits: 4 })} {payment.originalCurrency}
+                </p>
+                <p className="text-xs text-amber-400 flex items-center justify-end gap-1">
+                  <span>from</span>
+                  {payment.swapSellAmount?.toLocaleString(undefined, { maximumFractionDigits: 4 })} {payment.treasuryTokenSymbol}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-white font-medium">
+                  {payment.treasuryAmount.toLocaleString(undefined, { maximumFractionDigits: 4 })} {payment.treasuryTokenSymbol}
+                </p>
+                <p className="text-xs text-[#666]">
+                  {payment.originalAmount} {payment.originalCurrency}
+                </p>
+              </>
+            )}
           </div>
         </div>
 
@@ -252,12 +349,29 @@ function PaymentRow({ payment }: { payment: PaymentData }) {
               </p>
               <p className="text-xs text-[#666] mt-0.5">{payment.apiKeyName}</p>
               <p className="text-xs text-[#666]">{payment.providerName}</p>
+              {payment.hadSwap && (
+                <span className="text-xs text-violet-400 flex items-center gap-1 mt-1">
+                  <SwapIcon className="w-3 h-3" />
+                  Swapped
+                </span>
+              )}
             </div>
           </div>
           <div className="text-right flex-shrink-0">
-            <p className="text-sm text-white font-medium">
-              {payment.mneeAmount.toFixed(4)}
-            </p>
+            {payment.hadSwap ? (
+              <>
+                <p className="text-sm text-white font-medium">
+                  {payment.originalAmount.toLocaleString(undefined, { maximumFractionDigits: 4 })} {payment.originalCurrency}
+                </p>
+                <p className="text-xs text-amber-400">
+                  from {payment.swapSellAmount?.toLocaleString(undefined, { maximumFractionDigits: 2 })} {payment.treasuryTokenSymbol}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-white font-medium">
+                {payment.treasuryAmount.toLocaleString(undefined, { maximumFractionDigits: 4 })} {payment.treasuryTokenSymbol}
+              </p>
+            )}
             <span
               className={`inline-block mt-1 px-2 py-0.5 text-xs font-medium rounded-full ${status.bg} ${status.color}`}
             >
@@ -289,14 +403,54 @@ function PaymentRow({ payment }: { payment: PaymentData }) {
               <p className="text-white">{payment.providerHost}</p>
             </div>
             <div>
+              <p className="text-[#666] mb-1">Network</p>
+              <p className="text-white">{payment.originalNetwork}</p>
+            </div>
+
+            {/* Swap Details */}
+            {payment.hadSwap && (
+              <>
+                <div className="col-span-1 sm:col-span-2 md:col-span-4 border-t border-[#333] pt-4 mt-2">
+                  <h4 className="text-xs font-medium text-violet-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <SwapIcon className="w-4 h-4" />
+                    Token Swap Details
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div className="bg-amber-900/20 border border-amber-900/50 rounded-lg p-3">
+                      <p className="text-xs text-amber-400 mb-1">Sold from Treasury</p>
+                      <p className="text-white font-medium">
+                        {payment.swapSellAmount?.toLocaleString(undefined, { maximumFractionDigits: 6 })} {payment.treasuryTokenSymbol}
+                      </p>
+                    </div>
+                    <div className="flex items-center justify-center">
+                      <ArrowRightIcon className="w-6 h-6 text-[#666]" />
+                    </div>
+                    <div className="bg-emerald-900/20 border border-emerald-900/50 rounded-lg p-3">
+                      <p className="text-xs text-emerald-400 mb-1">Paid to Provider</p>
+                      <p className="text-white font-medium">
+                        {payment.swapBuyAmount?.toLocaleString(undefined, { maximumFractionDigits: 6 })} {payment.paidTokenSymbol}
+                      </p>
+                    </div>
+                  </div>
+                  {payment.swapFee !== undefined && payment.swapFee > 0 && (
+                    <p className="text-xs text-[#666] mt-2">
+                      Swap fee: {payment.swapFee.toLocaleString(undefined, { maximumFractionDigits: 6 })} {payment.treasuryTokenSymbol}
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+
+            <div>
               <p className="text-[#666] mb-1">Created</p>
               <p className="text-white">
                 {new Date(payment.createdAt).toLocaleString()}
               </p>
             </div>
+
             {payment.txHash && (
-              <div className="col-span-1 sm:col-span-2 md:col-span-4">
-                <p className="text-[#666] mb-1">Transaction Hash</p>
+              <div className="col-span-1 sm:col-span-2 md:col-span-3">
+                <p className="text-[#666] mb-1">Payment Transaction</p>
                 <a
                   href={`https://basescan.org/tx/${payment.txHash}`}
                   target="_blank"
@@ -304,6 +458,20 @@ function PaymentRow({ payment }: { payment: PaymentData }) {
                   className="text-violet-400 hover:text-violet-300 font-mono text-xs break-all"
                 >
                   {payment.txHash}
+                </a>
+              </div>
+            )}
+
+            {payment.swapTxHash && (
+              <div className="col-span-1 sm:col-span-2 md:col-span-4">
+                <p className="text-[#666] mb-1">Swap Transaction</p>
+                <a
+                  href={`https://basescan.org/tx/${payment.swapTxHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-violet-400 hover:text-violet-300 font-mono text-xs break-all"
+                >
+                  {payment.swapTxHash}
                 </a>
               </div>
             )}
@@ -320,15 +488,23 @@ function StatCard({
   suffix,
   subtitle,
   loading,
+  accent,
 }: {
   label: string;
   value: number;
   suffix?: string;
   subtitle?: string;
   loading?: boolean;
+  accent?: "emerald" | "violet" | "amber";
 }) {
+  const accentColors = {
+    emerald: "border-emerald-900/50",
+    violet: "border-violet-900/50",
+    amber: "border-amber-900/50",
+  };
+
   return (
-    <div className="bg-[#111] border border-[#333] rounded-xl p-4">
+    <div className={`bg-[#111] border rounded-xl p-4 ${accent ? accentColors[accent] : "border-[#333]"}`}>
       <p className="text-xs text-[#666] uppercase tracking-wider mb-1">{label}</p>
       {loading ? (
         <div className="h-7 w-20 bg-[#1a1a1a] rounded animate-pulse" />
@@ -433,3 +609,28 @@ function ReceiptIcon({ className }: { className?: string }) {
   );
 }
 
+function SwapIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+      />
+    </svg>
+  );
+}
+
+function ArrowRightIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M14 5l7 7m0 0l-7 7m7-7H3"
+      />
+    </svg>
+  );
+}

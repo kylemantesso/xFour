@@ -115,7 +115,7 @@ export const wagmiConfig = createConfig({
   connectors: [injected()],
   transports: {
     [activeChain.id]: http(activeChain.rpcUrls.default.http[0]),
-  },
+  } as Record<number, ReturnType<typeof http>>,
   ssr: true,
 });
 

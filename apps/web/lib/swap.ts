@@ -244,7 +244,7 @@ export class SwapService {
     }
 
     // Add 1% buffer for mock slippage
-    sellAmount = (sellAmount * 101n) / 100n;
+    sellAmount = (sellAmount * BigInt(101)) / BigInt(100);
 
     return {
       sellToken: params.sellToken,
@@ -255,10 +255,10 @@ export class SwapService {
       guaranteedPrice: "0.99",
       to: this.mockRouterAddress!,
       data: "0x" as `0x${string}`,
-      value: 0n,
-      gas: 200000n,
-      gasPrice: 1000000000n, // 1 gwei
-      estimatedGas: 150000n,
+      value: BigInt(0),
+      gas: BigInt(200000),
+      gasPrice: BigInt(1000000000), // 1 gwei
+      estimatedGas: BigInt(150000),
       sources: [{ name: "MockRouter", proportion: "1" }],
       allowanceTarget: this.mockRouterAddress!,
     };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { WorkspaceGuard } from "../../../components/WorkspaceGuard";
@@ -56,6 +56,14 @@ function TrashIcon({ className }: { className?: string }) {
   );
 }
 
+function ChevronDownIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+    </svg>
+  );
+}
+
 // ============================================
 // API KEYS COMPONENTS
 // ============================================
@@ -73,24 +81,34 @@ type ApiKeyData = {
   updatedAt: number;
 };
 
-function CreateApiKeyButton() {
+function CreateApiKeyButton({ workspaceTokens }: { workspaceTokens: SupportedToken[] | undefined }) {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [selectedToken, setSelectedToken] = useState<SupportedToken | null>(null);
+  const [isTokenDropdownOpen, setIsTokenDropdownOpen] = useState(false);
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const createApiKey = useMutation(api.apiKeys.createApiKey);
 
+  // Set default token when workspaceTokens loads
+  useEffect(() => {
+    if (workspaceTokens && workspaceTokens.length > 0 && !selectedToken) {
+      setSelectedToken(workspaceTokens[0]);
+    }
+  }, [workspaceTokens, selectedToken]);
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || !selectedToken) return;
 
     setIsCreating(true);
     try {
       const result = await createApiKey({
         name: name.trim(),
         description: description.trim() || undefined,
+        preferredPaymentToken: selectedToken.address,
       });
       setNewApiKey(result.apiKey);
       setName("");
@@ -140,7 +158,7 @@ function CreateApiKeyButton() {
                       API Key Created
                     </h3>
                     <p className="text-sm text-[#888]">
-                      Copy your key now — you won't see it again!
+                      Copy your key now — you won&apos;t see it again!
                     </p>
                   </div>
                 </div>
@@ -166,7 +184,7 @@ function CreateApiKeyButton() {
 
                 <div className="bg-amber-900/20 border border-amber-800 rounded-lg p-3">
                   <p className="text-sm text-amber-200">
-                    <strong>Important:</strong> This is the only time you'll see this key. 
+                    <strong>Important:</strong> This is the only time you&apos;ll see this key. 
                     Store it securely — we only save a hash on our servers.
                   </p>
                 </div>
@@ -217,10 +235,53 @@ function CreateApiKeyButton() {
                   />
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-[#888] mb-1">
+                    Payment Token <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsTokenDropdownOpen(!isTokenDropdownOpen)}
+                      className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white focus:outline-none focus:border-[#555] flex items-center justify-between"
+                    >
+                      <span className={selectedToken ? "text-white" : "text-[#666]"}>
+                        {selectedToken ? `${selectedToken.symbol} - ${selectedToken.name}` : "Select a token"}
+                      </span>
+                      <ChevronDownIcon className="w-4 h-4 text-[#666]" />
+                    </button>
+                    {isTokenDropdownOpen && workspaceTokens && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-[#0a0a0a] border border-[#333] rounded-lg shadow-xl z-10 max-h-48 overflow-y-auto">
+                        {workspaceTokens.map((token) => (
+                          <button
+                            key={token._id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedToken(token);
+                              setIsTokenDropdownOpen(false);
+                            }}
+                            className={`w-full px-3 py-2 text-left hover:bg-[#1a1a1a] transition-colors ${
+                              selectedToken?._id === token._id ? "bg-[#1a1a1a]" : ""
+                            }`}
+                          >
+                            <span className="text-white">{token.symbol}</span>
+                            <span className="text-[#666] ml-2">{token.name}</span>
+                          </button>
+                        ))}
+                        {workspaceTokens.length === 0 && (
+                          <div className="px-3 py-2 text-[#666] text-sm">
+                            No tokens configured for this workspace
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
                 <div className="flex gap-2 pt-2">
                   <button
                     type="submit"
-                    disabled={isCreating || !name.trim()}
+                    disabled={isCreating || !name.trim() || !selectedToken}
                     className="flex-1 px-4 py-2.5 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isCreating ? "Creating..." : "Create Key"}
@@ -445,6 +506,7 @@ function WorkspaceSettings() {
   const members = useQuery(api.workspaces.listMembers);
   const invites = useQuery(api.invites.listInvites);
   const apiKeys = useQuery(api.apiKeys.listApiKeys);
+  const workspaceTokens = useQuery(api.tokens.listWorkspaceTokens, {});
 
   if (!workspaceData || !members) {
     return <LoadingSkeleton />;
@@ -494,7 +556,7 @@ function WorkspaceSettings() {
                 </p>
               </div>
             </div>
-            {canWrite && <CreateApiKeyButton />}
+            {canWrite && <CreateApiKeyButton workspaceTokens={workspaceTokens} />}
           </div>
           <ApiKeysList apiKeys={apiKeys} canManage={isAdmin} />
         </section>

@@ -243,7 +243,7 @@ function CreateApiKeyButton({ workspaceTokens }: { workspaceTokens: SupportedTok
                       API Key Created
                     </h3>
                     <p className="text-sm text-[#888]">
-                      Copy your key now — you won't see it again!
+                      Copy your key now — you won&apos;t see it again!
                     </p>
                   </div>
                 </div>
@@ -269,7 +269,7 @@ function CreateApiKeyButton({ workspaceTokens }: { workspaceTokens: SupportedTok
 
                 <div className="bg-amber-900/20 border border-amber-800 rounded-xl p-4">
                   <p className="text-sm text-amber-200">
-                    <strong>Important:</strong> This is the only time you'll see this key. 
+                    <strong>Important:</strong> This is the only time you&apos;ll see this key. 
                     Store it securely — we only save a hash on our servers.
                   </p>
                 </div>

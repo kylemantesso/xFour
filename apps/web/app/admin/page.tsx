@@ -147,7 +147,7 @@ function BootstrapAdmin() {
           Admin Access Required
         </h1>
         <p className="text-[#888] mb-6">
-          You don't have platform admin access. If this is a new installation, you can bootstrap yourself as the first admin.
+          You don&apos;t have platform admin access. If this is a new installation, you can bootstrap yourself as the first admin.
         </p>
 
         {error && (
@@ -675,7 +675,7 @@ function ChainsManagement() {
             </div>
             <p className="text-lg font-medium text-white">No chains configured</p>
             <p className="text-sm text-[#888] mt-1">
-              Click "Seed Defaults" to add standard chains, or add a custom chain
+              Click &quot;Seed Defaults&quot; to add standard chains, or add a custom chain
             </p>
           </div>
         ) : (

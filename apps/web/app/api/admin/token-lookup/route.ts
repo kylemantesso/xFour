@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createPublicClient, http, getAddress, isAddress } from "viem";
+import { createPublicClient, http, getAddress, isAddress, Chain } from "viem";
 import { base, baseSepolia, mainnet, sepolia, localhost } from "viem/chains";
 
 // ERC20 minimal ABI for reading token info
@@ -28,7 +28,7 @@ const erc20Abi = [
 ] as const;
 
 // Chain configurations
-const chains: Record<number, { chain: typeof base; rpcUrl?: string }> = {
+const chains: Record<number, { chain: Chain; rpcUrl?: string }> = {
   1: { chain: mainnet, rpcUrl: "https://eth.llamarpc.com" },
   11155111: { chain: sepolia, rpcUrl: "https://rpc.sepolia.org" },
   8453: { chain: base },

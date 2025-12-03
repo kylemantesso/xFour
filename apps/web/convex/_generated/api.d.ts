@@ -16,6 +16,7 @@ import type * as invites from "../invites.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as payments from "../payments.js";
 import type * as tokens from "../tokens.js";
+import type * as usage from "../usage.js";
 import type * as users from "../users.js";
 import type * as workspaces from "../workspaces.js";
 
@@ -34,6 +35,7 @@ declare const fullApi: ApiFromModules<{
   "lib/auth": typeof lib_auth;
   payments: typeof payments;
   tokens: typeof tokens;
+  usage: typeof usage;
   users: typeof users;
   workspaces: typeof workspaces;
 }>;

@@ -3,6 +3,63 @@ import { query } from "./_generated/server";
 import { getCurrentWorkspaceContext, requireRole, ALL_ROLES } from "./lib/auth";
 
 /**
+ * Get real-time activity data for a 60-second sliding window
+ * Returns individual payment events with timestamps for animated timeline
+ */
+export const getActivityTimeline = query({
+  args: {
+    windowSeconds: v.optional(v.number()), // default 60
+  },
+  handler: async (ctx, args) => {
+    const { workspaceId, role } = await getCurrentWorkspaceContext(ctx);
+    requireRole(role, ALL_ROLES, "view activity timeline");
+
+    const windowSeconds = args.windowSeconds ?? 60;
+    const now = Date.now();
+    const windowStart = now - windowSeconds * 1000;
+
+    // Fetch recent payments
+    const payments = await ctx.db
+      .query("payments")
+      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
+      .order("desc")
+      .take(100);
+
+    // Filter to only payments in the window and map to timeline events
+    const events = payments
+      .filter((p) => p.createdAt >= windowStart)
+      .map((p) => ({
+        id: p._id,
+        timestamp: p.createdAt,
+        status: p.status,
+        amount: p.treasuryAmount,
+        // Normalize amount for height (we'll calculate max on frontend)
+      }));
+
+    // Count by status for stats
+    const settled = events.filter((e) => e.status === "settled" || e.status === "completed").length;
+    const pending = events.filter((e) => e.status === "allowed" || e.status === "pending").length;
+    const denied = events.filter((e) => e.status === "denied" || e.status === "failed").length;
+
+    // Get max amount for normalization
+    const maxAmount = Math.max(...events.map((e) => e.amount), 1);
+
+    return {
+      events,
+      serverTime: now,
+      windowSeconds,
+      stats: {
+        total: events.length,
+        settled,
+        pending,
+        denied,
+      },
+      maxAmount,
+    };
+  },
+});
+
+/**
  * List payments for the current workspace
  */
 export const listPayments = query({

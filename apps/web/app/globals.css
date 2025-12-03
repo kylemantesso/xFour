@@ -48,3 +48,32 @@ body {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
+
+/* Activity Timeline Chart Animations */
+@keyframes activity-scan {
+  0% { right: 100%; }
+  100% { right: 0%; }
+}
+
+@keyframes activity-bar-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.5); }
+}
+
+@keyframes activity-bar-pop {
+  0% { transform: scaleY(0.8); }
+  50% { transform: scaleY(1.15); }
+  100% { transform: scaleY(1); }
+}
+
+.animate-activity-scan {
+  animation: activity-scan 60s linear infinite;
+}
+
+.animate-activity-bar-pulse {
+  animation: activity-bar-pulse 0.3s ease-out;
+}
+
+.animate-activity-bar-pop {
+  animation: activity-bar-pop 0.4s ease-out;
+}

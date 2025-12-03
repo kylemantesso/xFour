@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { WorkspaceGuard } from "../../../components/WorkspaceGuard";
@@ -8,6 +8,8 @@ import { BackToDashboard } from "../../../components/BackToDashboard";
 
 // Status filter type
 type StatusFilter = "all" | "settled" | "allowed" | "denied" | "failed";
+
+const ITEMS_PER_PAGE = 15;
 
 export default function ActivityPage() {
   return (
@@ -19,6 +21,7 @@ export default function ActivityPage() {
 
 function ActivityContent() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [currentPage, setCurrentPage] = useState(1);
   const payments = useQuery(api.payments.listPayments, { limit: 100 });
   const stats = useQuery(api.payments.getPaymentStats);
 
@@ -26,6 +29,18 @@ function ActivityContent() {
     if (statusFilter === "all") return true;
     return p.status === statusFilter;
   });
+
+  // Reset to page 1 when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter]);
+
+  // Pagination calculations
+  const totalItems = filteredPayments?.length ?? 0;
+  const totalPages = Math.ceil(totalItems / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedPayments = filteredPayments?.slice(startIndex, endIndex);
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
@@ -47,6 +62,9 @@ function ActivityContent() {
             </div>
           </div>
         </div>
+
+        {/* Real-time Activity Chart */}
+        <ActivityTimelineChart />
 
         {/* Summary Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -179,16 +197,28 @@ function ActivityContent() {
           </div>
 
           {/* Table Body */}
-          {!filteredPayments ? (
+          {!paginatedPayments ? (
             <LoadingSkeleton />
-          ) : filteredPayments.length === 0 ? (
+          ) : paginatedPayments.length === 0 ? (
             <EmptyState />
           ) : (
             <div className="divide-y divide-[#222]">
-              {filteredPayments.map((payment) => (
+              {paginatedPayments.map((payment) => (
                 <PaymentRow key={payment._id} payment={payment} />
               ))}
             </div>
+          )}
+
+          {/* Pagination Controls */}
+          {paginatedPayments && totalItems > ITEMS_PER_PAGE && (
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              startIndex={startIndex}
+              endIndex={Math.min(endIndex, totalItems)}
+              onPageChange={setCurrentPage}
+            />
           )}
         </div>
       </div>
@@ -582,6 +612,353 @@ function EmptyState() {
   );
 }
 
+function Pagination({
+  currentPage,
+  totalPages,
+  totalItems,
+  startIndex,
+  endIndex,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  totalItems: number;
+  startIndex: number;
+  endIndex: number;
+  onPageChange: (page: number) => void;
+}) {
+  // Generate page numbers to display
+  const getPageNumbers = () => {
+    const pages: (number | "ellipsis")[] = [];
+    const showEllipsisStart = currentPage > 3;
+    const showEllipsisEnd = currentPage < totalPages - 2;
+
+    if (totalPages <= 7) {
+      // Show all pages if 7 or fewer
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Always show first page
+      pages.push(1);
+
+      if (showEllipsisStart) {
+        pages.push("ellipsis");
+      }
+
+      // Show pages around current page
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+
+      for (let i = start; i <= end; i++) {
+        if (!pages.includes(i)) {
+          pages.push(i);
+        }
+      }
+
+      if (showEllipsisEnd) {
+        pages.push("ellipsis");
+      }
+
+      // Always show last page
+      if (!pages.includes(totalPages)) {
+        pages.push(totalPages);
+      }
+    }
+
+    return pages;
+  };
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-6 py-4 border-t border-[#333] bg-[#0a0a0a]">
+      {/* Results info */}
+      <div className="text-sm text-[#666]">
+        Showing <span className="text-[#888] font-medium">{startIndex + 1}</span> to{" "}
+        <span className="text-[#888] font-medium">{endIndex}</span> of{" "}
+        <span className="text-[#888] font-medium">{totalItems}</span> results
+      </div>
+
+      {/* Page controls */}
+      <div className="flex items-center gap-1">
+        {/* Previous button */}
+        <button
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="p-2 rounded-lg text-[#888] hover:text-white hover:bg-[#1a1a1a] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[#888] transition-colors"
+          aria-label="Previous page"
+        >
+          <ChevronLeftIcon className="w-4 h-4" />
+        </button>
+
+        {/* Page numbers */}
+        <div className="flex items-center gap-1">
+          {getPageNumbers().map((page, idx) =>
+            page === "ellipsis" ? (
+              <span key={`ellipsis-${idx}`} className="px-2 text-[#666]">
+                …
+              </span>
+            ) : (
+              <button
+                key={page}
+                onClick={() => onPageChange(page)}
+                className={`min-w-[36px] h-9 px-3 rounded-lg text-sm font-medium transition-colors ${
+                  currentPage === page
+                    ? "bg-white text-black"
+                    : "text-[#888] hover:text-white hover:bg-[#1a1a1a]"
+                }`}
+              >
+                {page}
+              </button>
+            )
+          )}
+        </div>
+
+        {/* Next button */}
+        <button
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="p-2 rounded-lg text-[#888] hover:text-white hover:bg-[#1a1a1a] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[#888] transition-colors"
+          aria-label="Next page"
+        >
+          <ChevronRightIcon className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// Real-time Activity Timeline Chart
+// ============================================
+
+interface TimelineEvent {
+  id: string;
+  timestamp: number;
+  status: string;
+  amount: number;
+}
+
+function ActivityTimelineChart() {
+  const timeline = useQuery(api.payments.getActivityTimeline, { windowSeconds: 60 });
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  const [newEventIds, setNewEventIds] = useState<Set<string>>(new Set());
+  const prevEventIdsRef = useRef<Set<string>>(new Set());
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  const isLoading = timeline === undefined;
+  const windowSeconds = 60;
+  const windowMs = windowSeconds * 1000;
+
+  // Update current time frequently for smooth sliding animation
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+    }, 50); // Update every 50ms for smooth animation
+    return () => clearInterval(interval);
+  }, []);
+
+  // Detect new events and trigger entrance animation
+  useEffect(() => {
+    if (!timeline?.events) return;
+
+    const currentIds = new Set(timeline.events.map((e) => e.id));
+    const newIds = new Set<string>();
+
+    // Find events that weren't in the previous set
+    currentIds.forEach((id) => {
+      if (!prevEventIdsRef.current.has(id)) {
+        newIds.add(id);
+      }
+    });
+
+    if (newIds.size > 0) {
+      setNewEventIds((prev) => new Set([...prev, ...newIds]));
+      
+      // Clear the "new" status after animation completes
+      setTimeout(() => {
+        setNewEventIds((prev) => {
+          const next = new Set(prev);
+          newIds.forEach((id) => next.delete(id));
+          return next;
+        });
+      }, 800);
+    }
+
+    prevEventIdsRef.current = currentIds;
+  }, [timeline]);
+
+  // Get status color
+  const getStatusColor = (status: string) => {
+    if (status === "settled" || status === "completed") {
+      return { bar: "from-emerald-500 to-emerald-300", glow: "bg-emerald-500" };
+    }
+    if (status === "allowed" || status === "pending") {
+      return { bar: "from-blue-500 to-blue-300", glow: "bg-blue-500" };
+    }
+    if (status === "denied" || status === "failed") {
+      return { bar: "from-red-500 to-red-300", glow: "bg-red-500" };
+    }
+    return { bar: "from-gray-500 to-gray-300", glow: "bg-gray-500" };
+  };
+
+  // Calculate position (0% = left/old, 100% = right/now)
+  const getPosition = (timestamp: number) => {
+    const age = currentTime - timestamp;
+    const position = 100 - (age / windowMs) * 100;
+    return Math.max(0, Math.min(100, position));
+  };
+
+  // Calculate height based on amount
+  const maxAmount = timeline?.maxAmount ?? 1;
+  const getHeight = (amount: number) => {
+    const normalized = amount / maxAmount;
+    return Math.max(15, normalized * 100); // Min 15% height for visibility
+  };
+
+  const events = timeline?.events ?? [];
+  const stats = timeline?.stats ?? { total: 0, settled: 0, pending: 0, denied: 0 };
+
+  return (
+    <div className="bg-[#111] border border-[#333] rounded-xl p-6 mb-6 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <div className={`w-3 h-3 rounded-full ${isLoading ? "bg-yellow-500" : "bg-emerald-500"} animate-pulse`} />
+            <div className={`absolute inset-0 w-3 h-3 rounded-full ${isLoading ? "bg-yellow-500" : "bg-emerald-500"} animate-ping opacity-75`} />
+          </div>
+          <h3 className="text-sm font-medium text-white">Live Activity</h3>
+          <span className="text-xs text-[#666]">
+            {isLoading ? "Connecting..." : "60 second window"}
+          </span>
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="text-xs text-[#888]">Settled ({stats.settled})</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-blue-500" />
+            <span className="text-xs text-[#888]">Pending ({stats.pending})</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-red-500" />
+            <span className="text-xs text-[#888]">Denied ({stats.denied})</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Chart */}
+      <div ref={containerRef} className="relative h-32 bg-[#0a0a0a] rounded-lg overflow-hidden">
+        {/* Grid lines */}
+        <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-30">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div key={i} className="border-b border-[#333] w-full" />
+          ))}
+        </div>
+
+        {/* Vertical time markers */}
+        <div className="absolute inset-0 flex justify-between pointer-events-none opacity-20">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <div key={i} className="border-l border-[#333] h-full" />
+          ))}
+        </div>
+
+        {/* "Now" edge glow */}
+        <div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-emerald-500/10 to-transparent pointer-events-none" />
+
+        {/* Events sliding across */}
+        {events.map((event) => {
+          const position = getPosition(event.timestamp);
+          const height = getHeight(event.amount);
+          const colors = getStatusColor(event.status);
+          const isNew = newEventIds.has(event.id);
+          const secondsAgo = Math.round((currentTime - event.timestamp) / 1000);
+
+          // Don't render if off-screen
+          if (position <= 0) return null;
+
+          return (
+            <div
+              key={event.id}
+              className="absolute bottom-0 group"
+              style={{
+                left: `${position}%`,
+                transform: "translateX(-50%)",
+                transition: "left 50ms linear",
+              }}
+            >
+              {/* Glow effect for new events */}
+              {isNew && (
+                <div
+                  className={`absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-full ${colors.glow} opacity-40 blur-md animate-pulse`}
+                  style={{ height: `${height + 20}%` }}
+                />
+              )}
+
+              {/* The bar itself */}
+              <div
+                className={`
+                  w-2 rounded-t-full bg-gradient-to-t ${colors.bar}
+                  transition-all duration-200 ease-out
+                  ${isNew ? "animate-activity-bar-pop" : ""}
+                `}
+                style={{
+                  height: `${height}%`,
+                  minHeight: "12px",
+                  boxShadow: isNew ? `0 0 12px 2px currentColor` : undefined,
+                }}
+              />
+
+              {/* Peak dot for new events */}
+              {isNew && (
+                <div className={`absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 ${colors.glow} rounded-full animate-ping`} />
+              )}
+
+              {/* Tooltip */}
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20">
+                <div className="bg-[#1a1a1a] border border-[#333] rounded-lg px-3 py-2 text-xs whitespace-nowrap shadow-xl">
+                  <div className="text-white font-medium">{event.amount.toFixed(4)}</div>
+                  <div className="text-[#888] capitalize">{event.status}</div>
+                  <div className="text-[#666]">{secondsAgo}s ago</div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Empty state */}
+        {events.length === 0 && !isLoading && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-[#666] text-sm">Waiting for transactions...</div>
+          </div>
+        )}
+      </div>
+
+      {/* Time axis */}
+      <div className="flex justify-between mt-2 text-xs text-[#666]">
+        <span>60s ago</span>
+        <span>45s</span>
+        <span>30s</span>
+        <span>15s</span>
+        <span className="text-emerald-500 font-medium">now</span>
+      </div>
+
+      {/* Stats footer */}
+      <div className="flex items-center justify-between mt-4 pt-4 border-t border-[#222]">
+        <div className="text-sm">
+          <span className="text-[#888]">Transactions in window:</span>
+          <span className="text-white font-medium ml-2">{stats.total}</span>
+        </div>
+        <div className="text-sm">
+          <span className="text-[#888]">Max amount:</span>
+          <span className="text-white font-medium ml-2">{maxAmount.toFixed(4)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Icons
 function ActivityIcon({ className }: { className?: string }) {
   return (
@@ -630,6 +1007,32 @@ function ArrowRightIcon({ className }: { className?: string }) {
         strokeLinejoin="round"
         strokeWidth={2}
         d="M14 5l7 7m0 0l-7 7m7-7H3"
+      />
+    </svg>
+  );
+}
+
+function ChevronLeftIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M15 19l-7-7 7-7"
+      />
+    </svg>
+  );
+}
+
+function ChevronRightIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M9 5l7 7-7 7"
       />
     </svg>
   );

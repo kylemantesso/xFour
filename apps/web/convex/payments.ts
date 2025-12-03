@@ -249,3 +249,146 @@ export const getPaymentStats = query({
     };
   },
 });
+
+// ============================================
+// PUBLIC QUERIES (No authentication required)
+// For landing page / marketing purposes
+// ============================================
+
+/**
+ * Get platform-wide public statistics
+ * No authentication required - for landing page
+ */
+export const getPublicStats = query({
+  args: {},
+  returns: v.object({
+    totalPayments: v.number(),
+    settledPayments: v.number(),
+    totalVolume: v.number(),
+    activeWorkspaces: v.number(),
+    successRate: v.number(),
+    last24hPayments: v.number(),
+    last24hVolume: v.number(),
+  }),
+  handler: async (ctx) => {
+    // Get all payments across all workspaces
+    const payments = await ctx.db.query("payments").collect();
+
+    const totalPayments = payments.length;
+    const settledPayments = payments.filter(
+      (p) => p.status === "settled" || p.status === "completed"
+    );
+    const settledCount = settledPayments.length;
+    const totalVolume = settledPayments.reduce(
+      (sum, p) => sum + p.treasuryAmount,
+      0
+    );
+
+    // Count unique workspaces with payments
+    const uniqueWorkspaces = new Set(payments.map((p) => p.workspaceId));
+    const activeWorkspaces = uniqueWorkspaces.size;
+
+    // Calculate success rate
+    const successRate =
+      totalPayments > 0 ? (settledCount / totalPayments) * 100 : 100;
+
+    // Get payments from last 24 hours
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    const recentPayments = payments.filter((p) => p.createdAt > oneDayAgo);
+    const recentSettled = recentPayments.filter(
+      (p) => p.status === "settled" || p.status === "completed"
+    );
+    const last24hVolume = recentSettled.reduce(
+      (sum, p) => sum + p.treasuryAmount,
+      0
+    );
+
+    return {
+      totalPayments,
+      settledPayments: settledCount,
+      totalVolume: Math.round(totalVolume * 10000) / 10000,
+      activeWorkspaces,
+      successRate: Math.round(successRate * 10) / 10,
+      last24hPayments: recentPayments.length,
+      last24hVolume: Math.round(last24hVolume * 10000) / 10000,
+    };
+  },
+});
+
+/**
+ * Get public real-time activity timeline
+ * No authentication required - for landing page
+ * Returns anonymized data (no workspace/user info)
+ */
+export const getPublicActivityTimeline = query({
+  args: {
+    windowSeconds: v.optional(v.number()), // default 60
+  },
+  returns: v.object({
+    events: v.array(
+      v.object({
+        id: v.string(),
+        timestamp: v.number(),
+        status: v.string(),
+        amount: v.number(),
+      })
+    ),
+    serverTime: v.number(),
+    windowSeconds: v.number(),
+    stats: v.object({
+      total: v.number(),
+      settled: v.number(),
+      pending: v.number(),
+      denied: v.number(),
+    }),
+    maxAmount: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const windowSeconds = args.windowSeconds ?? 60;
+    const now = Date.now();
+    const windowStart = now - windowSeconds * 1000;
+
+    // Fetch recent payments across all workspaces
+    const payments = await ctx.db
+      .query("payments")
+      .order("desc")
+      .take(200);
+
+    // Filter to only payments in the window and map to anonymized timeline events
+    const events = payments
+      .filter((p) => p.createdAt >= windowStart)
+      .map((p) => ({
+        id: p._id,
+        timestamp: p.createdAt,
+        status: p.status,
+        amount: p.treasuryAmount,
+      }));
+
+    // Count by status for stats
+    const settled = events.filter(
+      (e) => e.status === "settled" || e.status === "completed"
+    ).length;
+    const pending = events.filter(
+      (e) => e.status === "allowed" || e.status === "pending"
+    ).length;
+    const denied = events.filter(
+      (e) => e.status === "denied" || e.status === "failed"
+    ).length;
+
+    // Get max amount for normalization
+    const maxAmount = Math.max(...events.map((e) => e.amount), 1);
+
+    return {
+      events,
+      serverTime: now,
+      windowSeconds,
+      stats: {
+        total: events.length,
+        settled,
+        pending,
+        denied,
+      },
+      maxAmount,
+    };
+  },
+});

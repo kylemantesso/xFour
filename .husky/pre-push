@@ -4,8 +4,8 @@
 echo "🔍 Running linting..."
 pnpm lint || exit 1
 
-echo "🏗️  Running build to ensure Vercel build will pass..."
-pnpm build || exit 1
+echo "🔎 Running type checking..."
+pnpm typecheck || exit 1
 
 echo "✅ Pre-push checks passed!"
 

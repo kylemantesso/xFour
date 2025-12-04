@@ -319,8 +319,6 @@ function ChainsManagement() {
     setIsAdding(true);
   };
 
-  const toast = useToast();
-
   const handleSeedChains = async () => {
     setIsSeeding(true);
     try {

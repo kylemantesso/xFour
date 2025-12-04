@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
+import { useToast } from "../../components/Toast";
 
 // Types for our demo
 type StepStatus = "pending" | "running" | "success" | "error";
@@ -66,9 +67,11 @@ export default function SDKDemoPage() {
     );
   }, []);
 
+  const toast = useToast();
+
   const runDemo = async () => {
     if (!apiKey.trim()) {
-      alert("Please enter your API key");
+      toast.warning("Please enter your API key");
       return;
     }
 
@@ -386,9 +389,9 @@ export default function SDKDemoPage() {
           >
             ← Back to Dashboard
           </Link>
-          <h1 className="text-3xl font-bold mt-4">x402 SDK Demo</h1>
+          <h1 className="text-3xl font-bold mt-4">xFour SDK Demo</h1>
           <p className="text-[#888] mt-2">
-            Watch the SDK handle an x402 payment flow step-by-step, including token swaps
+            Watch the SDK handle an xFour payment flow step-by-step, including token swaps
           </p>
         </div>
 
@@ -581,7 +584,7 @@ export default function SDKDemoPage() {
             :
           </p>
           <pre className="bg-[#0a0a0a] rounded-lg p-4 overflow-x-auto text-sm text-[#888]">
-            <code>{`import { createGatewayClient } from '@x402/sdk';
+            <code>{`import { createGatewayClient } from '@xfour/sdk';
 
 const client = createGatewayClient({
   gatewayBaseUrl: '${typeof window !== "undefined" ? window.location.origin : ""}/api/gateway',
@@ -600,7 +603,7 @@ const response = await client.fetchWithX402(
 
 // The SDK automatically handles:
 // 1. Detects 402 Payment Required
-// 2. Extracts x402 invoice headers
+// 2. Extracts xFour invoice headers
 // 3. Calls /quote to get authorization
 // 4. Calls /pay to execute payment
 //    ↳ Includes automatic token swaps if needed!

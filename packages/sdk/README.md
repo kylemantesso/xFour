@@ -1,21 +1,21 @@
-# @x402/sdk
+# @xfour/sdk
 
-TypeScript SDK for the x402 payment gateway. Provides a drop-in `fetch` replacement that automatically handles x402 payment flows.
+TypeScript SDK for the xFour payment gateway. Provides a drop-in `fetch` replacement that automatically handles xFour payment flows.
 
 ## Installation
 
 ```bash
-npm install @x402/sdk
+npm install @xfour/sdk
 # or
-pnpm add @x402/sdk
+pnpm add @xfour/sdk
 # or
-yarn add @x402/sdk
+yarn add @xfour/sdk
 ```
 
 ## Quick Start
 
 ```typescript
-import { createGatewayClient } from '@x402/sdk';
+import { createGatewayClient } from '@xfour/sdk';
 
 // Initialize the client
 const client = createGatewayClient({
@@ -24,7 +24,7 @@ const client = createGatewayClient({
 });
 
 // Use fetchWithX402 just like regular fetch
-// x402 payments are handled automatically!
+// xFour payments are handled automatically!
 const response = await client.fetchWithX402('https://api.example.com/paid-resource', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
@@ -56,7 +56,7 @@ When you call `fetchWithX402`:
 Creates a new gateway client instance.
 
 ```typescript
-import { createGatewayClient, GatewayClientConfig } from '@x402/sdk';
+import { createGatewayClient, GatewayClientConfig } from '@xfour/sdk';
 
 const config: GatewayClientConfig = {
   // Required: Gateway API base URL
@@ -123,7 +123,7 @@ if (result.status === 'ok') {
 Base error class for all gateway-related errors.
 
 ```typescript
-import { GatewayError } from '@x402/sdk';
+import { GatewayError } from '@xfour/sdk';
 
 try {
   await client.fetchWithX402(url);
@@ -140,7 +140,7 @@ try {
 Thrown when the gateway denies a payment quote.
 
 ```typescript
-import { PaymentDeniedError } from '@x402/sdk';
+import { PaymentDeniedError } from '@xfour/sdk';
 
 try {
   await client.fetchWithX402(url);
@@ -157,7 +157,7 @@ try {
 Thrown when a payment execution fails.
 
 ```typescript
-import { PaymentFailedError } from '@x402/sdk';
+import { PaymentFailedError } from '@xfour/sdk';
 
 try {
   await client.fetchWithX402(url);
@@ -176,7 +176,7 @@ try {
 Extract and normalize x402 headers from a Response.
 
 ```typescript
-import { extractInvoiceHeaders } from '@x402/sdk';
+import { extractInvoiceHeaders } from '@xfour/sdk';
 
 const res = await fetch('https://api.example.com/resource');
 const headers = extractInvoiceHeaders(res);
@@ -188,7 +188,7 @@ const headers = extractInvoiceHeaders(res);
 Check if a response is 402 Payment Required.
 
 ```typescript
-import { isPaymentRequired } from '@x402/sdk';
+import { isPaymentRequired } from '@xfour/sdk';
 
 const res = await fetch('https://api.example.com/resource');
 if (isPaymentRequired(res)) {
@@ -241,7 +241,7 @@ type InvoiceHeaders = Record<string, string>;
 ## Complete Example
 
 ```typescript
-import { createGatewayClient, PaymentDeniedError, PaymentFailedError } from '@x402/sdk';
+import { createGatewayClient, PaymentDeniedError, PaymentFailedError } from '@xfour/sdk';
 
 async function main() {
   const client = createGatewayClient({
@@ -250,7 +250,7 @@ async function main() {
   });
 
   try {
-    // Make request to x402-protected API
+    // Make request to xFour-protected API
     const res = await client.fetchWithX402('http://localhost:3000/api/mock-nova/review', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

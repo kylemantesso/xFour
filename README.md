@@ -1,32 +1,91 @@
-# Welcome to your Convex + Vercel app
+# xFour
 
-This is a [Convex](https://convex.dev/) project demonstrating how to use Convex with Vercel.
+**Payment Infrastructure for AI Agents** | [xfour.xyz](https://xfour.xyz)
 
-After the initial setup (<2 minutes) you'll have a working full-stack app using:
+xFour is a programmable payment gateway that enables AI agents to transact autonomously using stablecoins on Ethereum, with full budget controls, policy enforcement, and real-time analytics.
 
-- Convex as your backend (database, server logic)
-- [React](https://react.dev/) as your frontend (web page interactivity)
-- [Next.js](https://nextjs.org/) for optimized web hosting and page routing
-- [Tailwind](https://tailwindcss.com/) for building great looking accessible UI
-- [Vercel](https://vercel.com/) for hosting and deployment by integrating Convex through the Vercel Marketplace.
+## Features
 
-## Get started
+- 🔑 **Secure API Keys** - Generate API keys for each agent with workspace isolation
+- 🛡️ **Payment Policies** - Set spending limits, allowed providers, and budget caps
+- 📊 **Real-time Analytics** - Monitor payments as they happen with full audit trails
+- 🔄 **Token Swaps** - Automatic swaps from your treasury token to provider's required currency
+- 🏦 **Treasury Management** - Non-custodial smart contract treasuries
+- 🔌 **SDK Integration** - Drop-in SDK for any AI agent framework
 
-Click the "Deploy" button to clone this repo, create a new Vercel project, setup the Convex integration, and provision a new Convex project:
+## Tech Stack
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fget-convex%2Fvercel-marketplace-convex&project-name=vercel-with-convex&repository-name=vercel-with-convex&demo-title=Convex%20with%20Vercel&demo-description=A%20minimal%20template%20showcasing%20using%20Convex%20with%20Vercel&demo-url=https%3A%2F%2Fconvex-vercel-template-demo.previews.convex.dev%2F&products=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22convex%22%2C%22productSlug%22%3A%22convex%22%2C%22protocol%22%3A%22storage%22%7D%5D)
+- **Frontend**: Next.js 15, React, Tailwind CSS
+- **Backend**: Convex (real-time database & server logic)
+- **Auth**: Clerk
+- **Blockchain**: Ethereum, MNEE Stablecoin
+- **Contracts**: Hardhat, Solidity
 
-## Learn more
+## Project Structure
 
-To learn more about developing your project with Convex, check out:
+```
+├── apps/
+│   └── web/           # Next.js web application
+│       ├── app/       # App router pages
+│       ├── components/ # React components
+│       ├── convex/    # Convex backend functions
+│       └── hooks/     # Custom React hooks
+├── contracts/         # Solidity smart contracts
+└── packages/
+    └── sdk/           # TypeScript SDK (@xfour/sdk)
+```
 
-- The [Tour of Convex](https://docs.convex.dev/get-started) for a thorough introduction to Convex principles.
-- The rest of [Convex docs](https://docs.convex.dev/) to learn about all Convex features.
-- [Stack](https://stack.convex.dev/) for in-depth articles on advanced topics.
+## Getting Started
 
-## Join the community
+### Prerequisites
 
-Join thousands of developers building full-stack apps with Convex:
+- Node.js 18+
+- pnpm
+- A Convex account
+- A Clerk account
 
-- Join the [Convex Discord community](https://convex.dev/community) to get help in real-time.
-- Follow [Convex on GitHub](https://github.com/get-convex/), star and contribute to the open-source implementation of Convex.
+### Installation
+
+```bash
+# Install dependencies
+pnpm install
+
+# Start Convex dev server
+cd apps/web
+pnpm convex dev
+
+# Start Next.js dev server (in another terminal)
+pnpm dev
+```
+
+### Environment Variables
+
+Create `.env.local` in `apps/web/`:
+
+```env
+NEXT_PUBLIC_CONVEX_URL=your-convex-url
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=your-clerk-key
+CLERK_SECRET_KEY=your-clerk-secret
+```
+
+## SDK Usage
+
+```typescript
+import { createGatewayClient } from '@xfour/sdk';
+
+const client = createGatewayClient({
+  gatewayBaseUrl: 'https://xfour.xyz/api/gateway',
+  apiKey: 'your-api-key',
+});
+
+// Payments are handled automatically!
+const response = await client.fetchWithX402('https://api.example.com/paid-resource', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ data: 'test' }),
+});
+```
+
+## License
+
+MIT

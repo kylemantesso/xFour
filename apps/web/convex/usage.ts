@@ -451,3 +451,97 @@ export const getHourlyDistribution = query({
   },
 });
 
+/**
+ * Get agent's current daily and monthly spend
+ * Used for displaying spend vs limits in the UI
+ * Can optionally filter by chainId and tokenAddress for per-chain/token limits
+ */
+export const getAgentSpend = query({
+  args: {
+    apiKeyId: v.id("apiKeys"),
+    chainId: v.optional(v.number()),
+    tokenAddress: v.optional(v.string()),
+  },
+  returns: v.object({
+    dailySpend: v.number(),
+    monthlySpend: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const { workspaceId, role } = await getCurrentWorkspaceContext(ctx);
+    requireRole(role, ALL_ROLES, "view agent spend");
+
+    const apiKey = await ctx.db.get(args.apiKeyId);
+    if (!apiKey || apiKey.workspaceId !== workspaceId) {
+      throw new Error("API key not found in this workspace");
+    }
+
+    const now = Date.now();
+
+    // Calculate daily spend
+    const startOfDay = new Date(now);
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const startOfDayTimestamp = startOfDay.getTime();
+
+    const dailyPayments = await ctx.db
+      .query("payments")
+      .withIndex("by_apiKeyId", (q) => q.eq("apiKeyId", args.apiKeyId))
+      .filter((q) =>
+        q.and(
+          q.gte(q.field("createdAt"), startOfDayTimestamp),
+          q.or(
+            q.eq(q.field("status"), "settled"),
+            q.eq(q.field("status"), "completed")
+          )
+        )
+      )
+      .collect();
+
+    // Filter by chain/token if provided
+    let filteredDailyPayments = dailyPayments;
+    if (args.chainId !== undefined && args.tokenAddress !== undefined) {
+      filteredDailyPayments = dailyPayments.filter((p) =>
+        p.chainId === args.chainId &&
+        p.paymentToken?.toLowerCase() === args.tokenAddress!.toLowerCase()
+      );
+    }
+
+    const dailySpend = filteredDailyPayments.reduce((sum, p) => sum + p.treasuryAmount, 0);
+
+    // Calculate monthly spend
+    const startOfMonth = new Date(now);
+    startOfMonth.setUTCDate(1);
+    startOfMonth.setUTCHours(0, 0, 0, 0);
+    const startOfMonthTimestamp = startOfMonth.getTime();
+
+    const monthlyPayments = await ctx.db
+      .query("payments")
+      .withIndex("by_apiKeyId", (q) => q.eq("apiKeyId", args.apiKeyId))
+      .filter((q) =>
+        q.and(
+          q.gte(q.field("createdAt"), startOfMonthTimestamp),
+          q.or(
+            q.eq(q.field("status"), "settled"),
+            q.eq(q.field("status"), "completed")
+          )
+        )
+      )
+      .collect();
+
+    // Filter by chain/token if provided
+    let filteredMonthlyPayments = monthlyPayments;
+    if (args.chainId !== undefined && args.tokenAddress !== undefined) {
+      filteredMonthlyPayments = monthlyPayments.filter((p) =>
+        p.chainId === args.chainId &&
+        p.paymentToken?.toLowerCase() === args.tokenAddress!.toLowerCase()
+      );
+    }
+
+    const monthlySpend = filteredMonthlyPayments.reduce((sum, p) => sum + p.treasuryAmount, 0);
+
+    return {
+      dailySpend: Math.round(dailySpend * 1000000) / 1000000,
+      monthlySpend: Math.round(monthlySpend * 1000000) / 1000000,
+    };
+  },
+});
+

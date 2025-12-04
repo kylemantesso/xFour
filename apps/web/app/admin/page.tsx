@@ -5,6 +5,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { useUser } from "@clerk/nextjs";
+import { useToast } from "../../components/Toast";
 
 // Icons
 function ShieldIcon({ className }: { className?: string }) {
@@ -259,6 +260,7 @@ function ChainsManagement() {
   const updateChain = useMutation(api.chains.updateSupportedChain);
   const deleteChain = useMutation(api.chains.deleteSupportedChain);
   const seedChains = useMutation(api.chains.seedDefaultChains);
+  const toast = useToast();
 
   const [isAdding, setIsAdding] = useState(false);
   const [editingChain, setEditingChain] = useState<SupportedChain | null>(null);
@@ -317,17 +319,19 @@ function ChainsManagement() {
     setIsAdding(true);
   };
 
+  const toast = useToast();
+
   const handleSeedChains = async () => {
     setIsSeeding(true);
     try {
       const result = await seedChains({});
       if (result.added.length > 0) {
-        alert(`Added: ${result.added.join(", ")}`);
+        toast.success(`Added chains: ${result.added.join(", ")}`);
       } else {
-        alert("All default chains already exist");
+        toast.info("All default chains already exist");
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to seed chains");
+      toast.error(err instanceof Error ? err.message : "Failed to seed chains");
     } finally {
       setIsSeeding(false);
     }
@@ -398,8 +402,9 @@ function ChainsManagement() {
     setDeletingId(chain.chainId);
     try {
       await deleteChain({ chainId: chain.chainId });
+      toast.success(`Chain "${chain.name}" deleted successfully`);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to delete chain");
+      toast.error(err instanceof Error ? err.message : "Failed to delete chain");
     } finally {
       setDeletingId(null);
     }
@@ -1167,6 +1172,7 @@ function AdminsManagement() {
   const admins = useQuery(api.tokens.listAdmins);
   const grantAdmin = useMutation(api.tokens.grantAdminByEmail);
   const revokeAdmin = useMutation(api.tokens.revokeAdmin);
+  const toast = useToast();
 
   const [email, setEmail] = useState("");
   const [isAdding, setIsAdding] = useState(false);
@@ -1196,8 +1202,9 @@ function AdminsManagement() {
     setRevokingId(userId);
     try {
       await revokeAdmin({ userId });
+      toast.success(`Admin access revoked from ${name || "user"}`);
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to revoke admin");
+      toast.error(err instanceof Error ? err.message : "Failed to revoke admin");
     } finally {
       setRevokingId(null);
     }

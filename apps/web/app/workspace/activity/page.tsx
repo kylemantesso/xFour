@@ -240,6 +240,7 @@ interface PaymentData {
   createdAt: number;
   txHash?: string;
   payTo: string;
+  denialReason?: string;
   // Token info
   paymentToken?: string;
   treasuryTokenSymbol: string;
@@ -265,6 +266,18 @@ function PaymentRow({ payment }: { payment: PaymentData }) {
     pending: { color: "text-yellow-400", bg: "bg-yellow-900/30", label: "Processing" },
     completed: { color: "text-emerald-400", bg: "bg-emerald-900/30", label: "Completed" },
     refunded: { color: "text-orange-400", bg: "bg-orange-900/30", label: "Refunded" },
+  };
+
+  const formatDenialReason = (reason: string | undefined): string => {
+    if (!reason) return "";
+    const reasonMap: Record<string, string> = {
+      AGENT_POLICY_INACTIVE: "Agent policy is inactive",
+      AGENT_MAX_REQUEST_EXCEEDED: "Request exceeds max per-request limit",
+      AGENT_PROVIDER_NOT_ALLOWED: "Provider not allowed by agent policy",
+      AGENT_DAILY_LIMIT_EXCEEDED: "Daily spending limit exceeded",
+      AGENT_MONTHLY_LIMIT_EXCEEDED: "Monthly spending limit exceeded",
+    };
+    return reasonMap[reason] || reason.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase());
   };
 
   const status = statusConfig[payment.status] ?? {
@@ -349,12 +362,17 @@ function PaymentRow({ payment }: { payment: PaymentData }) {
         </div>
 
         {/* Status */}
-        <div className="col-span-2 flex items-center">
+        <div className="col-span-2 flex items-center gap-2">
           <span
             className={`px-2 py-1 text-xs font-medium rounded-full ${status.bg} ${status.color}`}
           >
             {status.label}
           </span>
+          {payment.status === "denied" && payment.denialReason && (
+            <span className="text-xs text-red-400 truncate" title={formatDenialReason(payment.denialReason)}>
+              {formatDenialReason(payment.denialReason)}
+            </span>
+          )}
         </div>
 
         {/* Time */}
@@ -407,6 +425,11 @@ function PaymentRow({ payment }: { payment: PaymentData }) {
             >
               {status.label}
             </span>
+            {payment.status === "denied" && payment.denialReason && (
+              <p className="text-xs text-red-400 mt-1" title={formatDenialReason(payment.denialReason)}>
+                {formatDenialReason(payment.denialReason)}
+              </p>
+            )}
             <p className="text-xs text-[#666] mt-1">{formatTime(payment.createdAt)}</p>
           </div>
         </div>
@@ -503,6 +526,17 @@ function PaymentRow({ payment }: { payment: PaymentData }) {
                 >
                   {payment.swapTxHash}
                 </a>
+              </div>
+            )}
+
+            {/* Denial Reason */}
+            {payment.status === "denied" && payment.denialReason && (
+              <div className="col-span-1 sm:col-span-2 md:col-span-4">
+                <p className="text-[#666] mb-1">Denial Reason</p>
+                <div className="bg-red-900/20 border border-red-900/50 rounded-lg p-3">
+                  <p className="text-sm text-red-400 font-medium">{formatDenialReason(payment.denialReason)}</p>
+                  <p className="text-xs text-red-400/60 mt-1 font-mono">{payment.denialReason}</p>
+                </div>
               </div>
             )}
           </div>

@@ -165,6 +165,7 @@ export default defineSchema({
     originalAmount: v.number(), // Amount in original currency (what provider requested)
     originalCurrency: v.string(), // e.g., "USDC" (currency provider requested)
     originalNetwork: v.string(), // e.g., "base"
+    chainId: v.optional(v.number()), // Chain ID (derived from originalNetwork) - for efficient filtering
     payTo: v.string(), // Payment address
     // Treasury token (workspace's preferred payment token)
     paymentToken: v.optional(v.string()), // Token address used from treasury
@@ -206,9 +207,9 @@ export default defineSchema({
   agentPolicies: defineTable({
     workspaceId: v.id("workspaces"),
     apiKeyId: v.id("apiKeys"),
-    dailyLimit: v.optional(v.number()), // Daily spend limit (in treasury token)
-    monthlyLimit: v.optional(v.number()), // Monthly spend limit (in treasury token)
-    maxRequest: v.optional(v.number()), // Max per-request amount (in treasury token)
+    dailyLimit: v.optional(v.number()), // Daily spend limit (in treasury token) - global fallback
+    monthlyLimit: v.optional(v.number()), // Monthly spend limit (in treasury token) - global fallback
+    maxRequest: v.optional(v.number()), // Max per-request amount (in treasury token) - global fallback
     allowedProviders: v.optional(v.array(v.id("providers"))),
     isActive: v.boolean(),
     createdAt: v.number(),
@@ -216,6 +217,23 @@ export default defineSchema({
   })
     .index("by_workspaceId", ["workspaceId"])
     .index("by_apiKeyId", ["apiKeyId"]),
+
+  // Per-chain/token spend limits (more specific than global limits)
+  agentPolicyLimits: defineTable({
+    workspaceId: v.id("workspaces"),
+    apiKeyId: v.id("apiKeys"),
+    chainId: v.number(), // e.g., 8453 (Base)
+    tokenAddress: v.string(), // Token contract address
+    dailyLimit: v.optional(v.number()), // Daily spend limit for this chain/token
+    monthlyLimit: v.optional(v.number()), // Monthly spend limit for this chain/token
+    maxRequest: v.optional(v.number()), // Max per-request amount for this chain/token
+    isActive: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_workspaceId", ["workspaceId"])
+    .index("by_apiKeyId", ["apiKeyId"])
+    .index("by_apiKey_chain_token", ["apiKeyId", "chainId", "tokenAddress"]),
 
   // Provider-level policies
   providerPolicies: defineTable({

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalMutation, internalQuery, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
+import { getCurrentWorkspaceContext, requireRole, ALL_ROLES } from "./lib/auth";
 
 // ============================================
 // FX CONVERSION
@@ -93,6 +94,30 @@ export const validateApiKeyInternal = internalQuery({
 // ============================================
 
 /**
+ * List providers for the current workspace
+ */
+export const listProviders = query({
+  args: {},
+  handler: async (ctx) => {
+    const { workspaceId, role } = await getCurrentWorkspaceContext(ctx);
+    requireRole(role, ALL_ROLES, "view providers");
+
+    const providers = await ctx.db
+      .query("providers")
+      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
+      .collect();
+
+    return providers.map((p) => ({
+      _id: p._id,
+      name: p.name,
+      host: p.host,
+      type: p.type,
+      isActive: p.isActive,
+    }));
+  },
+});
+
+/**
  * Get or create a provider for a given host
  * Auto-creates providers when we see new hosts
  */
@@ -148,6 +173,7 @@ export const createPaymentQuote = internalMutation({
     originalAmount: v.number(),
     originalCurrency: v.string(),
     originalNetwork: v.string(),
+    chainId: v.optional(v.number()), // Chain ID for efficient filtering
     payTo: v.string(),
     paymentToken: v.optional(v.string()), // Token address from API key preference
     paymentTokenSymbol: v.optional(v.string()), // Token symbol (e.g., "MNEE", "USDC")
@@ -168,6 +194,7 @@ export const createPaymentQuote = internalMutation({
       originalAmount: args.originalAmount,
       originalCurrency: args.originalCurrency,
       originalNetwork: args.originalNetwork,
+      chainId: args.chainId,
       payTo: args.payTo,
       paymentToken: args.paymentToken,
       paymentTokenSymbol: args.paymentTokenSymbol,
@@ -271,6 +298,126 @@ export const updatePaymentSwapDetails = internalMutation({
     });
 
     return { success: true };
+  },
+});
+
+// ============================================
+// POLICY ENFORCEMENT
+// ============================================
+
+/**
+ * Check agent policy against a payment request
+ * Returns whether the request is allowed and a reason if denied
+ * Requires per-chain/token limits - no global limits
+ */
+export const checkAgentPolicy = internalQuery({
+  args: {
+    apiKeyId: v.id("apiKeys"),
+    providerId: v.optional(v.id("providers")),
+    treasuryAmount: v.number(), // Amount in treasury token
+    chainId: v.number(), // Chain ID for per-chain/token limits
+    tokenAddress: v.optional(v.string()), // Token address for per-chain/token limits
+  },
+  handler: async (ctx, args) => {
+    // Get agent policy (for allowedProviders and isActive check)
+    const policy = await ctx.db
+      .query("agentPolicies")
+      .withIndex("by_apiKeyId", (q) => q.eq("apiKeyId", args.apiKeyId))
+      .unique();
+
+    // Check if policy exists and is active
+    if (policy && !policy.isActive) {
+      return { allowed: false, reason: "AGENT_POLICY_INACTIVE" };
+    }
+
+    // Check allowedProviders if configured
+    if (policy && policy.allowedProviders && policy.allowedProviders.length > 0) {
+      if (!args.providerId || !policy.allowedProviders.includes(args.providerId)) {
+        return { allowed: false, reason: "AGENT_PROVIDER_NOT_ALLOWED" };
+      }
+    }
+
+    // Require tokenAddress for per-chain/token limits
+    if (!args.tokenAddress) {
+      // If no token address provided, allow (backward compatible for now)
+      // In the future, we might want to require tokenAddress
+      return { allowed: true, reason: null };
+    }
+
+    // Get per-chain/token limits
+    const chainTokenPolicy = await ctx.db
+      .query("agentPolicyLimits")
+      .withIndex("by_apiKey_chain_token", (q) =>
+        q.eq("apiKeyId", args.apiKeyId)
+          .eq("chainId", args.chainId)
+          .eq("tokenAddress", args.tokenAddress!.toLowerCase())
+      )
+      .first();
+
+    // If no per-chain/token limit exists, allow (no limits configured for this token)
+    if (!chainTokenPolicy || !chainTokenPolicy.isActive) {
+      return { allowed: true, reason: null };
+    }
+
+    const limit = chainTokenPolicy;
+
+    // Check maxRequest limit (fastest check)
+    if (limit.maxRequest !== undefined && args.treasuryAmount > limit.maxRequest) {
+      return { allowed: false, reason: "AGENT_MAX_REQUEST_EXCEEDED" };
+    }
+
+    // Calculate spend for this specific chain/token combination
+    const now = Date.now();
+    const startOfDay = new Date(now);
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const startOfDayTimestamp = startOfDay.getTime();
+
+    const startOfMonth = new Date(now);
+    startOfMonth.setUTCDate(1);
+    startOfMonth.setUTCHours(0, 0, 0, 0);
+    const startOfMonthTimestamp = startOfMonth.getTime();
+
+    // Get all payments for this agent, filtered by chain/token
+    const allPayments = await ctx.db
+      .query("payments")
+      .withIndex("by_apiKeyId", (q) => q.eq("apiKeyId", args.apiKeyId))
+      .filter((q) =>
+        q.and(
+          q.or(
+            q.eq(q.field("status"), "settled"),
+            q.eq(q.field("status"), "completed")
+          )
+        )
+      )
+      .collect();
+
+    // Filter payments by chainId and token address
+    const relevantPayments = allPayments.filter((p) => {
+      const matchesChain = p.chainId === args.chainId;
+      const matchesToken = p.paymentToken?.toLowerCase() === args.tokenAddress!.toLowerCase();
+      return matchesChain && matchesToken;
+    });
+
+    // Calculate daily spend
+    const dailyPayments = relevantPayments.filter((p) => p.createdAt >= startOfDayTimestamp);
+    const dailySpend = dailyPayments.reduce((sum, p) => sum + p.treasuryAmount, 0);
+
+    // Check daily limit
+    if (limit.dailyLimit !== undefined && dailySpend + args.treasuryAmount > limit.dailyLimit) {
+      return { allowed: false, reason: "AGENT_DAILY_LIMIT_EXCEEDED" };
+    }
+
+    // Calculate monthly spend
+    const monthlyPayments = relevantPayments.filter((p) => p.createdAt >= startOfMonthTimestamp);
+    const monthlySpend = monthlyPayments.reduce((sum, p) => sum + p.treasuryAmount, 0);
+
+    // Check monthly limit
+    if (limit.monthlyLimit !== undefined && monthlySpend + args.treasuryAmount > limit.monthlyLimit) {
+      return { allowed: false, reason: "AGENT_MONTHLY_LIMIT_EXCEEDED" };
+    }
+
+    // All checks passed
+    return { allowed: true, reason: null };
   },
 });
 

@@ -289,8 +289,17 @@ export const getPublicStats = query({
     const activeWorkspaces = uniqueWorkspaces.size;
 
     // Calculate success rate
+    // Successful payments: settled, completed, and denied (policy decisions are successful)
+    // Failed payments: only actual errors (status === "failed")
+    const successfulPayments = payments.filter(
+      (p) => p.status === "settled" || p.status === "completed" || p.status === "denied"
+    );
+    const failedPayments = payments.filter((p) => p.status === "failed");
+    const paymentsWithOutcome = successfulPayments.length + failedPayments.length;
     const successRate =
-      totalPayments > 0 ? (settledCount / totalPayments) * 100 : 100;
+      paymentsWithOutcome > 0
+        ? (successfulPayments.length / paymentsWithOutcome) * 100
+        : 100;
 
     // Get payments from last 24 hours
     const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;

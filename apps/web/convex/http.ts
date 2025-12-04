@@ -260,29 +260,46 @@ const quoteAction = httpAction(async (ctx, request) => {
     host,
   });
 
-  // Step 5: Get treasury token details for symbol
+  // Step 5: Get chain info from network name
+  const chain = await ctx.runQuery(internal.chains.getChainByNetworkNameInternal, {
+    networkName: invoice.network,
+  });
+
+  if (!chain) {
+    return errorResponse(`Unsupported network: ${invoice.network}`, 400);
+  }
+
+  // Step 6: Get treasury token details for symbol
   let treasuryTokenSymbol = "UNKNOWN";
+  let treasuryTokenChainId: number | undefined;
   if (preferredPaymentToken) {
     const treasuryToken = await ctx.runQuery(internal.tokens.getTokenByAddressInternal, {
       address: preferredPaymentToken,
+      chainId: chain.chainId,
     });
     if (treasuryToken) {
       treasuryTokenSymbol = treasuryToken.symbol;
+      treasuryTokenChainId = treasuryToken.chainId;
     }
   }
 
-  // Step 6: Convert to treasury token amount
+  // Step 7: Convert to treasury token amount
   const { treasuryAmount, rate } = convertToTreasuryToken(
     invoice.amount, 
     invoice.currency, 
     treasuryTokenSymbol
   );
 
-  // Step 7: Apply policies (placeholder - always allow for now)
-  // Later this will check agent daily limits, provider policies, etc.
-  const policyResult = { allowed: true, reason: null as string | null };
+  // Step 8: Apply policies (with chain and token info)
+  const policyResult = await ctx.runQuery(internal.gateway.checkAgentPolicy, {
+    apiKeyId,
+    providerId,
+    treasuryAmount,
+    chainId: chain.chainId,
+    tokenAddress: preferredPaymentToken,
+  });
 
-  // Step 8: Create payment record
+  // Step 9: Create payment record
   const paymentId = await ctx.runMutation(internal.gateway.createPaymentQuote, {
     workspaceId,
     apiKeyId,
@@ -292,6 +309,7 @@ const quoteAction = httpAction(async (ctx, request) => {
     originalAmount: invoice.amount,
     originalCurrency: invoice.currency,
     originalNetwork: invoice.network,
+    chainId: chain.chainId,
     payTo: invoice.payTo,
     paymentToken: preferredPaymentToken,
     paymentTokenSymbol: treasuryTokenSymbol,
@@ -301,10 +319,10 @@ const quoteAction = httpAction(async (ctx, request) => {
     denialReason: policyResult.reason ?? undefined,
   });
 
-  // Step 9: Update API key last used
+  // Step 10: Update API key last used
   await ctx.runMutation(internal.gateway.markApiKeyUsedInternal, { apiKeyId });
 
-  // Step 10: Return response
+  // Step 11: Return response
   if (policyResult.allowed) {
     const response: QuoteResponseAllowed = {
       status: "allowed",

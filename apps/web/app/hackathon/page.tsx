@@ -63,7 +63,7 @@ function HeroSection() {
 
         {/* Title */}
         <h1 className="text-4xl md:text-6xl font-bold text-white mb-6">
-          x402 Gateway
+          xFour
           <span className="block mt-2 text-3xl md:text-4xl bg-gradient-to-r from-pink-400 to-violet-400 bg-clip-text text-transparent">
             Programmable Payments for AI Agents
           </span>
@@ -101,7 +101,7 @@ function ProjectOverview() {
       <div className="max-w-5xl mx-auto px-4">
         <SectionHeader
           badge="Project Overview"
-          title="What is x402 Gateway?"
+          title="What is xFour?"
           description="A complete infrastructure layer for autonomous AI payments"
         />
 
@@ -132,7 +132,7 @@ function ProjectOverview() {
           <div className="bg-[#111] border border-[#333] rounded-2xl p-8">
             <h3 className="text-xl font-semibold text-white mb-4">Our Solution</h3>
             <p className="text-[#888] leading-relaxed mb-4">
-              x402 Gateway is a programmable payment infrastructure that enables AI agents to 
+              xFour is a programmable payment infrastructure that enables AI agents to 
               autonomously transact using MNEE stablecoin, with full budget controls, 
               policy enforcement, and real-time analytics.
             </p>
@@ -164,7 +164,7 @@ function TrackAlignment() {
         <SectionHeader
           badge="Track Alignment"
           title="AI & Agent Payments"
-          description="How x402 Gateway fits the hackathon track"
+          description="How xFour fits the hackathon track"
         />
 
         <div className="mt-12 bg-gradient-to-br from-pink-500/10 to-violet-500/10 border border-pink-500/20 rounded-2xl p-8">
@@ -354,8 +354,8 @@ function TechnicalArchitecture() {
                 <ArrowDownIcon className="w-5 h-5 text-[#666]" />
               </div>
               <ArchitectureLayer
-                label="x402 Gateway API"
-                description="Next.js API routes with policy enforcement"
+              label="xFour Gateway API"
+              description="Next.js API routes with policy enforcement"
                 color="from-blue-500 to-cyan-600"
               />
               <div className="flex justify-center">
@@ -514,7 +514,7 @@ function DemoSection() {
         <div className="mt-12 grid md:grid-cols-3 gap-6">
           <DemoCard
             title="Live Demo"
-            description="Try the full x402 Gateway platform with test transactions"
+            description="Try the full xFour platform with test transactions"
             href="/sdk-demo"
             icon={<PlayIcon className="w-6 h-6" />}
             gradient="from-emerald-500 to-teal-600"
@@ -620,7 +620,7 @@ function CTASection() {
           Experience the Future of Agent Payments
         </h2>
         <p className="text-lg text-[#888] mb-8">
-          Sign up to try x402 Gateway and see how AI agents can transact autonomously with MNEE stablecoin.
+          Sign up to try xFour and see how AI agents can transact autonomously with MNEE stablecoin.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <SignUpButton mode="modal">

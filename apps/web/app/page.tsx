@@ -177,7 +177,7 @@ function LiveStatsSection() {
             Real Traction, Real Payments
           </h2>
           <p className="text-lg text-[#888] max-w-2xl mx-auto">
-            Watch AI agents transact in real-time across the x402 Gateway network.
+            Watch AI agents transact in real-time across the xFour network.
           </p>
         </div>
 
@@ -487,7 +487,7 @@ function ProblemSolutionSection() {
                 The Solution
               </div>
               <h3 className="text-2xl md:text-3xl font-bold text-white mb-4">
-                x402 Gateway + MNEE Stablecoin
+                xFour + MNEE Stablecoin
               </h3>
               <p className="text-[#888] leading-relaxed mb-6">
                 A programmable payment gateway that enables AI agents to transact autonomously using MNEE, 
@@ -537,7 +537,7 @@ function FeaturesSection() {
     {
       icon: <SwapIcon className="w-6 h-6" />,
       title: "Token Swaps",
-      description: "Pay providers in any token. x402 automatically swaps from your treasury token to the required currency.",
+      description: "Pay providers in any token. xFour automatically swaps from your treasury token to the required currency.",
       gradient: "from-blue-500 to-cyan-600",
     },
     {
@@ -549,7 +549,7 @@ function FeaturesSection() {
     {
       icon: <CodeIcon className="w-6 h-6" />,
       title: "SDK Integration",
-      description: "Drop-in SDK for AI agents. Works with any agent framework — just wrap HTTP calls with x402.",
+      description: "Drop-in SDK for AI agents. Works with any agent framework — just wrap HTTP calls with xFour.",
       gradient: "from-indigo-500 to-blue-600",
     },
   ];
@@ -616,7 +616,7 @@ function HackathonBanner() {
                   Building the Future of Agent Commerce
                 </h3>
                 <p className="text-[#888] mb-6 max-w-xl">
-                  x402 Gateway is our submission to the MNEE Hackathon in the 
+                  xFour is our submission to the MNEE Hackathon in the 
                   <span className="text-white font-medium"> AI & Agent Payments</span> track. 
                   See how we&apos;re meeting all judging criteria.
                 </p>

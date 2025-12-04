@@ -4,6 +4,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 import ConvexClientProvider from "@/components/ConvexClientProvider";
 import { TopNav } from "@/components/TopNav";
+import { ToastProvider } from "@/components/Toast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "x402 Gateway",
-  description: "AI Payment Gateway for Agent Commerce",
+  title: "xFour",
+  description: "Payment Infrastructure for AI Agents | xfour.xyz",
   icons: {
     icon: "/convex.svg",
   },
@@ -35,8 +36,8 @@ export default function RootLayout({
           colorBackground: "#0a0a0a",
           colorInputBackground: "#1a1a1a",
           colorPrimary: "#fff",
-          colorText: "#fff",
-          colorTextSecondary: "#888",
+          colorText: "#ffffff",
+          colorTextSecondary: "#ffffff",
           colorInputText: "#fff",
         },
         elements: {
@@ -48,9 +49,14 @@ export default function RootLayout({
           formFieldInput: "bg-[#0a0a0a] border-[#333] text-white",
           footerActionLink: "text-white hover:text-gray-300",
           identityPreviewEditButton: "text-white",
-          userButtonPopoverCard: "bg-[#111] border border-[#333]",
-          userButtonPopoverActionButton: "text-[#888] hover:text-white hover:bg-[#1a1a1a]",
-          userButtonPopoverActionButtonText: "text-[#888]",
+          userButtonPopoverCard: "bg-[#111] border border-[#333] [&_*]:text-white",
+          userButtonPopoverMain: "text-white [&_*]:text-white",
+          userButtonPopoverIdentity: "text-white [&_*]:text-white",
+          userButtonPopoverIdentityText: "text-white [&_*]:text-white",
+          userButtonPopoverActions: "text-white [&_*]:text-white",
+          userButtonPopoverActionButton: "text-white hover:text-white hover:bg-[#1a1a1a] [&_*]:text-white",
+          userButtonPopoverActionButtonText: "!text-white",
+          userButtonPopoverActionButtonIcon: "text-white",
           userButtonPopoverFooter: "hidden",
         },
       }}
@@ -60,8 +66,10 @@ export default function RootLayout({
           className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#0a0a0a]`}
         >
           <ConvexClientProvider>
-            <TopNav />
-            {children}
+            <ToastProvider>
+              <TopNav />
+              {children}
+            </ToastProvider>
           </ConvexClientProvider>
         </body>
       </html>

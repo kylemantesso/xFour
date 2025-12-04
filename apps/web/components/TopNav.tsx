@@ -70,9 +70,22 @@ export function TopNav() {
             <UserButton
               afterSignOutUrl="/"
               appearance={{
+                variables: {
+                  colorText: "#ffffff",
+                  colorTextSecondary: "#ffffff",
+                },
                 elements: {
                   avatarBox: "w-7 h-7",
                   userButtonTrigger: "focus:shadow-none",
+                  userButtonPopoverCard: "bg-[#111] border border-[#333] [&_*]:text-white",
+                  userButtonPopoverMain: "text-white [&_*]:text-white",
+                  userButtonPopoverIdentity: "text-white [&_*]:text-white",
+                  userButtonPopoverIdentityText: "text-white [&_*]:text-white",
+                  userButtonPopoverActions: "text-white [&_*]:text-white",
+                  userButtonPopoverActionButton: "text-white hover:text-white hover:bg-[#1a1a1a] [&_*]:text-white",
+                  userButtonPopoverActionButtonText: "!text-white",
+                  userButtonPopoverActionButtonIcon: "text-white",
+                  userButtonPopoverFooter: "hidden",
                 },
               }}
             />
@@ -403,4 +416,5 @@ function PlusIcon({ className }: { className?: string }) {
     </svg>
   );
 }
+
 

@@ -255,3 +255,26 @@ body {
 .animate-slide-in-right {
   animation: slide-in-right 0.5s ease-out forwards;
 }
+
+/* Clerk UserButton Popover Text Colors */
+.cl-userButtonPopoverCard,
+.cl-userButtonPopoverCard *,
+.cl-userButtonPopoverMain,
+.cl-userButtonPopoverMain *,
+.cl-userButtonPopoverIdentity,
+.cl-userButtonPopoverIdentity *,
+.cl-userButtonPopoverIdentityText,
+.cl-userButtonPopoverIdentityText *,
+.cl-userButtonPopoverActions,
+.cl-userButtonPopoverActions *,
+.cl-userButtonPopoverActionButton,
+.cl-userButtonPopoverActionButton *,
+.cl-userButtonPopoverActionButtonText,
+.cl-userButtonPopoverActionButtonIcon {
+  color: #ffffff !important;
+}
+
+.cl-userButtonPopoverActionButton:hover,
+.cl-userButtonPopoverActionButton:hover * {
+  color: #ffffff !important;
+}

@@ -1,6 +1,7 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
+import { Id } from "./_generated/dataModel";
 import { convertToTreasuryToken } from "./gateway";
 
 const http = httpRouter();
@@ -428,7 +429,7 @@ const payAction = httpAction(async (ctx, request) => {
   let payment;
   try {
     payment = await ctx.runQuery(internal.gateway.getPaymentById, { 
-      paymentId: paymentId as any // Cast to Id<"payments">
+      paymentId: paymentId as Id<"payments">
     });
   } catch {
     // Invalid payment ID format
@@ -526,7 +527,7 @@ const payAction = httpAction(async (ctx, request) => {
   // Step 7: Settle the payment
   // For now, no on-chain logic - just update status to "settled"
   await ctx.runMutation(internal.gateway.settlePayment, { 
-    paymentId: paymentId as any 
+    paymentId: paymentId as Id<"payments">
   });
 
   // Step 8: Update API key last used
@@ -586,7 +587,7 @@ const updateSwapAction = httpAction(async (ctx, request) => {
   try {
     // Update swap details
     await ctx.runMutation(internal.gateway.updatePaymentSwapDetails, {
-      paymentId: paymentId as any,
+      paymentId: paymentId as Id<"payments">,
       txHash: body.txHash,
       swapTxHash: body.swapTxHash,
       swapSellAmount: body.swapSellAmount,

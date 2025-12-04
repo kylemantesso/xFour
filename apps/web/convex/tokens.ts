@@ -51,7 +51,7 @@ export const listSupportedTokens = query({
     chainId: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    let tokensQuery = ctx.db
+    const tokensQuery = ctx.db
       .query("supportedTokens")
       .filter((q) => q.eq(q.field("isActive"), true));
 

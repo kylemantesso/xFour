@@ -219,7 +219,7 @@ export const getUsageByProvider = query({
     const byProvider: Record<
       string,
       {
-        providerId?: string;
+        providerId?: Id<"providers">;
         totalPayments: number;
         settledPayments: number;
         deniedPayments: number;
@@ -232,7 +232,7 @@ export const getUsageByProvider = query({
       const host = payment.providerHost;
       if (!byProvider[host]) {
         byProvider[host] = {
-          providerId: payment.providerId as any,
+          providerId: payment.providerId,
           totalPayments: 0,
           settledPayments: 0,
           deniedPayments: 0,

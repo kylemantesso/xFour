@@ -1,6 +1,6 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { api, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
 import { convertToTreasuryToken } from "./gateway";
 
@@ -48,8 +48,6 @@ interface QuoteResponseDenied {
   fxRate: number | null;
 }
 
-type QuoteResponse = QuoteResponseAllowed | QuoteResponseDenied;
-
 interface PayRequest {
   apiKey: string;
   paymentId: string;
@@ -85,8 +83,6 @@ interface PayResponseError {
   status: "error";
   code: "INVALID_API_KEY" | "PAYMENT_NOT_FOUND" | "PAYMENT_NOT_ALLOWED";
 }
-
-type PayResponse = PayResponseOk | PayResponseError;
 
 // ============================================
 // HELPER FUNCTIONS
@@ -272,7 +268,6 @@ const quoteAction = httpAction(async (ctx, request) => {
 
   // Step 6: Get treasury token details for symbol
   let treasuryTokenSymbol = "UNKNOWN";
-  let treasuryTokenChainId: number | undefined;
   if (preferredPaymentToken) {
     const treasuryToken = await ctx.runQuery(internal.tokens.getTokenByAddressInternal, {
       address: preferredPaymentToken,
@@ -280,7 +275,6 @@ const quoteAction = httpAction(async (ctx, request) => {
     });
     if (treasuryToken) {
       treasuryTokenSymbol = treasuryToken.symbol;
-      treasuryTokenChainId = treasuryToken.chainId;
     }
   }
 

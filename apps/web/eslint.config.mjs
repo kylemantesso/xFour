@@ -16,4 +16,9 @@ export default [
   },
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   ...convexPlugin.configs.recommended,
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": "error",
+    },
+  },
 ];

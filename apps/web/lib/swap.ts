@@ -2,14 +2,11 @@ import {
   createWalletClient,
   createPublicClient,
   http,
-  parseUnits,
-  formatUnits,
   getAddress,
-  encodeFunctionData,
   type Chain,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { localhost, base, baseSepolia, ZEROX_API_URLS } from "./wagmi";
+import { localhost, base, baseSepolia } from "./wagmi";
 import { erc20Abi } from "./contracts";
 
 // ============================================
@@ -221,12 +218,6 @@ export class SwapService {
   // ============================================
 
   private async getMockQuote(params: SwapParams): Promise<SwapQuote> {
-    const chain = buildChainFromConfig(this.chainId, this.rpcUrl);
-    const publicClient = createPublicClient({
-      chain,
-      transport: http(this.rpcUrl),
-    });
-
     // Mock router uses 1:1 rate, adjusted for decimals
     // If selling MNEE (18 decimals) to buy USDC (6 decimals), need to adjust
     const decimalDiff = params.sellTokenDecimals - params.buyTokenDecimals;

@@ -7,6 +7,7 @@
     "build": "pnpm --filter @x402/web build",
     "build:sdk": "pnpm --filter @x402/sdk build",
     "lint": "pnpm -r lint",
+    "lint:fix": "pnpm -r lint:fix",
     "typecheck": "pnpm --filter @x402/web exec tsc --noEmit && pnpm --filter @x402/sdk exec tsc --noEmit",
     "clean": "pnpm -r clean",
     "prepare": "husky"

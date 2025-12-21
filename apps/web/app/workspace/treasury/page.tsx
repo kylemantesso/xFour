@@ -231,8 +231,6 @@ function TreasuryContent() {
 
   // Treasury balance for selected token
   const {
-    formattedBalance: treasuryBalance,
-    isLoading: treasuryLoading,
     error: treasuryError,
     refetch: refetchTreasuryBalance,
   } = useTreasuryBalance(

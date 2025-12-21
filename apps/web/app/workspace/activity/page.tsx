@@ -765,13 +765,6 @@ function Pagination({
 // Real-time Activity Timeline Chart
 // ============================================
 
-interface TimelineEvent {
-  id: string;
-  timestamp: number;
-  status: string;
-  amount: number;
-}
-
 function ActivityTimelineChart() {
   const timeline = useQuery(api.payments.getActivityTimeline, { windowSeconds: 60 });
   const [currentTime, setCurrentTime] = useState(Date.now());

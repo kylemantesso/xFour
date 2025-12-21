@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation, internalQuery } from "./_generated/server";
-import { requirePlatformAdmin, isPlatformAdmin } from "./lib/auth";
+import { requirePlatformAdmin } from "./lib/auth";
 
 // ============================================
 // CHAIN QUERIES

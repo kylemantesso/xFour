@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
-import { useUser } from "@clerk/nextjs";
 import { useToast } from "../../components/Toast";
 
 // Icons
@@ -101,7 +100,6 @@ type SupportedChain = {
 };
 
 export default function AdminPage() {
-  const { user } = useUser();
   const isAdmin = useQuery(api.tokens.checkIsAdmin);
 
   // Show loading while checking admin status

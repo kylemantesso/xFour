@@ -641,6 +641,7 @@ function ApiKeysList({
 
 function SpendPolicySection({
   apiKeyId,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   canManage,
 }: {
   apiKeyId: Id<"apiKeys">;
@@ -1200,7 +1201,7 @@ function AddChainTokenLimitForm({
       setMonthlyLimit("");
       setMaxRequest("");
       setIsExpanded(false);
-    } catch (error) {
+    } catch {
       // Error already handled in onAdd
     } finally {
       setIsAdding(false);

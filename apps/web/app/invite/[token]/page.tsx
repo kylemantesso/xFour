@@ -34,7 +34,7 @@ export default function InvitePage() {
     setError(null);
 
     try {
-      const result = await acceptInvite({ token });
+      await acceptInvite({ token });
       setSuccess(true);
       // Redirect to dashboard after a short delay
       setTimeout(() => {

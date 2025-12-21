@@ -314,6 +314,12 @@ function ApiKeysList({
   const deleteApiKey = useMutation(api.apiKeys.deleteApiKey);
   const [togglingId, setTogglingId] = useState<Id<"apiKeys"> | null>(null);
   const [deletingId, setDeletingId] = useState<Id<"apiKeys"> | null>(null);
+  const [showingKeyId, setShowingKeyId] = useState<Id<"apiKeys"> | null>(null);
+  const [copiedKeyId, setCopiedKeyId] = useState<Id<"apiKeys"> | null>(null);
+  const fullApiKeyData = useQuery(
+    api.apiKeys.getApiKey,
+    showingKeyId ? { apiKeyId: showingKeyId } : "skip"
+  );
 
   if (apiKeys === undefined) {
     return (
@@ -371,6 +377,20 @@ function ApiKeysList({
     }
   };
 
+  const handleShowKey = (apiKeyId: Id<"apiKeys">) => {
+    setShowingKeyId(apiKeyId);
+  };
+
+  const handleHideKey = () => {
+    setShowingKeyId(null);
+  };
+
+  const handleCopyKey = async (apiKey: string, apiKeyId: Id<"apiKeys">) => {
+    await navigator.clipboard.writeText(apiKey);
+    setCopiedKeyId(apiKeyId);
+    setTimeout(() => setCopiedKeyId(null), 2000);
+  };
+
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleDateString("en-US", {
       month: "short",
@@ -418,7 +438,7 @@ function ApiKeysList({
                 }`}
               />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <p className="text-sm font-medium text-white truncate">
                   {apiKey.name}
@@ -433,23 +453,57 @@ function ApiKeysList({
                   {apiKey.isActive ? "Active" : "Disabled"}
                 </span>
               </div>
-              <div className="flex items-center gap-2 mt-0.5">
-                <code className="text-xs font-mono text-[#666]">
-                  {apiKey.apiKeyPrefix}
-                </code>
-                <span className="text-[#333]">•</span>
-                <span className="text-xs text-[#666]">
-                  Created {formatDate(apiKey.createdAt)}
-                </span>
-                {apiKey.lastUsedAt && (
-                  <>
-                    <span className="text-[#333]">•</span>
-                    <span className="text-xs text-[#666]">
-                      Last used {formatRelativeTime(apiKey.lastUsedAt)}
-                    </span>
-                  </>
-                )}
-              </div>
+              
+              {showingKeyId === apiKey._id && fullApiKeyData ? (
+                <div className="mt-2 bg-[#0a0a0a] border border-[#333] rounded-lg p-3">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <code className="text-xs font-mono text-white break-all flex-1">
+                      {fullApiKeyData.apiKey}
+                    </code>
+                    <button
+                      onClick={() => handleCopyKey(fullApiKeyData.apiKey, apiKey._id)}
+                      className="flex-shrink-0 p-1.5 text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors"
+                      title="Copy to clipboard"
+                    >
+                      {copiedKeyId === apiKey._id ? (
+                        <CheckIcon className="w-4 h-4 text-emerald-500" />
+                      ) : (
+                        <CopyIcon className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
+                  <button
+                    onClick={handleHideKey}
+                    className="text-xs text-[#666] hover:text-white transition-colors"
+                  >
+                    Hide Key
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 mt-0.5">
+                  <code className="text-xs font-mono text-[#666]">
+                    {apiKey.apiKeyPrefix}
+                  </code>
+                  <button
+                    onClick={() => handleShowKey(apiKey._id)}
+                    className="text-xs text-[#666] hover:text-emerald-400 transition-colors"
+                  >
+                    Show Key
+                  </button>
+                  <span className="text-[#333]">•</span>
+                  <span className="text-xs text-[#666]">
+                    Created {formatDate(apiKey.createdAt)}
+                  </span>
+                  {apiKey.lastUsedAt && (
+                    <>
+                      <span className="text-[#333]">•</span>
+                      <span className="text-xs text-[#666]">
+                        Last used {formatRelativeTime(apiKey.lastUsedAt)}
+                      </span>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

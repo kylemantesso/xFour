@@ -243,7 +243,7 @@ export const getPaymentById = internalQuery({
 });
 
 /**
- * Settle a payment - marks it as confirmed
+ * Settle a payment - marks it as confirmed (on-chain payment succeeded)
  */
 export const settlePayment = internalMutation({
   args: {
@@ -265,7 +265,63 @@ export const settlePayment = internalMutation({
 });
 
 /**
+ * Mark a payment as failed (on-chain payment failed)
+ */
+export const markPaymentFailed = internalMutation({
+  args: {
+    paymentId: v.id("payments"),
+    errorMessage: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const payment = await ctx.db.get(args.paymentId);
+    if (!payment) {
+      return { success: false, error: "Payment not found" };
+    }
+
+    await ctx.db.patch(args.paymentId, {
+      status: "failed",
+      denialReason: args.errorMessage,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Update payment status (e.g., from "allowed" to "pending")
+ */
+export const updatePaymentStatus = internalMutation({
+  args: {
+    paymentId: v.id("payments"),
+    status: v.union(
+      v.literal("allowed"),
+      v.literal("denied"),
+      v.literal("settled"),
+      v.literal("pending"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("refunded")
+    ),
+  },
+  handler: async (ctx, args) => {
+    const payment = await ctx.db.get(args.paymentId);
+    if (!payment) {
+      return { success: false, error: "Payment not found" };
+    }
+
+    await ctx.db.patch(args.paymentId, {
+      status: args.status,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
  * Update swap details on a payment after on-chain swap execution
+ * Also marks payment as "settled" when transaction details are saved
  */
 export const updatePaymentSwapDetails = internalMutation({
   args: {
@@ -286,6 +342,7 @@ export const updatePaymentSwapDetails = internalMutation({
 
     const now = Date.now();
     await ctx.db.patch(args.paymentId, {
+      status: "settled", // Mark as settled when tx details are saved
       txHash: args.txHash,
       swapTxHash: args.swapTxHash,
       swapSellAmount: args.swapSellAmount,
@@ -294,7 +351,7 @@ export const updatePaymentSwapDetails = internalMutation({
       swapBuyToken: args.swapBuyToken,
       swapFee: args.swapFee,
       updatedAt: now,
-      completedAt: now, // Mark as completed when tx details are saved
+      completedAt: now,
     });
 
     return { success: true };

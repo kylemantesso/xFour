@@ -3,7 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "pnpm --filter @x402/web dev",
+    "dev": "npm-run-all --parallel dev:*",
+    "dev:web": "pnpm --filter @x402/web dev",
+    "dev:blockchain": "pnpm --filter @x402-gateway/contracts node",
     "build": "pnpm --filter @x402/web build",
     "build:sdk": "pnpm --filter @x402/sdk build",
     "lint": "pnpm -r lint",
@@ -14,6 +16,7 @@
   },
   "devDependencies": {
     "husky": "^9.1.7",
+    "npm-run-all2": "^5.0.0",
     "typescript": "^5"
   },
   "packageManager": "pnpm@10.24.0",

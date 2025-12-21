@@ -81,7 +81,8 @@ interface PayResponseOk {
 
 interface PayResponseError {
   status: "error";
-  code: "INVALID_API_KEY" | "PAYMENT_NOT_FOUND" | "PAYMENT_NOT_ALLOWED";
+  code: "INVALID_API_KEY" | "PAYMENT_NOT_FOUND" | "PAYMENT_NOT_ALLOWED" | "PAYMENT_FAILED";
+  message?: string;
 }
 
 // ============================================
@@ -503,14 +504,24 @@ const payAction = httpAction(async (ctx, request) => {
   });
 
   // Step 6: Check payment status
-  // If already settled, return success (idempotent)
-  if (payment.status === "settled") {
+  // If already settled or completed, return success (idempotent)
+  if (payment.status === "settled" || payment.status === "completed") {
     return jsonResponse(buildResponse());
+  }
+
+  // If already failed, return error (idempotent)
+  if (payment.status === "failed") {
+    const response: PayResponseError = {
+      status: "error",
+      code: "PAYMENT_FAILED",
+      message: payment.denialReason || "Payment failed",
+    };
+    return jsonResponse(response, 500);
   }
 
   // Only allow payments with status "allowed" (quotes ready for payment)
   if (payment.status !== "allowed") {
-    // Status is "denied", "pending", "completed", "failed", or "refunded"
+    // Status is "denied", "pending", or "refunded"
     const response: PayResponseError = {
       status: "error",
       code: "PAYMENT_NOT_ALLOWED",
@@ -518,16 +529,18 @@ const payAction = httpAction(async (ctx, request) => {
     return jsonResponse(response, 403);
   }
 
-  // Step 7: Settle the payment
-  // For now, no on-chain logic - just update status to "settled"
-  await ctx.runMutation(internal.gateway.settlePayment, { 
-    paymentId: paymentId as Id<"payments">
+  // Step 7: Mark payment as pending (on-chain execution will happen in Next.js route)
+  // Don't mark as settled until on-chain payment succeeds
+  await ctx.runMutation(internal.gateway.updatePaymentStatus, {
+    paymentId: paymentId as Id<"payments">,
+    status: "pending",
   });
 
   // Step 8: Update API key last used
   await ctx.runMutation(internal.gateway.markApiKeyUsedInternal, { apiKeyId });
 
   // Step 9: Return success response with chain and token details
+  // The Next.js route will handle on-chain execution and update status accordingly
   return jsonResponse(buildResponse());
 });
 
@@ -599,6 +612,61 @@ const updateSwapAction = httpAction(async (ctx, request) => {
 });
 
 // ============================================
+// MARK PAYMENT AS FAILED ACTION
+// ============================================
+
+interface MarkFailedRequest {
+  paymentId: string;
+  errorMessage?: string;
+}
+
+const markFailedAction = httpAction(async (ctx, request) => {
+  // Handle CORS preflight
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      },
+    });
+  }
+
+  // Only accept POST
+  if (request.method !== "POST") {
+    return errorResponse("Method not allowed", 405);
+  }
+
+  // Parse request body
+  let body: MarkFailedRequest;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse("Invalid JSON body", 400);
+  }
+
+  // Validate required fields
+  const { paymentId } = body;
+  if (!paymentId || typeof paymentId !== "string") {
+    return errorResponse("Missing or invalid paymentId", 400);
+  }
+
+  try {
+    // Mark payment as failed
+    await ctx.runMutation(internal.gateway.markPaymentFailed, {
+      paymentId: paymentId as Id<"payments">,
+      errorMessage: body.errorMessage,
+    });
+
+    return jsonResponse({ status: "ok" });
+  } catch (error) {
+    console.error("Failed to mark payment as failed:", error);
+    return errorResponse("Failed to mark payment as failed", 500);
+  }
+});
+
+// ============================================
 // ROUTE REGISTRATION
 // ============================================
 
@@ -642,6 +710,20 @@ http.route({
   path: "/gateway/update-swap",
   method: "OPTIONS",
   handler: updateSwapAction,
+});
+
+// Mark payment as failed endpoint (called by Next.js when on-chain payment fails)
+http.route({
+  path: "/gateway/mark-failed",
+  method: "POST",
+  handler: markFailedAction,
+});
+
+// CORS preflight for mark-failed
+http.route({
+  path: "/gateway/mark-failed",
+  method: "OPTIONS",
+  handler: markFailedAction,
 });
 
 export default http;

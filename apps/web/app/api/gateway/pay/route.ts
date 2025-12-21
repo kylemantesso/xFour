@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
         }
         console.log(`Payment executed: ${txHash}`);
 
-        // Step 3: Save swap details back to Convex
+        // Step 3: Save swap details back to Convex (this also marks payment as settled)
         if (convexData.paymentId) {
           try {
             await fetch(`${convexSiteUrl}/gateway/update-swap`, {
@@ -173,6 +173,24 @@ export async function POST(request: NextRequest) {
         }
       } catch (paymentError) {
         console.error("Payment execution failed:", paymentError);
+        
+        // Mark payment as failed in Convex
+        if (convexData.paymentId) {
+          try {
+            await fetch(`${convexSiteUrl}/gateway/mark-failed`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                paymentId: convexData.paymentId,
+                errorMessage: paymentError instanceof Error ? paymentError.message : String(paymentError),
+              }),
+            });
+            console.log("Payment marked as failed in Convex");
+          } catch (updateError) {
+            console.error("Failed to mark payment as failed in Convex:", updateError);
+          }
+        }
+        
         return NextResponse.json(
           {
             ...convexData,

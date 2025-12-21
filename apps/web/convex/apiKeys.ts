@@ -232,6 +232,31 @@ export const markApiKeyUsed = mutation({
   },
 });
 
+/**
+ * Get the full API key (for viewing after creation)
+ */
+export const getApiKey = query({
+  args: {
+    apiKeyId: v.id("apiKeys"),
+  },
+  returns: v.object({
+    apiKey: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    const { workspaceId, role } = await getCurrentWorkspaceContext(ctx);
+    requireRole(role, ALL_ROLES, "view API keys");
+
+    const apiKey = await ctx.db.get(args.apiKeyId);
+    if (!apiKey || apiKey.workspaceId !== workspaceId) {
+      throw new Error("API key not found in this workspace");
+    }
+
+    return {
+      apiKey: apiKey.apiKey,
+    };
+  },
+});
+
 // ============================================
 // AGENT POLICY MANAGEMENT
 // ============================================

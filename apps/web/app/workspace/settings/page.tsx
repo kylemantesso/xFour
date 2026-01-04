@@ -506,7 +506,7 @@ function WorkspaceSettings() {
   const workspaceData = useQuery(api.workspaces.getCurrentWorkspace);
   const members = useQuery(api.workspaces.listMembers);
   const invites = useQuery(api.invites.listInvites);
-  const apiKeys = useQuery(api.apiKeys.listApiKeys);
+  const apiKeys = useQuery(api.apiKeys.listApiKeys, {});
   // Check for MNEE wallets
   const mneeWallets = useQuery(api.mnee.listWorkspaceMneeWallets, {});
 

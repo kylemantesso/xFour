@@ -45,7 +45,7 @@ export default function SDKDemoPage() {
   const [finalResponse, setFinalResponse] = useState<Record<string, unknown> | null>(null);
 
   // Fetch user's API keys
-  const apiKeys = useQuery(api.apiKeys.listApiKeys);
+  const apiKeys = useQuery(api.apiKeys.listApiKeys, {});
   // Fetch the full API key when one is selected
   const fullApiKeyData = useQuery(
     api.apiKeys.getApiKey,

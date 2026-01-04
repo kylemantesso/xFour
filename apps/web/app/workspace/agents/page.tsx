@@ -70,7 +70,7 @@ export default function AgentsPage() {
 
 function AgentsContent() {
   const workspaceData = useQuery(api.workspaces.getCurrentWorkspace);
-  const apiKeys = useQuery(api.apiKeys.listApiKeys);
+  const apiKeys = useQuery(api.apiKeys.listApiKeys, {});
   const wallets = useQuery(api.wallets.listWallets, {});
   const mneeWallets = useQuery(api.mnee.listWorkspaceMneeWallets, {});
 
@@ -108,7 +108,7 @@ function AgentsContent() {
               </p>
             </div>
           </div>
-          {canWrite && <CreateApiKeyButton hasWallets={hasWallets} wallets={wallets} />}
+          {canWrite && <CreateApiKeyButton hasWallets={hasWallets ?? false} wallets={wallets} />}
         </div>
 
         {/* Info Card */}

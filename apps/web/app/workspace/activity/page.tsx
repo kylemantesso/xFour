@@ -119,18 +119,18 @@ function ActivityContent() {
             label="Payments Received"
             value={receivedStats?.totalPayments ?? 0}
             loading={!receivedStats}
-            accent="purple"
+            accent="violet"
           />
           <StatCard
             label="Volume Sent"
-            value={stats?.totalVolume ?? 0}
+            value={stats?.totalSpent ?? 0}
             suffix=" MNEE"
             loading={!stats}
             accent="emerald"
           />
           <StatCard
             label="Volume Received"
-            value={receivedStats?.totalVolume ?? 0}
+            value={receivedStats?.totalEarned ?? 0}
             suffix=" MNEE"
             loading={!receivedStats}
             accent="violet"

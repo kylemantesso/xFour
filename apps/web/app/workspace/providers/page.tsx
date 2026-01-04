@@ -70,7 +70,7 @@ export default function ProvidersPage() {
 
 function ProvidersContent() {
   const workspaceData = useQuery(api.workspaces.getCurrentWorkspace);
-  const apiKeys = useQuery(api.apiKeys.listApiKeys);
+  const apiKeys = useQuery(api.apiKeys.listApiKeys, {});
   const wallets = useQuery(api.wallets.listWallets, {});
   const mneeWallets = useQuery(api.mnee.listWorkspaceMneeWallets, {});
 
@@ -108,7 +108,7 @@ function ProvidersContent() {
               </p>
             </div>
           </div>
-          {canWrite && <CreateProviderKeyButton hasWallets={hasWallets} wallets={wallets} />}
+          {canWrite && <CreateProviderKeyButton hasWallets={hasWallets ?? false} wallets={wallets} />}
         </div>
 
         {/* Info Card */}

@@ -40,7 +40,7 @@ export default function Home() {
 
 function Dashboard() {
   const userData = useQuery(api.users.getCurrentUser);
-  const apiKeys = useQuery(api.apiKeys.listApiKeys);
+  const apiKeys = useQuery(api.apiKeys.listApiKeys, {});
   const mneeWallets = useQuery(api.mnee.listWorkspaceMneeWallets);
 
   if (!userData) {

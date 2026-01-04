@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import Image from "next/image";
 import { api } from "../../../convex/_generated/api";
+import { Id } from "../../../convex/_generated/dataModel";
 import { WorkspaceGuard } from "../../../components/WorkspaceGuard";
 import { BackToDashboard } from "../../../components/BackToDashboard";
 import { useToast } from "../../../components/Toast";

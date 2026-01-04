@@ -15,18 +15,10 @@ function ShieldIcon({ className }: { className?: string }) {
   );
 }
 
-function TokenIcon({ className }: { className?: string }) {
+function NetworkIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  );
-}
-
-function ChainIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
     </svg>
   );
 }
@@ -39,22 +31,6 @@ function EditIcon({ className }: { className?: string }) {
   );
 }
 
-function PlusIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-    </svg>
-  );
-}
-
-function TrashIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-    </svg>
-  );
-}
-
 function UserIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -63,44 +39,51 @@ function UserIcon({ className }: { className?: string }) {
   );
 }
 
-// Fallback chain names (used if chains not loaded from DB)
-const defaultChainNames: Record<number, string> = {
-  1: "Ethereum Mainnet",
-  137: "Polygon",
-  8453: "Base",
-  84532: "Base Sepolia",
-  31337: "Localhost",
-};
+function CurrencyIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
 
-type SupportedToken = {
-  _id: Id<"supportedTokens">;
-  address: string;
-  symbol: string;
-  name: string;
-  decimals: number;
-  chainId: number;
-  isActive: boolean;
-  createdAt: number;
-};
+function CheckCircleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
 
-type SupportedChain = {
-  _id: Id<"supportedChains">;
-  chainId: number;
+function XCircleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+function ClockIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+type MneeNetwork = {
+  _id: Id<"mneeNetworks">;
+  network: "sandbox" | "mainnet";
   name: string;
-  networkName: string;
-  rpcUrl: string;
+  apiUrl: string;
   explorerUrl?: string;
-  nativeCurrency: { name: string; symbol: string; decimals: number };
-  treasuryAddress?: string;
-  swapRouterAddress?: string;
-  zeroxApiUrl?: string;
-  isTestnet: boolean;
+  decimals: number;
   isActive: boolean;
   createdAt: number;
 };
 
 export default function AdminPage() {
-  const isAdmin = useQuery(api.tokens.checkIsAdmin);
+  const isAdmin = useQuery(api.users.checkIsAdmin);
 
   // Show loading while checking admin status
   if (isAdmin === undefined) {
@@ -116,7 +99,7 @@ export default function AdminPage() {
 }
 
 function BootstrapAdmin() {
-  const bootstrapAdmin = useMutation(api.tokens.bootstrapAdmin);
+  const bootstrapAdmin = useMutation(api.users.bootstrapAdmin);
   const [isBootstrapping, setIsBootstrapping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -180,11 +163,11 @@ function BootstrapAdmin() {
 }
 
 function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<"chains" | "tokens" | "admins">("chains");
+  const [activeTab, setActiveTab] = useState<"payments" | "networks" | "admins">("payments");
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
-      <div className="max-w-5xl mx-auto px-4 py-8">
+      <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
           <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/25">
@@ -195,7 +178,7 @@ function AdminDashboard() {
               Platform Admin
             </h1>
             <p className="text-sm text-[#888] mt-1">
-              Manage chains, tokens, and platform administrators
+              Manage payments, MNEE networks, and platform administrators
             </p>
           </div>
         </div>
@@ -203,29 +186,29 @@ function AdminDashboard() {
         {/* Tab Navigation */}
         <div className="flex gap-2 mb-6">
           <button
-            onClick={() => setActiveTab("chains")}
+            onClick={() => setActiveTab("payments")}
             className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "chains"
+              activeTab === "payments"
                 ? "bg-white text-black"
                 : "text-[#888] hover:text-white hover:bg-[#1a1a1a]"
             }`}
           >
             <span className="flex items-center gap-2">
-              <ChainIcon className="w-4 h-4" />
-              Chains
+              <CurrencyIcon className="w-4 h-4" />
+              Payments
             </span>
           </button>
           <button
-            onClick={() => setActiveTab("tokens")}
+            onClick={() => setActiveTab("networks")}
             className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "tokens"
+              activeTab === "networks"
                 ? "bg-white text-black"
                 : "text-[#888] hover:text-white hover:bg-[#1a1a1a]"
             }`}
           >
             <span className="flex items-center gap-2">
-              <TokenIcon className="w-4 h-4" />
-              Tokens
+              <NetworkIcon className="w-4 h-4" />
+              MNEE Networks
             </span>
           </button>
           <button
@@ -244,90 +227,57 @@ function AdminDashboard() {
         </div>
 
         {/* Content */}
-        {activeTab === "chains" && <ChainsManagement />}
-        {activeTab === "tokens" && <TokensManagement />}
+        {activeTab === "payments" && <PaymentsManagement />}
+        {activeTab === "networks" && <MneeNetworksManagement />}
         {activeTab === "admins" && <AdminsManagement />}
       </div>
     </div>
   );
 }
 
-function ChainsManagement() {
-  const chains = useQuery(api.chains.listAllChains, {});
-  const addChain = useMutation(api.chains.addSupportedChain);
-  const updateChain = useMutation(api.chains.updateSupportedChain);
-  const deleteChain = useMutation(api.chains.deleteSupportedChain);
-  const seedChains = useMutation(api.chains.seedDefaultChains);
+function MneeNetworksManagement() {
+  const networks = useQuery(api.mneeNetworks.listNetworks, { includeSandbox: true });
+  const seedNetworksMutation = useMutation(api.mneeNetworks.seedNetworks);
+  const updateNetworkMutation = useMutation(api.mneeNetworks.updateNetwork);
   const toast = useToast();
 
-  const [isAdding, setIsAdding] = useState(false);
-  const [editingChain, setEditingChain] = useState<SupportedChain | null>(null);
+  const [editingNetwork, setEditingNetwork] = useState<MneeNetwork | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [togglingNetwork, setTogglingNetwork] = useState<"sandbox" | "mainnet" | null>(null);
   const [isSeeding, setIsSeeding] = useState(false);
 
   // Form state
-  const [chainId, setChainId] = useState("");
   const [name, setName] = useState("");
-  const [networkName, setNetworkName] = useState("");
-  const [rpcUrl, setRpcUrl] = useState("");
+  const [apiUrl, setApiUrl] = useState("");
   const [explorerUrl, setExplorerUrl] = useState("");
-  const [treasuryAddress, setTreasuryAddress] = useState("");
-  const [swapRouterAddress, setSwapRouterAddress] = useState("");
-  const [zeroxApiUrl, setZeroxApiUrl] = useState("");
-  const [isTestnet, setIsTestnet] = useState(false);
-  const [nativeName, setNativeName] = useState("Ether");
-  const [nativeSymbol, setNativeSymbol] = useState("ETH");
-  const [nativeDecimals, setNativeDecimals] = useState("18");
 
   const resetForm = () => {
-    setChainId("");
     setName("");
-    setNetworkName("");
-    setRpcUrl("");
+    setApiUrl("");
     setExplorerUrl("");
-    setTreasuryAddress("");
-    setSwapRouterAddress("");
-    setZeroxApiUrl("");
-    setIsTestnet(false);
-    setNativeName("Ether");
-    setNativeSymbol("ETH");
-    setNativeDecimals("18");
-    setEditingChain(null);
-    setIsAdding(false);
+    setEditingNetwork(null);
     setError(null);
   };
 
-  const startEditing = (chain: SupportedChain) => {
-    setEditingChain(chain);
-    setChainId(chain.chainId.toString());
-    setName(chain.name);
-    setNetworkName(chain.networkName);
-    setRpcUrl(chain.rpcUrl);
-    setExplorerUrl(chain.explorerUrl || "");
-    setTreasuryAddress(chain.treasuryAddress || "");
-    setSwapRouterAddress(chain.swapRouterAddress || "");
-    setZeroxApiUrl(chain.zeroxApiUrl || "");
-    setIsTestnet(chain.isTestnet);
-    setNativeName(chain.nativeCurrency.name);
-    setNativeSymbol(chain.nativeCurrency.symbol);
-    setNativeDecimals(chain.nativeCurrency.decimals.toString());
-    setIsAdding(true);
+  const startEditing = (network: MneeNetwork) => {
+    setEditingNetwork(network);
+    setName(network.name);
+    setApiUrl(network.apiUrl);
+    setExplorerUrl(network.explorerUrl || "");
   };
 
-  const handleSeedChains = async () => {
+  const handleSeedNetworks = async () => {
     setIsSeeding(true);
     try {
-      const result = await seedChains({});
+      const result = await seedNetworksMutation({});
       if (result.added.length > 0) {
-        toast.success(`Added chains: ${result.added.join(", ")}`);
+        toast.success(`Added networks: ${result.added.join(", ")}`);
       } else {
-        toast.info("All default chains already exist");
+        toast.info("All default MNEE networks already exist");
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to seed chains");
+      toast.error(err instanceof Error ? err.message : "Failed to seed networks");
     } finally {
       setIsSeeding(false);
     }
@@ -335,44 +285,20 @@ function ChainsManagement() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chainId || !name || !networkName || !rpcUrl) return;
+    if (!editingNetwork || !name || !apiUrl) return;
 
     setIsSubmitting(true);
     setError(null);
 
     try {
-      if (editingChain) {
-        // Update existing chain
-        await updateChain({
-          chainId: parseInt(chainId),
-          name,
-          rpcUrl,
-          explorerUrl: explorerUrl || undefined,
-          treasuryAddress: treasuryAddress || undefined,
-          swapRouterAddress: swapRouterAddress || undefined,
-          zeroxApiUrl: zeroxApiUrl || undefined,
-          isTestnet,
-        });
-      } else {
-        // Add new chain
-        await addChain({
-          chainId: parseInt(chainId),
-          name,
-          networkName: networkName.toLowerCase(),
-          rpcUrl,
-          explorerUrl: explorerUrl || undefined,
-          nativeCurrency: {
-            name: nativeName,
-            symbol: nativeSymbol,
-            decimals: parseInt(nativeDecimals),
-          },
-          treasuryAddress: treasuryAddress || undefined,
-          swapRouterAddress: swapRouterAddress || undefined,
-          zeroxApiUrl: zeroxApiUrl || undefined,
-          isTestnet,
-        });
-      }
+      await updateNetworkMutation({
+        network: editingNetwork.network,
+        name,
+        apiUrl,
+        explorerUrl: explorerUrl || undefined,
+      });
       resetForm();
+      toast.success("Network updated successfully");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Operation failed");
     } finally {
@@ -380,29 +306,15 @@ function ChainsManagement() {
     }
   };
 
-  const handleToggleActive = async (chain: SupportedChain) => {
-    setTogglingId(chain.chainId);
+  const handleToggleActive = async (network: MneeNetwork) => {
+    setTogglingNetwork(network.network);
     try {
-      await updateChain({
-        chainId: chain.chainId,
-        isActive: !chain.isActive,
+      await updateNetworkMutation({
+        network: network.network,
+        isActive: !network.isActive,
       });
     } finally {
-      setTogglingId(null);
-    }
-  };
-
-  const handleDelete = async (chain: SupportedChain) => {
-    if (!confirm(`Delete chain "${chain.name}"? This cannot be undone.`)) return;
-
-    setDeletingId(chain.chainId);
-    try {
-      await deleteChain({ chainId: chain.chainId });
-      toast.success(`Chain "${chain.name}" deleted successfully`);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to delete chain");
-    } finally {
-      setDeletingId(null);
+      setTogglingNetwork(null);
     }
   };
 
@@ -411,38 +323,29 @@ function ChainsManagement() {
       <div className="bg-[#111] rounded-xl border border-[#333] p-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-lg font-semibold text-white">Supported Chains</h2>
+            <h2 className="text-lg font-semibold text-white">MNEE Networks</h2>
             <p className="text-sm text-[#888]">
-              Blockchain networks with deployed treasury contracts
+              Configure MNEE network endpoints (sandbox and mainnet)
             </p>
           </div>
           <div className="flex gap-2">
-            {!isAdding && (
-              <>
-                <button
-                  onClick={handleSeedChains}
-                  disabled={isSeeding}
-                  className="px-4 py-2 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors disabled:opacity-50"
-                >
-                  {isSeeding ? "Seeding..." : "Seed Defaults"}
-                </button>
-                <button
-                  onClick={() => setIsAdding(true)}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors"
-                >
-                  <PlusIcon className="w-4 h-4" />
-                  Add Chain
-                </button>
-              </>
+            {!editingNetwork && (
+              <button
+                onClick={handleSeedNetworks}
+                disabled={isSeeding}
+                className="px-4 py-2 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors disabled:opacity-50"
+              >
+                {isSeeding ? "Seeding..." : "Seed Defaults"}
+              </button>
             )}
           </div>
         </div>
 
-        {/* Add/Edit Chain Form */}
-        {isAdding && (
+        {/* Edit Network Form */}
+        {editingNetwork && (
           <div className="bg-[#0a0a0a] rounded-lg border border-[#333] p-4 mb-6">
             <h3 className="text-sm font-medium text-white mb-4">
-              {editingChain ? `Edit ${editingChain.name}` : "Add New Chain"}
+              Edit {editingNetwork.name}
             </h3>
 
             {error && (
@@ -452,22 +355,7 @@ function ChainsManagement() {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Basic Info */}
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[#888] mb-2">
-                    Chain ID <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    value={chainId}
-                    onChange={(e) => setChainId(e.target.value)}
-                    placeholder="8453"
-                    disabled={!!editingChain}
-                    className="w-full px-4 py-3 border border-[#333] rounded-lg bg-[#111] text-white placeholder-[#666] focus:outline-none focus:border-[#555] disabled:opacity-50"
-                    required
-                  />
-                </div>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-[#888] mb-2">
                     Name <span className="text-red-500">*</span>
@@ -476,39 +364,34 @@ function ChainsManagement() {
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Base"
+                    placeholder="MNEE Mainnet"
                     className="w-full px-4 py-3 border border-[#333] rounded-lg bg-[#111] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
                     required
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-[#888] mb-2">
-                    Network Name <span className="text-red-500">*</span>
+                    Network Type
                   </label>
                   <input
                     type="text"
-                    value={networkName}
-                    onChange={(e) => setNetworkName(e.target.value)}
-                    placeholder="base"
-                    disabled={!!editingChain}
-                    className="w-full px-4 py-3 border border-[#333] rounded-lg bg-[#111] text-white placeholder-[#666] focus:outline-none focus:border-[#555] disabled:opacity-50"
-                    required
+                    value={editingNetwork.network}
+                    disabled
+                    className="w-full px-4 py-3 border border-[#333] rounded-lg bg-[#111] text-[#666] focus:outline-none disabled:opacity-50"
                   />
-                  <p className="text-xs text-[#666] mt-1">Used in x402 invoice</p>
                 </div>
               </div>
 
-              {/* URLs */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-[#888] mb-2">
-                    RPC URL <span className="text-red-500">*</span>
+                    API URL <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="url"
-                    value={rpcUrl}
-                    onChange={(e) => setRpcUrl(e.target.value)}
-                    placeholder="https://mainnet.base.org"
+                    value={apiUrl}
+                    onChange={(e) => setApiUrl(e.target.value)}
+                    placeholder="https://api.mnee.io"
                     className="w-full px-4 py-3 border border-[#333] rounded-lg bg-[#111] text-white placeholder-[#666] focus:outline-none focus:border-[#555] font-mono text-sm"
                     required
                   />
@@ -521,128 +404,19 @@ function ChainsManagement() {
                     type="url"
                     value={explorerUrl}
                     onChange={(e) => setExplorerUrl(e.target.value)}
-                    placeholder="https://basescan.org"
+                    placeholder="https://whatsonchain.com"
                     className="w-full px-4 py-3 border border-[#333] rounded-lg bg-[#111] text-white placeholder-[#666] focus:outline-none focus:border-[#555] font-mono text-sm"
                   />
                 </div>
               </div>
 
-              {/* Contract Addresses */}
-              <div className="border border-[#333] rounded-lg p-4">
-                <h4 className="text-xs font-medium text-[#666] uppercase tracking-wider mb-3">
-                  Contract Addresses
-                </h4>
-                <div className="grid grid-cols-1 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-[#888] mb-2">
-                      Treasury Address
-                    </label>
-                    <input
-                      type="text"
-                      value={treasuryAddress}
-                      onChange={(e) => setTreasuryAddress(e.target.value)}
-                      placeholder="0x..."
-                      className="w-full px-4 py-3 border border-[#333] rounded-lg bg-[#111] text-white placeholder-[#666] focus:outline-none focus:border-[#555] font-mono text-sm"
-                    />
-                    <p className="text-xs text-[#666] mt-1">ERC20WorkspaceTreasury contract deployed on this chain</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-[#888] mb-2">
-                        Swap Router (localhost)
-                      </label>
-                      <input
-                        type="text"
-                        value={swapRouterAddress}
-                        onChange={(e) => setSwapRouterAddress(e.target.value)}
-                        placeholder="0x..."
-                        className="w-full px-4 py-3 border border-[#333] rounded-lg bg-[#111] text-white placeholder-[#666] focus:outline-none focus:border-[#555] font-mono text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-[#888] mb-2">
-                        0x API URL (production)
-                      </label>
-                      <input
-                        type="url"
-                        value={zeroxApiUrl}
-                        onChange={(e) => setZeroxApiUrl(e.target.value)}
-                        placeholder="https://base.api.0x.org"
-                        className="w-full px-4 py-3 border border-[#333] rounded-lg bg-[#111] text-white placeholder-[#666] focus:outline-none focus:border-[#555] font-mono text-sm"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Native Currency (only for new chains) */}
-              {!editingChain && (
-                <div className="border border-[#333] rounded-lg p-4">
-                  <h4 className="text-xs font-medium text-[#666] uppercase tracking-wider mb-3">
-                    Native Currency
-                  </h4>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-[#888] mb-2">Name</label>
-                      <input
-                        type="text"
-                        value={nativeName}
-                        onChange={(e) => setNativeName(e.target.value)}
-                        placeholder="Ether"
-                        className="w-full px-4 py-3 border border-[#333] rounded-lg bg-[#111] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-[#888] mb-2">Symbol</label>
-                      <input
-                        type="text"
-                        value={nativeSymbol}
-                        onChange={(e) => setNativeSymbol(e.target.value)}
-                        placeholder="ETH"
-                        className="w-full px-4 py-3 border border-[#333] rounded-lg bg-[#111] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-[#888] mb-2">Decimals</label>
-                      <input
-                        type="number"
-                        value={nativeDecimals}
-                        onChange={(e) => setNativeDecimals(e.target.value)}
-                        placeholder="18"
-                        className="w-full px-4 py-3 border border-[#333] rounded-lg bg-[#111] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Testnet toggle */}
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setIsTestnet(!isTestnet)}
-                  className={`relative w-12 h-6 rounded-full transition-colors ${
-                    isTestnet ? "bg-amber-500" : "bg-[#333]"
-                  }`}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
-                      isTestnet ? "translate-x-6" : ""
-                    }`}
-                  />
-                </button>
-                <span className="text-sm text-[#888]">
-                  {isTestnet ? "Testnet" : "Mainnet"}
-                </span>
-              </div>
-
               <div className="flex gap-2 pt-2">
                 <button
                   type="submit"
-                  disabled={isSubmitting || !chainId || !name || !networkName || !rpcUrl}
+                  disabled={isSubmitting || !name || !apiUrl}
                   className="px-4 py-2 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isSubmitting ? "Saving..." : editingChain ? "Update Chain" : "Add Chain"}
+                  {isSubmitting ? "Saving..." : "Update Network"}
                 </button>
                 <button
                   type="button"
@@ -656,10 +430,10 @@ function ChainsManagement() {
           </div>
         )}
 
-        {/* Chains List */}
-        {chains === undefined ? (
+        {/* Networks List */}
+        {networks === undefined ? (
           <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
+            {[1, 2].map((i) => (
               <div key={i} className="animate-pulse flex items-center gap-4 py-3">
                 <div className="w-10 h-10 bg-[#1a1a1a] rounded-lg" />
                 <div className="flex-1 space-y-2">
@@ -669,491 +443,101 @@ function ChainsManagement() {
               </div>
             ))}
           </div>
-        ) : chains.length === 0 ? (
+        ) : networks.length === 0 ? (
           <div className="text-center py-12">
             <div className="w-16 h-16 rounded-2xl bg-[#1a1a1a] flex items-center justify-center mx-auto mb-4">
-              <ChainIcon className="w-8 h-8 text-[#666]" />
+              <NetworkIcon className="w-8 h-8 text-[#666]" />
             </div>
-            <p className="text-lg font-medium text-white">No chains configured</p>
+            <p className="text-lg font-medium text-white">No MNEE networks configured</p>
             <p className="text-sm text-[#888] mt-1">
-              Click &quot;Seed Defaults&quot; to add standard chains, or add a custom chain
+              Click &quot;Seed Defaults&quot; to add sandbox and mainnet networks
             </p>
           </div>
         ) : (
           <div className="divide-y divide-[#333] bg-[#0a0a0a] rounded-lg border border-[#333]">
-            {chains.map((chain) => (
+            {networks.map((network) => (
               <div
-                key={chain._id}
-                className={`p-4 ${!chain.isActive ? "opacity-60" : ""}`}
+                key={network._id}
+                className={`p-4 ${!network.isActive ? "opacity-60" : ""}`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex items-start gap-3">
                     <div
                       className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                        chain.isActive
-                          ? chain.isTestnet
-                            ? "bg-gradient-to-br from-amber-500/20 to-orange-600/20 border border-amber-500/30"
-                            : "bg-gradient-to-br from-emerald-500/20 to-teal-600/20 border border-emerald-500/30"
+                        network.isActive
+                          ? network.network === "mainnet"
+                            ? "bg-gradient-to-br from-emerald-500/20 to-teal-600/20 border border-emerald-500/30"
+                            : "bg-gradient-to-br from-amber-500/20 to-orange-600/20 border border-amber-500/30"
                           : "bg-[#1a1a1a]"
                       }`}
                     >
-                      <ChainIcon
+                      <NetworkIcon
                         className={`w-5 h-5 ${
-                          chain.isActive
-                            ? chain.isTestnet
-                              ? "text-amber-400"
-                              : "text-emerald-400"
+                          network.isActive
+                            ? network.network === "mainnet"
+                              ? "text-emerald-400"
+                              : "text-amber-400"
                             : "text-[#666]"
                         }`}
                       />
                     </div>
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-white">{chain.name}</p>
-                        <span className="text-xs text-[#666] font-mono">#{chain.chainId}</span>
-                        {chain.isTestnet && (
+                        <p className="text-sm font-semibold text-white">{network.name}</p>
+                        {network.network === "sandbox" && (
                           <span className="px-2 py-0.5 text-xs font-medium bg-amber-900/50 text-amber-400 rounded-full">
-                            Testnet
+                            Sandbox
                           </span>
                         )}
                         <span
                           className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                            chain.isActive
+                            network.isActive
                               ? "bg-emerald-900/50 text-emerald-400"
                               : "bg-[#1a1a1a] text-[#666]"
                           }`}
                         >
-                          {chain.isActive ? "Active" : "Inactive"}
+                          {network.isActive ? "Active" : "Inactive"}
                         </span>
                       </div>
                       <p className="text-xs text-[#888]">
-                        Network: <span className="font-mono">{chain.networkName}</span>
+                        Decimals: <span className="font-mono">{network.decimals}</span>
                       </p>
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                        {chain.treasuryAddress ? (
-                          <span className="text-emerald-400">
-                            ✓ Treasury: <span className="font-mono text-[#666]">{chain.treasuryAddress.slice(0, 10)}...</span>
-                          </span>
-                        ) : (
-                          <span className="text-red-400">✗ No treasury</span>
-                        )}
-                        {chain.swapRouterAddress && (
+                        <span className="text-[#888]">
+                          API: <span className="font-mono text-[#666]">{network.apiUrl}</span>
+                        </span>
+                        {network.explorerUrl && (
                           <span className="text-[#888]">
-                            Swap Router: <span className="font-mono text-[#666]">{chain.swapRouterAddress.slice(0, 10)}...</span>
+                            Explorer: <span className="font-mono text-[#666]">{network.explorerUrl}</span>
                           </span>
-                        )}
-                        {chain.zeroxApiUrl && (
-                          <span className="text-[#888]">0x API configured</span>
                         )}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => startEditing(chain as SupportedChain)}
+                      onClick={() => startEditing(network as MneeNetwork)}
                       className="p-2 text-[#666] hover:text-white rounded-lg hover:bg-[#1a1a1a] transition-colors"
-                      title="Edit chain"
+                      title="Edit network"
                     >
                       <EditIcon className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => handleToggleActive(chain as SupportedChain)}
-                      disabled={togglingId === chain.chainId}
+                      onClick={() => handleToggleActive(network as MneeNetwork)}
+                      disabled={togglingNetwork === network.network}
                       className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 ${
-                        chain.isActive
+                        network.isActive
                           ? "text-amber-400 hover:bg-amber-900/30"
                           : "text-emerald-400 hover:bg-emerald-900/30"
                       }`}
                     >
-                      {togglingId === chain.chainId
+                      {togglingNetwork === network.network
                         ? "..."
-                        : chain.isActive
+                        : network.isActive
                         ? "Deactivate"
                         : "Activate"}
                     </button>
-                    <button
-                      onClick={() => handleDelete(chain as SupportedChain)}
-                      disabled={deletingId === chain.chainId}
-                      className="p-2 text-[#666] hover:text-red-400 rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-50"
-                      title="Delete chain"
-                    >
-                      <TrashIcon className="w-4 h-4" />
-                    </button>
                   </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function TokensManagement() {
-  const tokens = useQuery(api.tokens.listSupportedTokens, {});
-  const chains = useQuery(api.chains.listAllChains, {});
-  const addToken = useMutation(api.tokens.addSupportedToken);
-  const updateToken = useMutation(api.tokens.updateSupportedToken);
-  const deleteToken = useMutation(api.tokens.deleteSupportedToken);
-
-  const [isAdding, setIsAdding] = useState(false);
-  const [address, setAddress] = useState("");
-  const [symbol, setSymbol] = useState("");
-  const [name, setName] = useState("");
-  const [decimals, setDecimals] = useState("18");
-  const [chainId, setChainId] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLookingUp, setIsLookingUp] = useState(false);
-  const [deletingId, setDeletingId] = useState<Id<"supportedTokens"> | null>(null);
-  const [togglingId, setTogglingId] = useState<Id<"supportedTokens"> | null>(null);
-
-  // Build chain name lookup from database
-  const chainNamesFromDb: Record<number, string> = {};
-  if (chains) {
-    chains.forEach((c) => {
-      chainNamesFromDb[c.chainId] = c.name;
-    });
-  }
-
-  // Lookup token info from chain
-  const handleLookupToken = async () => {
-    if (!address || !chainId) return;
-
-    setIsLookingUp(true);
-    setError(null);
-
-    try {
-      const response = await fetch(
-        `/api/admin/token-lookup?address=${encodeURIComponent(address)}&chainId=${chainId}`
-      );
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to lookup token");
-      }
-
-      // Prefill the form
-      setSymbol(data.symbol);
-      setName(data.name);
-      setDecimals(data.decimals.toString());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Token lookup failed");
-    } finally {
-      setIsLookingUp(false);
-    }
-  };
-
-  const handleAddToken = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!address || !symbol || !name) return;
-
-    setIsSubmitting(true);
-    setError(null);
-
-    try {
-      await addToken({
-        address: address.trim(),
-        symbol: symbol.trim().toUpperCase(),
-        name: name.trim(),
-        decimals: parseInt(decimals),
-        chainId: parseInt(chainId),
-      });
-      // Reset form
-      setAddress("");
-      setSymbol("");
-      setName("");
-      setDecimals("18");
-      setIsAdding(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to add token");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleToggleActive = async (token: SupportedToken) => {
-    setTogglingId(token._id);
-    try {
-      await updateToken({
-        tokenId: token._id,
-        isActive: !token.isActive,
-      });
-    } finally {
-      setTogglingId(null);
-    }
-  };
-
-  const handleDelete = async (token: SupportedToken) => {
-    if (!confirm(`Delete token ${token.symbol}? This will also remove it from all workspaces.`)) return;
-    
-    setDeletingId(token._id);
-    try {
-      await deleteToken({ tokenId: token._id });
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
-  // Group tokens by chain
-  const tokensByChain = (tokens || []).reduce((acc, token) => {
-    const chain = token.chainId;
-    if (!acc[chain]) acc[chain] = [];
-    acc[chain].push(token as SupportedToken);
-    return acc;
-  }, {} as Record<number, SupportedToken[]>);
-
-  return (
-    <div className="space-y-6">
-      {/* Add Token Section */}
-      <div className="bg-[#111] rounded-xl border border-[#333] p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-lg font-semibold text-white">Supported Tokens</h2>
-            <p className="text-sm text-[#888]">
-              Global list of tokens that workspaces can add to their treasury
-            </p>
-          </div>
-          {!isAdding && (
-            <button
-              onClick={() => setIsAdding(true)}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors"
-            >
-              <PlusIcon className="w-4 h-4" />
-              Add Token
-            </button>
-          )}
-        </div>
-
-        {/* Add Token Form */}
-        {isAdding && (
-          <div className="bg-[#0a0a0a] rounded-lg border border-[#333] p-4 mb-6">
-            <h3 className="text-sm font-medium text-white mb-4">Add New Token</h3>
-            
-            {error && (
-              <div className="bg-red-900/20 border border-red-800 rounded-lg p-3 mb-4">
-                <p className="text-sm text-red-200">{error}</p>
-              </div>
-            )}
-
-            <form onSubmit={handleAddToken} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[#888] mb-2">
-                    Chain
-                  </label>
-                  <select
-                    value={chainId}
-                    onChange={(e) => setChainId(e.target.value)}
-                    className="w-full px-4 py-3 border border-[#333] rounded-lg bg-[#111] text-white focus:outline-none focus:border-[#555]"
-                    required
-                  >
-                    <option value="">Select a chain...</option>
-                    {chains?.map((c) => (
-                      <option key={c.chainId} value={c.chainId}>
-                        {c.name} ({c.chainId})
-                      </option>
-                    ))}
-                  </select>
-                  {chains?.length === 0 && (
-                    <p className="text-xs text-amber-400 mt-1">
-                      No chains configured. Add chains first.
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#888] mb-2">
-                    Token Address <span className="text-red-500">*</span>
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={address}
-                      onChange={(e) => setAddress(e.target.value)}
-                      placeholder="0x..."
-                      className="flex-1 px-4 py-3 border border-[#333] rounded-lg bg-[#111] text-white placeholder-[#666] focus:outline-none focus:border-[#555] font-mono text-sm"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={handleLookupToken}
-                      disabled={!address || !chainId || isLookingUp}
-                      className="px-4 py-3 text-sm font-medium text-white bg-[#333] hover:bg-[#444] rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                    >
-                      {isLookingUp ? "Looking up..." : "Lookup"}
-                    </button>
-                  </div>
-                  <p className="text-xs text-[#666] mt-1">
-                    Enter address and click Lookup to auto-fill token details
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-[#888] mb-2">
-                    Symbol <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={symbol}
-                    onChange={(e) => setSymbol(e.target.value)}
-                    placeholder="USDC"
-                    className="w-full px-4 py-3 border border-[#333] rounded-lg bg-[#111] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#888] mb-2">
-                    Name <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder="USD Coin"
-                    className="w-full px-4 py-3 border border-[#333] rounded-lg bg-[#111] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-[#888] mb-2">
-                    Decimals
-                  </label>
-                  <input
-                    type="number"
-                    value={decimals}
-                    onChange={(e) => setDecimals(e.target.value)}
-                    placeholder="18"
-                    min="0"
-                    max="24"
-                    className="w-full px-4 py-3 border border-[#333] rounded-lg bg-[#111] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  disabled={isSubmitting || !address || !symbol || !name}
-                  className="px-4 py-2 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isSubmitting ? "Adding..." : "Add Token"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAdding(false);
-                    setError(null);
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {/* Tokens List */}
-        {tokens === undefined ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="animate-pulse flex items-center gap-4 py-3">
-                <div className="w-10 h-10 bg-[#1a1a1a] rounded-lg" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 w-32 bg-[#1a1a1a] rounded" />
-                  <div className="h-3 w-48 bg-[#1a1a1a] rounded" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : tokens.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 rounded-2xl bg-[#1a1a1a] flex items-center justify-center mx-auto mb-4">
-              <TokenIcon className="w-8 h-8 text-[#666]" />
-            </div>
-            <p className="text-lg font-medium text-white">No tokens configured</p>
-            <p className="text-sm text-[#888] mt-1">
-              Add your first token to get started
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {Object.entries(tokensByChain).map(([chain, chainTokens]) => (
-              <div key={chain}>
-                <h4 className="text-xs font-medium text-[#666] uppercase tracking-wider mb-3">
-                  {chainNamesFromDb[Number(chain)] || defaultChainNames[Number(chain)] || `Chain ${chain}`}
-                </h4>
-                <div className="divide-y divide-[#333] bg-[#0a0a0a] rounded-lg border border-[#333]">
-                  {chainTokens.map((token) => (
-                    <div
-                      key={token._id}
-                      className={`flex items-center justify-between p-4 ${
-                        !token.isActive ? "opacity-60" : ""
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                          token.isActive
-                            ? "bg-gradient-to-br from-emerald-500/20 to-teal-600/20 border border-emerald-500/30"
-                            : "bg-[#1a1a1a]"
-                        }`}>
-                          <span className={`text-sm font-bold ${
-                            token.isActive ? "text-emerald-400" : "text-[#666]"
-                          }`}>
-                            {token.symbol.slice(0, 2)}
-                          </span>
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-semibold text-white">
-                              {token.symbol}
-                            </p>
-                            <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                              token.isActive
-                                ? "bg-emerald-900/50 text-emerald-400"
-                                : "bg-[#1a1a1a] text-[#666]"
-                            }`}>
-                              {token.isActive ? "Active" : "Inactive"}
-                            </span>
-                          </div>
-                          <p className="text-xs text-[#888]">
-                            {token.name} • {token.decimals} decimals
-                          </p>
-                          <p className="text-xs text-[#666] font-mono">
-                            {token.address}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleToggleActive(token)}
-                          disabled={togglingId === token._id}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 ${
-                            token.isActive
-                              ? "text-amber-400 hover:bg-amber-900/30"
-                              : "text-emerald-400 hover:bg-emerald-900/30"
-                          }`}
-                        >
-                          {togglingId === token._id
-                            ? "..."
-                            : token.isActive
-                            ? "Deactivate"
-                            : "Activate"}
-                        </button>
-                        <button
-                          onClick={() => handleDelete(token)}
-                          disabled={deletingId === token._id}
-                          className="p-2 text-[#666] hover:text-red-400 rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-50"
-                          title="Delete token"
-                        >
-                          <TrashIcon className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
                 </div>
               </div>
             ))}
@@ -1165,9 +549,9 @@ function TokensManagement() {
 }
 
 function AdminsManagement() {
-  const admins = useQuery(api.tokens.listAdmins);
-  const grantAdmin = useMutation(api.tokens.grantAdminByEmail);
-  const revokeAdmin = useMutation(api.tokens.revokeAdmin);
+  const admins = useQuery(api.users.listAdmins);
+  const grantAdmin = useMutation(api.users.grantAdminByEmail);
+  const revokeAdmin = useMutation(api.users.revokeAdmin);
   const toast = useToast();
 
   const [email, setEmail] = useState("");
@@ -1185,6 +569,7 @@ function AdminsManagement() {
     try {
       await grantAdmin({ email: email.trim() });
       setEmail("");
+      toast.success("Admin access granted");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to grant admin access");
     } finally {
@@ -1211,7 +596,7 @@ function AdminsManagement() {
       <div className="mb-6">
         <h2 className="text-lg font-semibold text-white">Platform Admins</h2>
         <p className="text-sm text-[#888]">
-          Users with full access to manage global tokens and other admins
+          Users with full access to manage MNEE networks and other admins
         </p>
       </div>
 
@@ -1301,6 +686,232 @@ function AdminsManagement() {
   );
 }
 
+function PaymentsManagement() {
+  const payments = useQuery(api.gateway.listAllPaymentsForAdmin, { limit: 100 });
+  const stats = useQuery(api.gateway.getPaymentStatsForAdmin);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  const filteredPayments = payments
+    ? statusFilter === "all"
+      ? payments
+      : payments.filter((p) => p.status === statusFilter)
+    : [];
+
+  const formatMnee = (amount: number) => {
+    return (amount / 100000).toFixed(5);
+  };
+
+  const formatDate = (timestamp: number) => {
+    return new Date(timestamp).toLocaleString();
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "settled":
+      case "completed":
+        return "text-emerald-400 bg-emerald-900/30";
+      case "pending":
+        return "text-amber-400 bg-amber-900/30";
+      case "failed":
+        return "text-red-400 bg-red-900/30";
+      case "denied":
+        return "text-red-400 bg-red-900/30";
+      case "allowed":
+        return "text-blue-400 bg-blue-900/30";
+      default:
+        return "text-[#888] bg-[#1a1a1a]";
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "settled":
+      case "completed":
+        return <CheckCircleIcon className="w-4 h-4" />;
+      case "pending":
+        return <ClockIcon className="w-4 h-4" />;
+      case "failed":
+      case "denied":
+        return <XCircleIcon className="w-4 h-4" />;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Stats Cards */}
+      {stats && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-[#111] rounded-xl border border-[#333] p-6">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-[#888]">Total Payments</p>
+              <CurrencyIcon className="w-5 h-5 text-[#666]" />
+            </div>
+            <p className="text-2xl font-bold text-white">{stats.totalPayments}</p>
+            <p className="text-xs text-[#666] mt-1">All time</p>
+          </div>
+
+          <div className="bg-[#111] rounded-xl border border-[#333] p-6">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-[#888]">Total Revenue</p>
+              <CheckCircleIcon className="w-5 h-5 text-emerald-400" />
+            </div>
+            <p className="text-2xl font-bold text-white">{formatMnee(stats.totalRevenue)} MNEE</p>
+            <p className="text-xs text-[#666] mt-1">{stats.settledCount} settled payments</p>
+          </div>
+
+          <div className="bg-[#111] rounded-xl border border-[#333] p-6">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-[#888]">Today&apos;s Payments</p>
+              <ClockIcon className="w-5 h-5 text-amber-400" />
+            </div>
+            <p className="text-2xl font-bold text-white">{stats.todayPayments}</p>
+            <p className="text-xs text-[#666] mt-1">{formatMnee(stats.todayRevenue)} MNEE revenue</p>
+          </div>
+
+          <div className="bg-[#111] rounded-xl border border-[#333] p-6">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-sm text-[#888]">Status Overview</p>
+              <NetworkIcon className="w-5 h-5 text-[#666]" />
+            </div>
+            <div className="flex gap-2 mt-2">
+              <span className="text-xs text-emerald-400">{stats.settledCount} ✓</span>
+              <span className="text-xs text-amber-400">{stats.pendingCount} ⏳</span>
+              <span className="text-xs text-red-400">{stats.failedCount} ✗</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payments Table */}
+      <div className="bg-[#111] rounded-xl border border-[#333] p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-lg font-semibold text-white">All Payments</h2>
+            <p className="text-sm text-[#888]">
+              View and track all payment transactions across workspaces
+            </p>
+          </div>
+          
+          {/* Status Filter */}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-4 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white text-sm focus:outline-none focus:border-[#555]"
+          >
+            <option value="all">All Statuses</option>
+            <option value="settled">Settled</option>
+            <option value="completed">Completed</option>
+            <option value="pending">Pending</option>
+            <option value="allowed">Allowed</option>
+            <option value="failed">Failed</option>
+            <option value="denied">Denied</option>
+          </select>
+        </div>
+
+        {/* Payments List */}
+        {payments === undefined ? (
+          <div className="space-y-3">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="animate-pulse flex items-center gap-4 py-3">
+                <div className="w-10 h-10 bg-[#1a1a1a] rounded-lg" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-48 bg-[#1a1a1a] rounded" />
+                  <div className="h-3 w-32 bg-[#1a1a1a] rounded" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filteredPayments.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 rounded-2xl bg-[#1a1a1a] flex items-center justify-center mx-auto mb-4">
+              <CurrencyIcon className="w-8 h-8 text-[#666]" />
+            </div>
+            <p className="text-lg font-medium text-white">No payments found</p>
+            <p className="text-sm text-[#888] mt-1">
+              {statusFilter !== "all"
+                ? `No payments with status: ${statusFilter}`
+                : "Payments will appear here once transactions are made"}
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-[#333]">
+                  <th className="text-left text-xs font-medium text-[#888] pb-3 px-2">Status</th>
+                  <th className="text-left text-xs font-medium text-[#888] pb-3 px-2">Amount</th>
+                  <th className="text-left text-xs font-medium text-[#888] pb-3 px-2">Workspace</th>
+                  <th className="text-left text-xs font-medium text-[#888] pb-3 px-2">Provider</th>
+                  <th className="text-left text-xs font-medium text-[#888] pb-3 px-2">Network</th>
+                  <th className="text-left text-xs font-medium text-[#888] pb-3 px-2">Date</th>
+                  <th className="text-left text-xs font-medium text-[#888] pb-3 px-2">Invoice ID</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#333]">
+                {filteredPayments.map((payment) => (
+                  <tr key={payment._id} className="hover:bg-[#1a1a1a]/50 transition-colors">
+                    <td className="py-3 px-2">
+                      <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium w-fit ${getStatusColor(payment.status)}`}>
+                        {getStatusIcon(payment.status)}
+                        {payment.status}
+                      </div>
+                    </td>
+                    <td className="py-3 px-2">
+                      <div className="text-sm font-semibold text-white">
+                        {formatMnee(payment.amount)}
+                      </div>
+                      <div className="text-xs text-[#666]">MNEE</div>
+                    </td>
+                    <td className="py-3 px-2">
+                      <div className="text-sm text-white">{payment.workspaceName || "Unknown"}</div>
+                      <div className="text-xs text-[#666]">{payment.apiKeyName || "No key"}</div>
+                    </td>
+                    <td className="py-3 px-2">
+                      <div className="text-sm text-white">{payment.providerName || payment.providerHost}</div>
+                    </td>
+                    <td className="py-3 px-2">
+                      <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
+                        payment.network === "mainnet"
+                          ? "bg-emerald-900/50 text-emerald-400"
+                          : "bg-amber-900/50 text-amber-400"
+                      }`}>
+                        {payment.network}
+                      </span>
+                    </td>
+                    <td className="py-3 px-2">
+                      <div className="text-xs text-[#888]">{formatDate(payment.createdAt)}</div>
+                      {payment.completedAt && (
+                        <div className="text-xs text-[#666]">Completed: {formatDate(payment.completedAt)}</div>
+                      )}
+                    </td>
+                    <td className="py-3 px-2">
+                      <div className="text-xs font-mono text-[#888] max-w-xs truncate" title={payment.invoiceId}>
+                        {payment.invoiceId}
+                      </div>
+                      {payment.txHash && (
+                        <div className="text-xs font-mono text-[#666] max-w-xs truncate" title={payment.txHash}>
+                          {payment.txHash}
+                        </div>
+                      )}
+                      {payment.denialReason && (
+                        <div className="text-xs text-red-400 mt-1">
+                          {payment.denialReason}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function LoadingSkeleton() {
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
@@ -1308,4 +919,3 @@ function LoadingSkeleton() {
     </div>
   );
 }
-

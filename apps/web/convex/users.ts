@@ -207,4 +207,142 @@ export const updateProfile = mutation({
   },
 });
 
+// ============================================
+// ADMIN FUNCTIONS
+// ============================================
+
+/**
+ * Check if current user is a platform admin
+ */
+export const checkIsAdmin = query({
+  args: {},
+  handler: async (ctx) => {
+    const clerkUserId = await getClerkUserId(ctx);
+    if (!clerkUserId) return false;
+
+    const user = await getUser(ctx, clerkUserId);
+    return user?.isAdmin === true;
+  },
+});
+
+/**
+ * Bootstrap the first admin (only works if no admins exist)
+ */
+export const bootstrapAdmin = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const clerkUserId = await requireAuth(ctx);
+
+    // Check if any admins exist
+    const existingAdmins = await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("isAdmin"), true))
+      .first();
+
+    if (existingAdmins) {
+      throw new Error("Admin already exists. Ask an existing admin to grant you access.");
+    }
+
+    // Get or create user
+    let user = await getUser(ctx, clerkUserId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Make this user an admin
+    await ctx.db.patch(user._id, { isAdmin: true });
+    return { success: true };
+  },
+});
+
+/**
+ * List all platform admins
+ */
+export const listAdmins = query({
+  args: {},
+  handler: async (ctx) => {
+    const clerkUserId = await getClerkUserId(ctx);
+    if (!clerkUserId) return [];
+
+    // Verify caller is admin
+    const caller = await getUser(ctx, clerkUserId);
+    if (!caller?.isAdmin) return [];
+
+    return await ctx.db
+      .query("users")
+      .filter((q) => q.eq(q.field("isAdmin"), true))
+      .collect();
+  },
+});
+
+/**
+ * Grant admin access to a user by email
+ */
+export const grantAdminByEmail = mutation({
+  args: {
+    email: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const clerkUserId = await requireAuth(ctx);
+
+    // Verify caller is admin
+    const caller = await getUser(ctx, clerkUserId);
+    if (!caller?.isAdmin) {
+      throw new Error("Only admins can grant admin access");
+    }
+
+    // Find user by email
+    const targetUser = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", args.email))
+      .first();
+
+    if (!targetUser) {
+      throw new Error(`User with email ${args.email} not found`);
+    }
+
+    if (targetUser.isAdmin) {
+      throw new Error("User is already an admin");
+    }
+
+    // Grant admin
+    await ctx.db.patch(targetUser._id, { isAdmin: true });
+    return { success: true };
+  },
+});
+
+/**
+ * Revoke admin access from a user
+ */
+export const revokeAdmin = mutation({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const clerkUserId = await requireAuth(ctx);
+
+    // Verify caller is admin
+    const caller = await getUser(ctx, clerkUserId);
+    if (!caller?.isAdmin) {
+      throw new Error("Only admins can revoke admin access");
+    }
+
+    // Prevent self-revocation
+    if (caller._id === args.userId) {
+      throw new Error("You cannot revoke your own admin access");
+    }
+
+    const targetUser = await ctx.db.get(args.userId);
+    if (!targetUser) {
+      throw new Error("User not found");
+    }
+
+    if (!targetUser.isAdmin) {
+      throw new Error("User is not an admin");
+    }
+
+    await ctx.db.patch(args.userId, { isAdmin: false });
+    return { success: true };
+  },
+});
 

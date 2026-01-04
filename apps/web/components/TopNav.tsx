@@ -17,9 +17,9 @@ import { Id } from "../convex/_generated/dataModel";
 const navItems: { label: string; href: string; highlight?: boolean }[] = [
   { label: "Overview", href: "/" },
   { label: "Agents", href: "/workspace/agents" },
+  { label: "Providers", href: "/workspace/providers" },
   { label: "Treasury", href: "/workspace/treasury" },
   { label: "Activity", href: "/workspace/activity" },
-  { label: "Usage", href: "/workspace/usage" },
   { label: "Settings", href: "/workspace/settings" },
   { label: "SDK Demo", href: "/sdk-demo", highlight: true },
 ];
@@ -92,6 +92,12 @@ export function TopNav() {
           </SignedIn>
 
           <SignedOut>
+            <Link
+              href="/docs"
+              className="px-4 py-1.5 text-sm text-[#888] hover:text-white transition-colors"
+            >
+              Docs
+            </Link>
             <SignInButton>
               <button className="px-4 py-1.5 text-sm text-[#888] hover:text-white transition-colors">
                 Log In
@@ -116,7 +122,8 @@ export function TopNav() {
 
 function NavTabs() {
   const pathname = usePathname();
-  const isAdmin = useQuery(api.tokens.checkIsAdmin);
+  const currentUser = useQuery(api.users.getCurrentUser);
+  const isAdmin = currentUser?.user?.isAdmin ?? false;
 
   return (
     <nav className="flex items-center px-4 -mb-px overflow-x-auto scrollbar-hide">

@@ -4,7 +4,7 @@ import { Id } from "./_generated/dataModel";
 import { getCurrentWorkspaceContext, requireRole, ALL_ROLES } from "./lib/auth";
 
 /**
- * Get usage analytics over time (daily aggregates)
+ * Get usage analytics over time (daily aggregates) - MNEE only
  */
 export const getUsageOverTime = query({
   args: {
@@ -17,7 +17,6 @@ export const getUsageOverTime = query({
       settledPayments: v.number(),
       deniedPayments: v.number(),
       totalSpent: v.number(),
-      swapCount: v.number(),
     })
   ),
   handler: async (ctx, args) => {
@@ -43,7 +42,6 @@ export const getUsageOverTime = query({
         settledPayments: number;
         deniedPayments: number;
         totalSpent: number;
-        swapCount: number;
       }
     > = {};
 
@@ -56,7 +54,6 @@ export const getUsageOverTime = query({
         settledPayments: 0,
         deniedPayments: 0,
         totalSpent: 0,
-        swapCount: 0,
       };
     }
 
@@ -67,12 +64,9 @@ export const getUsageOverTime = query({
 
       byDate[dateStr].totalPayments += 1;
 
-      if (payment.status === "settled") {
+      if (payment.status === "settled" || payment.status === "completed") {
         byDate[dateStr].settledPayments += 1;
-        byDate[dateStr].totalSpent += payment.swapSellAmount ?? payment.treasuryAmount;
-        if (payment.swapTxHash) {
-          byDate[dateStr].swapCount += 1;
-        }
+        byDate[dateStr].totalSpent += payment.amount;
       } else if (payment.status === "denied") {
         byDate[dateStr].deniedPayments += 1;
       }
@@ -83,14 +77,14 @@ export const getUsageOverTime = query({
       .map(([date, data]) => ({
         date,
         ...data,
-        totalSpent: Math.round(data.totalSpent * 1000000) / 1000000,
+        totalSpent: Math.round(data.totalSpent * 100000) / 100000, // 5 decimal places for MNEE
       }))
       .sort((a, b) => a.date.localeCompare(b.date));
   },
 });
 
 /**
- * Get usage breakdown by agent (API key)
+ * Get usage breakdown by agent (API key) - MNEE only
  */
 export const getUsageByAgent = query({
   args: {
@@ -104,7 +98,6 @@ export const getUsageByAgent = query({
       settledPayments: v.number(),
       deniedPayments: v.number(),
       totalSpent: v.number(),
-      swapCount: v.number(),
       lastUsed: v.optional(v.number()),
     })
   ),
@@ -130,7 +123,6 @@ export const getUsageByAgent = query({
         settledPayments: number;
         deniedPayments: number;
         totalSpent: number;
-        swapCount: number;
         lastUsed: number | undefined;
       }
     > = {};
@@ -143,7 +135,6 @@ export const getUsageByAgent = query({
           settledPayments: 0,
           deniedPayments: 0,
           totalSpent: 0,
-          swapCount: 0,
           lastUsed: undefined,
         };
       }
@@ -154,12 +145,9 @@ export const getUsageByAgent = query({
         payment.createdAt
       );
 
-      if (payment.status === "settled") {
+      if (payment.status === "settled" || payment.status === "completed") {
         byAgent[keyId].settledPayments += 1;
-        byAgent[keyId].totalSpent += payment.swapSellAmount ?? payment.treasuryAmount;
-        if (payment.swapTxHash) {
-          byAgent[keyId].swapCount += 1;
-        }
+        byAgent[keyId].totalSpent += payment.amount;
       } else if (payment.status === "denied") {
         byAgent[keyId].deniedPayments += 1;
       }
@@ -173,7 +161,7 @@ export const getUsageByAgent = query({
           apiKeyId: apiKeyId as Id<"apiKeys">,
           apiKeyName: apiKey?.name ?? "Unknown Agent",
           ...data,
-          totalSpent: Math.round(data.totalSpent * 1000000) / 1000000,
+          totalSpent: Math.round(data.totalSpent * 100000) / 100000,
         };
       })
     );
@@ -184,7 +172,7 @@ export const getUsageByAgent = query({
 });
 
 /**
- * Get usage breakdown by provider
+ * Get usage breakdown by provider - MNEE only
  */
 export const getUsageByProvider = query({
   args: {
@@ -198,7 +186,6 @@ export const getUsageByProvider = query({
       settledPayments: v.number(),
       deniedPayments: v.number(),
       totalSpent: v.number(),
-      swapCount: v.number(),
     })
   ),
   handler: async (ctx, args) => {
@@ -224,7 +211,6 @@ export const getUsageByProvider = query({
         settledPayments: number;
         deniedPayments: number;
         totalSpent: number;
-        swapCount: number;
       }
     > = {};
 
@@ -237,18 +223,14 @@ export const getUsageByProvider = query({
           settledPayments: 0,
           deniedPayments: 0,
           totalSpent: 0,
-          swapCount: 0,
         };
       }
 
       byProvider[host].totalPayments += 1;
 
-      if (payment.status === "settled") {
+      if (payment.status === "settled" || payment.status === "completed") {
         byProvider[host].settledPayments += 1;
-        byProvider[host].totalSpent += payment.swapSellAmount ?? payment.treasuryAmount;
-        if (payment.swapTxHash) {
-          byProvider[host].swapCount += 1;
-        }
+        byProvider[host].totalSpent += payment.amount;
       } else if (payment.status === "denied") {
         byProvider[host].deniedPayments += 1;
       }
@@ -270,8 +252,7 @@ export const getUsageByProvider = query({
           totalPayments: data.totalPayments,
           settledPayments: data.settledPayments,
           deniedPayments: data.deniedPayments,
-          totalSpent: Math.round(data.totalSpent * 1000000) / 1000000,
-          swapCount: data.swapCount,
+          totalSpent: Math.round(data.totalSpent * 100000) / 100000,
         };
       })
     );
@@ -282,7 +263,7 @@ export const getUsageByProvider = query({
 });
 
 /**
- * Get comprehensive usage summary stats
+ * Get comprehensive usage summary stats - MNEE only
  */
 export const getUsageSummary = query({
   args: {
@@ -294,9 +275,6 @@ export const getUsageSummary = query({
     deniedPayments: v.number(),
     pendingPayments: v.number(),
     totalSpent: v.number(),
-    swapCount: v.number(),
-    swapVolume: v.number(),
-    swapFees: v.number(),
     uniqueAgents: v.number(),
     uniqueProviders: v.number(),
     avgPaymentSize: v.number(),
@@ -326,22 +304,15 @@ export const getUsageSummary = query({
     );
 
     // Current period stats
-    const settled = currentPayments.filter((p) => p.status === "settled");
+    const settled = currentPayments.filter(
+      (p) => p.status === "settled" || p.status === "completed"
+    );
     const denied = currentPayments.filter((p) => p.status === "denied");
     const pending = currentPayments.filter(
       (p) => p.status === "allowed" || p.status === "pending"
     );
-    const withSwaps = settled.filter((p) => !!p.swapTxHash);
 
-    const totalSpent = settled.reduce(
-      (sum, p) => sum + (p.swapSellAmount ?? p.treasuryAmount),
-      0
-    );
-    const swapVolume = withSwaps.reduce(
-      (sum, p) => sum + (p.swapSellAmount ?? 0),
-      0
-    );
-    const swapFees = withSwaps.reduce((sum, p) => sum + (p.swapFee ?? 0), 0);
+    const totalSpent = settled.reduce((sum, p) => sum + p.amount, 0);
 
     const uniqueAgents = new Set(currentPayments.map((p) => p.apiKeyId)).size;
     const uniqueProviders = new Set(currentPayments.map((p) => p.providerHost)).size;
@@ -353,11 +324,10 @@ export const getUsageSummary = query({
         : 0;
 
     // Previous period stats for comparison
-    const prevSettled = previousPayments.filter((p) => p.status === "settled");
-    const prevTotalSpent = prevSettled.reduce(
-      (sum, p) => sum + (p.swapSellAmount ?? p.treasuryAmount),
-      0
+    const prevSettled = previousPayments.filter(
+      (p) => p.status === "settled" || p.status === "completed"
     );
+    const prevTotalSpent = prevSettled.reduce((sum, p) => sum + p.amount, 0);
 
     // Calculate percentage changes
     const spentChange =
@@ -378,13 +348,10 @@ export const getUsageSummary = query({
       settledPayments: settled.length,
       deniedPayments: denied.length,
       pendingPayments: pending.length,
-      totalSpent: Math.round(totalSpent * 1000000) / 1000000,
-      swapCount: withSwaps.length,
-      swapVolume: Math.round(swapVolume * 1000000) / 1000000,
-      swapFees: Math.round(swapFees * 1000000) / 1000000,
+      totalSpent: Math.round(totalSpent * 100000) / 100000,
       uniqueAgents,
       uniqueProviders,
-      avgPaymentSize: Math.round(avgPaymentSize * 1000000) / 1000000,
+      avgPaymentSize: Math.round(avgPaymentSize * 100000) / 100000,
       successRate: Math.round(successRate * 10) / 10,
       spentChange: Math.round(spentChange * 10) / 10,
       paymentsChange: Math.round(paymentsChange * 10) / 10,
@@ -393,7 +360,7 @@ export const getUsageSummary = query({
 });
 
 /**
- * Get hourly distribution of payments (for heat map)
+ * Get hourly distribution of payments (for heat map) - MNEE only
  */
 export const getHourlyDistribution = query({
   args: {
@@ -420,7 +387,7 @@ export const getHourlyDistribution = query({
       .collect();
 
     const recentPayments = payments.filter(
-      (p) => p.createdAt >= startTime && p.status === "settled"
+      (p) => p.createdAt >= startTime && (p.status === "settled" || p.status === "completed")
     );
 
     // Initialize all hour/day combinations
@@ -436,7 +403,7 @@ export const getHourlyDistribution = query({
       const date = new Date(payment.createdAt);
       const key = `${date.getDay()}-${date.getHours()}`;
       distribution[key].count += 1;
-      distribution[key].spent += payment.swapSellAmount ?? payment.treasuryAmount;
+      distribution[key].spent += payment.amount;
     }
 
     return Object.entries(distribution).map(([key, data]) => {
@@ -445,22 +412,19 @@ export const getHourlyDistribution = query({
         hour,
         dayOfWeek,
         count: data.count,
-        spent: Math.round(data.spent * 1000000) / 1000000,
+        spent: Math.round(data.spent * 100000) / 100000,
       };
     });
   },
 });
 
 /**
- * Get agent's current daily and monthly spend
+ * Get agent's current daily and monthly spend (MNEE only)
  * Used for displaying spend vs limits in the UI
- * Can optionally filter by chainId and tokenAddress for per-chain/token limits
  */
 export const getAgentSpend = query({
   args: {
     apiKeyId: v.id("apiKeys"),
-    chainId: v.optional(v.number()),
-    tokenAddress: v.optional(v.string()),
   },
   returns: v.object({
     dailySpend: v.number(),
@@ -496,16 +460,7 @@ export const getAgentSpend = query({
       )
       .collect();
 
-    // Filter by chain/token if provided
-    let filteredDailyPayments = dailyPayments;
-    if (args.chainId !== undefined && args.tokenAddress !== undefined) {
-      filteredDailyPayments = dailyPayments.filter((p) =>
-        p.chainId === args.chainId &&
-        p.paymentToken?.toLowerCase() === args.tokenAddress!.toLowerCase()
-      );
-    }
-
-    const dailySpend = filteredDailyPayments.reduce((sum, p) => sum + p.treasuryAmount, 0);
+    const dailySpend = dailyPayments.reduce((sum, p) => sum + p.amount, 0);
 
     // Calculate monthly spend
     const startOfMonth = new Date(now);
@@ -527,21 +482,11 @@ export const getAgentSpend = query({
       )
       .collect();
 
-    // Filter by chain/token if provided
-    let filteredMonthlyPayments = monthlyPayments;
-    if (args.chainId !== undefined && args.tokenAddress !== undefined) {
-      filteredMonthlyPayments = monthlyPayments.filter((p) =>
-        p.chainId === args.chainId &&
-        p.paymentToken?.toLowerCase() === args.tokenAddress!.toLowerCase()
-      );
-    }
-
-    const monthlySpend = filteredMonthlyPayments.reduce((sum, p) => sum + p.treasuryAmount, 0);
+    const monthlySpend = monthlyPayments.reduce((sum, p) => sum + p.amount, 0);
 
     return {
-      dailySpend: Math.round(dailySpend * 1000000) / 1000000,
-      monthlySpend: Math.round(monthlySpend * 1000000) / 1000000,
+      dailySpend: Math.round(dailySpend * 100000) / 100000,
+      monthlySpend: Math.round(monthlySpend * 100000) / 100000,
     };
   },
 });
-

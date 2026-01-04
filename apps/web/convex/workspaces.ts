@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import {
   requireAuth,
   getUser,
@@ -96,6 +97,12 @@ export const createWorkspace = mutation({
         currentWorkspaceId: workspaceId,
       });
     }
+
+    // Auto-generate MNEE wallet for the workspace (scheduled to run immediately)
+    await ctx.scheduler.runAfter(0, internal.mneeActions.createWalletForWorkspace, {
+      workspaceId,
+      network: "sandbox",
+    });
 
     return { workspaceId };
   },
@@ -195,13 +202,13 @@ export const deleteWorkspace = mutation({
       await ctx.db.delete(policy._id);
     }
 
-    // Treasury Config
-    const treasuryConfigs = await ctx.db
-      .query("treasuryConfig")
+    // MNEE Wallets
+    const mneeWallets = await ctx.db
+      .query("mneeWallets")
       .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
       .collect();
-    for (const config of treasuryConfigs) {
-      await ctx.db.delete(config._id);
+    for (const wallet of mneeWallets) {
+      await ctx.db.delete(wallet._id);
     }
 
     // Payments (keep for audit trail, but you could also delete)
@@ -414,4 +421,87 @@ export const leaveWorkspace = mutation({
   },
 });
 
+// ============================================
+// API PROVIDER RECEIVING ADDRESSES
+// ============================================
+
+/**
+ * Add a receiving address for tracking payments as an API provider
+ */
+export const addReceivingAddress = mutation({
+  args: {
+    address: v.string(),
+    network: v.union(v.literal("sandbox"), v.literal("mainnet")),
+    label: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { workspaceId, workspace, role } = await getCurrentWorkspaceContext(ctx);
+    requireRole(role, ADMIN_ROLES, "manage receiving addresses");
+
+    const currentAddresses = workspace.receivingAddresses || [];
+
+    // Check if address already exists
+    const exists = currentAddresses.some(
+      (a) => a.address === args.address && a.network === args.network
+    );
+    if (exists) {
+      throw new Error("This address already exists for this network");
+    }
+
+    const updatedAddresses = [
+      ...currentAddresses,
+      {
+        address: args.address,
+        network: args.network,
+        label: args.label,
+      },
+    ];
+
+    await ctx.db.patch(workspaceId, {
+      receivingAddresses: updatedAddresses,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Remove a receiving address
+ */
+export const removeReceivingAddress = mutation({
+  args: {
+    address: v.string(),
+    network: v.union(v.literal("sandbox"), v.literal("mainnet")),
+  },
+  handler: async (ctx, args) => {
+    const { workspaceId, workspace, role } = await getCurrentWorkspaceContext(ctx);
+    requireRole(role, ADMIN_ROLES, "manage receiving addresses");
+
+    const currentAddresses = workspace.receivingAddresses || [];
+    const updatedAddresses = currentAddresses.filter(
+      (a) => !(a.address === args.address && a.network === args.network)
+    );
+
+    await ctx.db.patch(workspaceId, {
+      receivingAddresses: updatedAddresses,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * List receiving addresses for the workspace
+ */
+export const listReceivingAddresses = query({
+  args: {},
+  handler: async (ctx) => {
+    const { workspace, role } = await getCurrentWorkspaceContext(ctx);
+    requireRole(role, ALL_ROLES, "view receiving addresses");
+
+    return workspace.receivingAddresses || [];
+  },
+});
 

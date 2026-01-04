@@ -22,12 +22,15 @@ export default function ActivityPage() {
 function ActivityContent() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedNetwork, setSelectedNetwork] = useState<"sandbox" | "mainnet">("sandbox");
   const payments = useQuery(api.payments.listPayments, { limit: 100 });
+  const receivedStats = useQuery(api.gateway.getReceivedPaymentStats);
   const stats = useQuery(api.payments.getPaymentStats);
 
   const filteredPayments = payments?.filter((p) => {
-    if (statusFilter === "all") return true;
-    return p.status === statusFilter;
+    if (statusFilter !== "all" && p.status !== statusFilter) return false;
+    if (p.network !== selectedNetwork) return false;
+    return true;
   });
 
   // Reset to page 1 when filter changes
@@ -63,95 +66,102 @@ function ActivityContent() {
           </div>
         </div>
 
+        {/* Network Toggle Switch */}
+        <div className="flex items-center justify-center gap-3 mb-6">
+          <span className={`text-sm font-medium transition-colors ${
+            selectedNetwork === "sandbox" ? "text-amber-400" : "text-[#666]"
+          }`}>
+            Sandbox
+          </span>
+          <button
+            onClick={() => setSelectedNetwork(selectedNetwork === "sandbox" ? "mainnet" : "sandbox")}
+            className="relative w-14 h-7 rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#0a0a0a] focus:ring-emerald-500"
+            style={{
+              backgroundColor: selectedNetwork === "sandbox" ? "rgb(245 158 11 / 0.3)" : "rgb(16 185 129 / 0.3)",
+            }}
+          >
+            <span
+              className="absolute top-0.5 left-0.5 w-6 h-6 rounded-full shadow-lg transform transition-all duration-300 flex items-center justify-center"
+              style={{
+                transform: selectedNetwork === "mainnet" ? "translateX(28px)" : "translateX(0)",
+                backgroundColor: selectedNetwork === "sandbox" ? "rgb(245 158 11)" : "rgb(16 185 129)",
+              }}
+            >
+              {selectedNetwork === "sandbox" ? (
+                <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M6.672 1.911a1 1 0 10-1.932.518l.259.966a1 1 0 001.932-.518l-.26-.966zM2.429 4.74a1 1 0 10-.517 1.932l.966.259a1 1 0 00.517-1.932l-.966-.26zm8.814-.569a1 1 0 00-1.415-1.414l-.707.707a1 1 0 101.415 1.415l.707-.708zm-7.071 7.072l.707-.707A1 1 0 003.465 9.12l-.708.707a1 1 0 001.415 1.415zm3.2-5.171a1 1 0 00-1.3 1.3l4 10a1 1 0 001.823.075l1.38-2.759 3.018 3.02a1 1 0 001.414-1.415l-3.019-3.02 2.76-1.379a1 1 0 00-.076-1.822l-10-4z" clipRule="evenodd" />
+                </svg>
+              ) : (
+                <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              )}
+            </span>
+          </button>
+          <span className={`text-sm font-medium transition-colors ${
+            selectedNetwork === "mainnet" ? "text-emerald-400" : "text-[#666]"
+          }`}>
+            Mainnet
+          </span>
+        </div>
+
         {/* Real-time Activity Chart */}
-        <ActivityTimelineChart />
+        <ActivityTimelineChart network={selectedNetwork} />
 
         {/* Summary Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <StatCard
-            label="Total Payments"
+            label="Payments Sent"
             value={stats?.totalPayments ?? 0}
             loading={!stats}
           />
           <StatCard
-            label="Settled"
-            value={stats?.settledCount ?? 0}
+            label="Payments Received"
+            value={receivedStats?.totalPayments ?? 0}
+            loading={!receivedStats}
+            accent="purple"
+          />
+          <StatCard
+            label="Volume Sent"
+            value={stats?.totalVolume ?? 0}
+            suffix=" MNEE"
             loading={!stats}
             accent="emerald"
           />
           <StatCard
-            label="Last 24h"
-            value={stats?.recentPayments ?? 0}
-            subtitle="payments"
-            loading={!stats}
-          />
-          <StatCard
-            label="Swaps"
-            value={stats?.swapCount ?? 0}
-            subtitle="conversions"
-            loading={!stats}
+            label="Volume Received"
+            value={receivedStats?.totalVolume ?? 0}
+            suffix=" MNEE"
+            loading={!receivedStats}
             accent="violet"
           />
         </div>
 
-        {/* Token Spend Breakdown */}
-        {stats && (stats.spendByToken?.length > 0 || stats.paidByToken?.length > 0) && (
-          <div className="grid md:grid-cols-2 gap-4 mb-6">
-            {/* Spent from Treasury */}
-            {stats.spendByToken && stats.spendByToken.length > 0 && (
-              <div className="bg-[#111] border border-[#333] rounded-xl p-4">
-                <h3 className="text-sm font-medium text-[#888] mb-3 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-amber-500" />
-                  Spent from Treasury
-                </h3>
-                <div className="space-y-2">
-                  {stats.spendByToken.map((token) => (
-                    <div key={token.address} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-amber-900/50 flex items-center justify-center">
-                          <span className="text-xs font-bold text-amber-400">
-                            {token.symbol.slice(0, 2)}
-                          </span>
-                        </div>
-                        <span className="text-sm text-white">{token.symbol}</span>
-                        <span className="text-xs text-[#666]">({token.count} txns)</span>
-                      </div>
-                      <span className="text-sm font-medium text-white">
-                        {token.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+        {/* Network Spend Breakdown */}
+        {stats && stats.spendByNetwork && stats.spendByNetwork.length > 0 && (
+          <div className="bg-[#111] border border-[#333] rounded-xl p-4 mb-6">
+            <h3 className="text-sm font-medium text-[#888] mb-3 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-500" />
+              Spend by Network
+            </h3>
+            <div className="space-y-2">
+              {stats.spendByNetwork.map((network) => (
+                <div key={network.network} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-amber-900/50 flex items-center justify-center">
+                      <span className="text-xs font-bold text-amber-400">
+                        {network.network === "mainnet" ? "M" : "S"}
                       </span>
                     </div>
-                  ))}
+                    <span className="text-sm text-white">{network.network === "mainnet" ? "MNEE Mainnet" : "MNEE Sandbox"}</span>
+                    <span className="text-xs text-[#666]">({network.count} txns)</span>
+                  </div>
+                  <span className="text-sm font-medium text-white">
+                    {network.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })} MNEE
+                  </span>
                 </div>
-              </div>
-            )}
-
-            {/* Paid to Providers */}
-            {stats.paidByToken && stats.paidByToken.length > 0 && (
-              <div className="bg-[#111] border border-[#333] rounded-xl p-4">
-                <h3 className="text-sm font-medium text-[#888] mb-3 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  Paid to Providers
-                </h3>
-                <div className="space-y-2">
-                  {stats.paidByToken.map((token) => (
-                    <div key={token.address} className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 rounded-full bg-emerald-900/50 flex items-center justify-center">
-                          <span className="text-xs font-bold text-emerald-400">
-                            {token.symbol.slice(0, 2)}
-                          </span>
-                        </div>
-                        <span className="text-sm text-white">{token.symbol}</span>
-                        <span className="text-xs text-[#666]">({token.count} txns)</span>
-                      </div>
-                      <span className="text-sm font-medium text-white">
-                        {token.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+              ))}
+            </div>
           </div>
         )}
 
@@ -200,7 +210,7 @@ function ActivityContent() {
           {!paginatedPayments ? (
             <LoadingSkeleton />
           ) : paginatedPayments.length === 0 ? (
-            <EmptyState />
+            <EmptyState network={selectedNetwork} />
           ) : (
             <div className="divide-y divide-[#222]">
               {paginatedPayments.map((payment) => (
@@ -232,27 +242,13 @@ interface PaymentData {
   apiKeyName: string;
   providerName: string;
   providerHost: string;
-  originalAmount: number;
-  originalCurrency: string;
-  originalNetwork: string;
-  treasuryAmount: number;
+  amount: number; // Amount in MNEE
+  network: "sandbox" | "mainnet"; // MNEE network
   status: string;
   createdAt: number;
   txHash?: string;
   payTo: string;
   denialReason?: string;
-  // Token info
-  paymentToken?: string;
-  treasuryTokenSymbol: string;
-  paidTokenSymbol: string;
-  hadSwap: boolean;
-  // Swap details
-  swapTxHash?: string;
-  swapSellAmount?: number;
-  swapSellToken?: string;
-  swapBuyAmount?: number;
-  swapBuyToken?: string;
-  swapFee?: number;
 }
 
 function PaymentRow({ payment }: { payment: PaymentData }) {
@@ -316,12 +312,6 @@ function PaymentRow({ payment }: { payment: PaymentData }) {
             <p className="text-sm text-white font-mono truncate">
               {payment.invoiceId.slice(0, 20)}...
             </p>
-            {payment.hadSwap && (
-              <span className="text-xs text-violet-400 flex items-center gap-1">
-                <SwapIcon className="w-3 h-3" />
-                Swapped
-              </span>
-            )}
           </div>
         </div>
 
@@ -338,26 +328,12 @@ function PaymentRow({ payment }: { payment: PaymentData }) {
         {/* Amount */}
         <div className="col-span-2 flex items-center justify-end">
           <div className="text-right">
-            {payment.hadSwap ? (
-              <>
-                <p className="text-sm text-white font-medium">
-                  {payment.originalAmount.toLocaleString(undefined, { maximumFractionDigits: 4 })} {payment.originalCurrency}
-                </p>
-                <p className="text-xs text-amber-400 flex items-center justify-end gap-1">
-                  <span>from</span>
-                  {payment.swapSellAmount?.toLocaleString(undefined, { maximumFractionDigits: 4 })} {payment.treasuryTokenSymbol}
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-white font-medium">
-                  {payment.treasuryAmount.toLocaleString(undefined, { maximumFractionDigits: 4 })} {payment.treasuryTokenSymbol}
-                </p>
-                <p className="text-xs text-[#666]">
-                  {payment.originalAmount} {payment.originalCurrency}
-                </p>
-              </>
-            )}
+            <p className="text-sm text-white font-medium">
+              {payment.amount.toLocaleString(undefined, { maximumFractionDigits: 5 })} MNEE
+            </p>
+            <p className="text-xs text-[#666] capitalize">
+              {payment.network}
+            </p>
           </div>
         </div>
 
@@ -397,29 +373,12 @@ function PaymentRow({ payment }: { payment: PaymentData }) {
               </p>
               <p className="text-xs text-[#666] mt-0.5">{payment.apiKeyName}</p>
               <p className="text-xs text-[#666]">{payment.providerName}</p>
-              {payment.hadSwap && (
-                <span className="text-xs text-violet-400 flex items-center gap-1 mt-1">
-                  <SwapIcon className="w-3 h-3" />
-                  Swapped
-                </span>
-              )}
             </div>
           </div>
           <div className="text-right flex-shrink-0">
-            {payment.hadSwap ? (
-              <>
-                <p className="text-sm text-white font-medium">
-                  {payment.originalAmount.toLocaleString(undefined, { maximumFractionDigits: 4 })} {payment.originalCurrency}
-                </p>
-                <p className="text-xs text-amber-400">
-                  from {payment.swapSellAmount?.toLocaleString(undefined, { maximumFractionDigits: 2 })} {payment.treasuryTokenSymbol}
-                </p>
-              </>
-            ) : (
-              <p className="text-sm text-white font-medium">
-                {payment.treasuryAmount.toLocaleString(undefined, { maximumFractionDigits: 4 })} {payment.treasuryTokenSymbol}
-              </p>
-            )}
+            <p className="text-sm text-white font-medium">
+              {payment.amount.toLocaleString(undefined, { maximumFractionDigits: 5 })} MNEE
+            </p>
             <span
               className={`inline-block mt-1 px-2 py-0.5 text-xs font-medium rounded-full ${status.bg} ${status.color}`}
             >
@@ -457,42 +416,8 @@ function PaymentRow({ payment }: { payment: PaymentData }) {
             </div>
             <div>
               <p className="text-[#666] mb-1">Network</p>
-              <p className="text-white">{payment.originalNetwork}</p>
+              <p className="text-white capitalize">{payment.network}</p>
             </div>
-
-            {/* Swap Details */}
-            {payment.hadSwap && (
-              <>
-                <div className="col-span-1 sm:col-span-2 md:col-span-4 border-t border-[#333] pt-4 mt-2">
-                  <h4 className="text-xs font-medium text-violet-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                    <SwapIcon className="w-4 h-4" />
-                    Token Swap Details
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="bg-amber-900/20 border border-amber-900/50 rounded-lg p-3">
-                      <p className="text-xs text-amber-400 mb-1">Sold from Treasury</p>
-                      <p className="text-white font-medium">
-                        {payment.swapSellAmount?.toLocaleString(undefined, { maximumFractionDigits: 6 })} {payment.treasuryTokenSymbol}
-                      </p>
-                    </div>
-                    <div className="flex items-center justify-center">
-                      <ArrowRightIcon className="w-6 h-6 text-[#666]" />
-                    </div>
-                    <div className="bg-emerald-900/20 border border-emerald-900/50 rounded-lg p-3">
-                      <p className="text-xs text-emerald-400 mb-1">Paid to Provider</p>
-                      <p className="text-white font-medium">
-                        {payment.swapBuyAmount?.toLocaleString(undefined, { maximumFractionDigits: 6 })} {payment.paidTokenSymbol}
-                      </p>
-                    </div>
-                  </div>
-                  {payment.swapFee !== undefined && payment.swapFee > 0 && (
-                    <p className="text-xs text-[#666] mt-2">
-                      Swap fee: {payment.swapFee.toLocaleString(undefined, { maximumFractionDigits: 6 })} {payment.treasuryTokenSymbol}
-                    </p>
-                  )}
-                </div>
-              </>
-            )}
 
             <div>
               <p className="text-[#666] mb-1">Created</p>
@@ -502,30 +427,11 @@ function PaymentRow({ payment }: { payment: PaymentData }) {
             </div>
 
             {payment.txHash && (
-              <div className="col-span-1 sm:col-span-2 md:col-span-3">
-                <p className="text-[#666] mb-1">Payment Transaction</p>
-                <a
-                  href={`https://basescan.org/tx/${payment.txHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-violet-400 hover:text-violet-300 font-mono text-xs break-all"
-                >
+              <div className="col-span-1 sm:col-span-2 md:col-span-2">
+                <p className="text-[#666] mb-1">Transaction</p>
+                <p className="text-violet-400 font-mono text-xs break-all">
                   {payment.txHash}
-                </a>
-              </div>
-            )}
-
-            {payment.swapTxHash && (
-              <div className="col-span-1 sm:col-span-2 md:col-span-4">
-                <p className="text-[#666] mb-1">Swap Transaction</p>
-                <a
-                  href={`https://basescan.org/tx/${payment.swapTxHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-violet-400 hover:text-violet-300 font-mono text-xs break-all"
-                >
-                  {payment.swapTxHash}
-                </a>
+                </p>
               </div>
             )}
 
@@ -559,12 +465,13 @@ function StatCard({
   suffix?: string;
   subtitle?: string;
   loading?: boolean;
-  accent?: "emerald" | "violet" | "amber";
+  accent?: "emerald" | "violet" | "amber" | "red";
 }) {
   const accentColors = {
     emerald: "border-emerald-900/50",
     violet: "border-violet-900/50",
     amber: "border-amber-900/50",
+    red: "border-red-900/50",
   };
 
   return (
@@ -632,15 +539,17 @@ function LoadingSkeleton() {
   );
 }
 
-function EmptyState() {
+function EmptyState({ network }: { network: "sandbox" | "mainnet" }) {
   return (
     <div className="px-6 py-16 text-center">
       <div className="w-16 h-16 rounded-2xl bg-[#1a1a1a] flex items-center justify-center mx-auto mb-4">
         <ActivityIcon className="w-8 h-8 text-[#666]" />
       </div>
-      <h3 className="text-lg font-medium text-white mb-2">No payments yet</h3>
+      <h3 className="text-lg font-medium text-white mb-2">
+        0 payments on {network === "sandbox" ? "Sandbox" : "Mainnet"}
+      </h3>
       <p className="text-sm text-[#888] max-w-sm mx-auto">
-        When your agents make payments through the gateway, they&apos;ll appear here.
+        When your agents make payments through the gateway on {network === "sandbox" ? "sandbox" : "mainnet"}, they&apos;ll appear here.
       </p>
     </div>
   );
@@ -765,8 +674,8 @@ function Pagination({
 // Real-time Activity Timeline Chart
 // ============================================
 
-function ActivityTimelineChart() {
-  const timeline = useQuery(api.payments.getActivityTimeline, { windowSeconds: 60 });
+function ActivityTimelineChart({ network }: { network: "sandbox" | "mainnet" }) {
+  const timeline = useQuery(api.payments.getActivityTimeline, { windowSeconds: 60, network });
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [newEventIds, setNewEventIds] = useState<Set<string>>(new Set());
   const prevEventIdsRef = useRef<Set<string>>(new Set());
@@ -1008,32 +917,6 @@ function ReceiptIcon({ className }: { className?: string }) {
         strokeLinejoin="round"
         strokeWidth={2}
         d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"
-      />
-    </svg>
-  );
-}
-
-function SwapIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-      />
-    </svg>
-  );
-}
-
-function ArrowRightIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M14 5l7 7m0 0l-7 7m7-7H3"
       />
     </svg>
   );

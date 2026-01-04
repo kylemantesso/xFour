@@ -2,7 +2,6 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
-import { convertToTreasuryToken } from "./gateway";
 
 const http = httpRouter();
 
@@ -34,18 +33,14 @@ interface QuoteResponseAllowed {
   status: "allowed";
   paymentId: string;
   invoiceId: string;
-  treasuryAmount: number; // Amount in treasury token
-  treasuryTokenSymbol: string; // Treasury token symbol
-  fxRate: number;
+  amount: number; // Amount in MNEE
+  network: "sandbox" | "mainnet";
 }
 
 interface QuoteResponseDenied {
   status: "denied";
   reason: string;
   invoiceId: string | null;
-  treasuryAmount: number | null;
-  treasuryTokenSymbol: string | null;
-  fxRate: number | null;
 }
 
 interface PayRequest {
@@ -57,31 +52,18 @@ interface PayResponseOk {
   status: "ok";
   paymentId: string;
   invoiceId: string;
-  treasuryAmount: number; // Amount debited from treasury (in treasury token)
-  // Additional fields for on-chain settlement
+  amount: number; // Amount in MNEE
   workspaceId: string;
-  payTo: string;
-  // Chain info (derived from invoice network field)
-  chainId: number;
-  rpcUrl: string;
-  treasuryAddress?: string; // Treasury contract address on this chain
-  swapRouterAddress?: string; // Mock router for localhost
-  zeroxApiUrl?: string; // 0x API for production chains
-  // Treasury token (what workspace has)
-  treasuryTokenAddress?: string; // Token address from API key preference
-  treasuryTokenSymbol?: string; // Token symbol (e.g., "MNEE", "USDC")
-  treasuryTokenDecimals?: number; // Token decimals
-  // Required token (what provider wants) - looked up from supportedTokens by symbol
-  requiredTokenAddress?: string; // Token address for originalCurrency
-  requiredTokenDecimals?: number; // Token decimals
-  originalCurrency: string; // Currency symbol (e.g., "USDC")
-  originalAmount: number; // Amount in original currency
-  originalNetwork: string; // Network name from invoice (e.g., "base")
+  payTo: string; // MNEE Bitcoin address
+  network: "sandbox" | "mainnet"; // MNEE network
+  // MNEE wallet info for payment execution
+  mneeWalletAddress?: string;
+  encryptedWif?: string;
 }
 
 interface PayResponseError {
   status: "error";
-  code: "INVALID_API_KEY" | "PAYMENT_NOT_FOUND" | "PAYMENT_NOT_ALLOWED" | "PAYMENT_FAILED";
+  code: "INVALID_API_KEY" | "PAYMENT_NOT_FOUND" | "PAYMENT_NOT_ALLOWED" | "PAYMENT_FAILED" | "UNSUPPORTED_CURRENCY" | "NO_MNEE_WALLET";
   message?: string;
 }
 
@@ -151,6 +133,28 @@ function errorResponse(message: string, status = 400): Response {
   return jsonResponse({ error: message }, status);
 }
 
+/**
+ * Determine MNEE network from invoice network field
+ * Returns null if not a supported MNEE network
+ */
+function getMneeNetwork(networkName: string): "sandbox" | "mainnet" | null {
+  const normalized = networkName.toLowerCase();
+  if (normalized === "mnee-sandbox" || normalized === "mnee_sandbox" || normalized === "sandbox") {
+    return "sandbox";
+  }
+  if (normalized === "mnee-mainnet" || normalized === "mnee_mainnet" || normalized === "mainnet" || normalized === "mnee") {
+    return "mainnet";
+  }
+  return null;
+}
+
+/**
+ * Format MNEE amount (ensures max 5 decimal places)
+ */
+function formatMneeAmount(amount: number): number {
+  return Math.round(amount * 100000) / 100000;
+}
+
 // ============================================
 // GATEWAY QUOTE ENDPOINT
 // ============================================
@@ -158,18 +162,19 @@ function errorResponse(message: string, status = 400): Response {
 /**
  * POST /gateway/quote
  * 
- * Evaluates an x402 invoice and returns a quote for payment in the workspace's treasury token.
+ * Evaluates an x402 invoice and returns a quote for MNEE payment.
+ * Only supports MNEE currency on MNEE networks.
  * 
  * Request body:
  * {
  *   "apiKey": "x402_...",
- *   "requestUrl": "https://api.novaai.com/review",
+ *   "requestUrl": "https://api.provider.com/service",
  *   "invoiceHeaders": {
  *     "X-402-Invoice-Id": "inv_123",
  *     "X-402-Amount": "0.50",
- *     "X-402-Currency": "USDC",
- *     "X-402-Network": "base",
- *     "X-402-Pay-To": "0x..."
+ *     "X-402-Currency": "MNEE",
+ *     "X-402-Network": "mnee-mainnet",
+ *     "X-402-Pay-To": "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"
  *   }
  * }
  * 
@@ -178,19 +183,15 @@ function errorResponse(message: string, status = 400): Response {
  *   "status": "allowed",
  *   "paymentId": "pay_abc",
  *   "invoiceId": "inv_123",
- *   "treasuryAmount": 0.49,
- *   "treasuryTokenSymbol": "MNEE",
- *   "fxRate": 0.98
+ *   "amount": 0.50,
+ *   "network": "mainnet"
  * }
  * 
  * Response (denied):
  * {
  *   "status": "denied",
  *   "reason": "AGENT_DAILY_LIMIT",
- *   "invoiceId": "inv_123",
- *   "treasuryAmount": null,
- *   "treasuryTokenSymbol": null,
- *   "fxRate": null
+ *   "invoiceId": "inv_123"
  * }
  */
 const quoteAction = httpAction(async (ctx, request) => {
@@ -238,7 +239,7 @@ const quoteAction = httpAction(async (ctx, request) => {
     return errorResponse(authResult.error, 401);
   }
 
-  const { apiKeyId, workspaceId, preferredPaymentToken } = authResult;
+  const { apiKeyId, workspaceId } = authResult;
 
   // Step 2: Parse invoice headers
   const invoice = parseInvoiceHeaders(invoiceHeaders);
@@ -246,71 +247,49 @@ const quoteAction = httpAction(async (ctx, request) => {
     return errorResponse("Invalid or incomplete x402 invoice headers", 400);
   }
 
-  // Step 3: Extract host from requestUrl
+  // Step 3: Validate currency is MNEE
+  if (invoice.currency.toUpperCase() !== "MNEE") {
+    return errorResponse(`Unsupported currency: ${invoice.currency}. Only MNEE is supported.`, 400);
+  }
+
+  // Step 4: Determine MNEE network from invoice
+  const mneeNetwork = getMneeNetwork(invoice.network);
+  if (!mneeNetwork) {
+    return errorResponse(`Unsupported network: ${invoice.network}. Use mnee-mainnet or mnee-sandbox.`, 400);
+  }
+
+  // Step 5: Extract host from requestUrl
   const host = extractHost(requestUrl);
   if (!host) {
     return errorResponse("Invalid requestUrl - could not extract host", 400);
   }
 
-  // Step 4: Get or create provider for this host
+  // Step 6: Get or create provider for this host
   const providerId = await ctx.runMutation(internal.gateway.getOrCreateProviderForHost, {
     workspaceId,
     host,
   });
 
-  // Step 5: Get chain info from network name
-  const chain = await ctx.runQuery(internal.chains.getChainByNetworkNameInternal, {
-    networkName: invoice.network,
-  });
+  // Step 7: Format amount with proper MNEE decimals
+  const amount = formatMneeAmount(invoice.amount);
 
-  if (!chain) {
-    return errorResponse(`Unsupported network: ${invoice.network}`, 400);
-  }
-
-  // Step 6: Get treasury token details for symbol
-  let treasuryTokenSymbol = "UNKNOWN";
-  if (preferredPaymentToken) {
-    const treasuryToken = await ctx.runQuery(internal.tokens.getTokenByAddressInternal, {
-      address: preferredPaymentToken,
-      chainId: chain.chainId,
-    });
-    if (treasuryToken) {
-      treasuryTokenSymbol = treasuryToken.symbol;
-    }
-  }
-
-  // Step 7: Convert to treasury token amount
-  const { treasuryAmount, rate } = convertToTreasuryToken(
-    invoice.amount, 
-    invoice.currency, 
-    treasuryTokenSymbol
-  );
-
-  // Step 8: Apply policies (with chain and token info)
-  const policyResult = await ctx.runQuery(internal.gateway.checkAgentPolicy, {
+  // Step 8: Apply policies
+  const policyResult = await ctx.runQuery(internal.gateway.checkAgentPolicyMnee, {
     apiKeyId,
     providerId,
-    treasuryAmount,
-    chainId: chain.chainId,
-    tokenAddress: preferredPaymentToken,
+    amount,
   });
 
   // Step 9: Create payment record
-  const paymentId = await ctx.runMutation(internal.gateway.createPaymentQuote, {
+  const paymentId = await ctx.runMutation(internal.gateway.createMneePaymentQuote, {
     workspaceId,
     apiKeyId,
     providerId,
     providerHost: host,
     invoiceId: invoice.invoiceId,
-    originalAmount: invoice.amount,
-    originalCurrency: invoice.currency,
-    originalNetwork: invoice.network,
-    chainId: chain.chainId,
+    amount,
     payTo: invoice.payTo,
-    paymentToken: preferredPaymentToken,
-    paymentTokenSymbol: treasuryTokenSymbol,
-    treasuryAmount,
-    fxRate: rate,
+    network: mneeNetwork,
     status: policyResult.allowed ? "allowed" : "denied",
     denialReason: policyResult.reason ?? undefined,
   });
@@ -324,9 +303,8 @@ const quoteAction = httpAction(async (ctx, request) => {
       status: "allowed",
       paymentId: paymentId.toString(),
       invoiceId: invoice.invoiceId,
-      treasuryAmount,
-      treasuryTokenSymbol,
-      fxRate: rate,
+      amount,
+      network: mneeNetwork,
     };
     return jsonResponse(response);
   } else {
@@ -334,9 +312,6 @@ const quoteAction = httpAction(async (ctx, request) => {
       status: "denied",
       reason: policyResult.reason ?? "UNKNOWN",
       invoiceId: invoice.invoiceId,
-      treasuryAmount: null,
-      treasuryTokenSymbol: null,
-      fxRate: null,
     };
     return jsonResponse(response, 403);
   }
@@ -349,8 +324,8 @@ const quoteAction = httpAction(async (ctx, request) => {
 /**
  * POST /gateway/pay
  * 
- * Confirms a payment quote and settles it.
- * Called by the SDK after /gateway/quote and before retrying the original request.
+ * Confirms a payment quote and returns info needed for MNEE payment execution.
+ * The actual payment execution happens in the Next.js API route.
  * 
  * Request body:
  * {
@@ -363,7 +338,12 @@ const quoteAction = httpAction(async (ctx, request) => {
  *   "status": "ok",
  *   "paymentId": "<id>",
  *   "invoiceId": "<payment.invoiceId>",
- *   "treasuryAmount": <payment.treasuryAmount>
+ *   "amount": <amount in MNEE>,
+ *   "workspaceId": "<id>",
+ *   "payTo": "<bitcoin address>",
+ *   "network": "mainnet" | "sandbox",
+ *   "mneeWalletAddress": "<workspace mnee address>",
+ *   "encryptedWif": "<encrypted private key>"
  * }
  * 
  * Response (error):
@@ -453,57 +433,35 @@ const payAction = httpAction(async (ctx, request) => {
     return jsonResponse(response, 404);
   }
 
-  // Step 4: Look up chain from invoice network field
-  const chain = await ctx.runQuery(internal.chains.getChainByNetworkNameInternal, {
-    networkName: payment.originalNetwork,
+  // Step 4: Get MNEE wallet for this workspace
+  const mneeWallet = await ctx.runQuery(internal.lib.mnee.getMneeWallet, {
+    workspaceId,
+    network: payment.network,
   });
 
-  if (!chain) {
-    return errorResponse(`Unsupported network: ${payment.originalNetwork}`, 400);
+  if (!mneeWallet) {
+    const response: PayResponseError = {
+      status: "error",
+      code: "NO_MNEE_WALLET",
+      message: `No MNEE wallet configured for ${payment.network} network`,
+    };
+    return jsonResponse(response, 400);
   }
 
-  // Step 5: Look up token details from supportedTokens (scoped to chain)
-  // Treasury token (what workspace has) - look up by address
-  let treasuryToken = null;
-  if (payment.paymentToken) {
-    treasuryToken = await ctx.runQuery(internal.tokens.getTokenByAddressInternal, {
-      address: payment.paymentToken,
-      chainId: chain.chainId,
-    });
-  }
-
-  // Required token (what provider wants) - look up by symbol on this chain
-  const requiredToken = await ctx.runQuery(internal.tokens.getTokenBySymbolInternal, {
-    symbol: payment.originalCurrency,
-    chainId: chain.chainId,
-  });
-
-  // Build the response with chain info
+  // Build the response
   const buildResponse = (): PayResponseOk => ({
     status: "ok",
     paymentId: paymentId,
     invoiceId: payment.invoiceId,
-    treasuryAmount: payment.treasuryAmount,
+    amount: payment.amount,
     workspaceId: workspaceId.toString(),
     payTo: payment.payTo,
-    // Chain info from Convex
-    chainId: chain.chainId,
-    rpcUrl: chain.rpcUrl,
-    treasuryAddress: chain.treasuryAddress,
-    swapRouterAddress: chain.swapRouterAddress,
-    zeroxApiUrl: chain.zeroxApiUrl,
-    // Token info
-    treasuryTokenAddress: payment.paymentToken,
-    treasuryTokenSymbol: payment.paymentTokenSymbol,
-    treasuryTokenDecimals: treasuryToken?.decimals,
-    requiredTokenAddress: requiredToken?.address,
-    requiredTokenDecimals: requiredToken?.decimals,
-    originalCurrency: payment.originalCurrency,
-    originalAmount: payment.originalAmount,
-    originalNetwork: payment.originalNetwork,
+    network: payment.network,
+    mneeWalletAddress: mneeWallet.address,
+    encryptedWif: mneeWallet.encryptedWif,
   });
 
-  // Step 6: Check payment status
+  // Step 5: Check payment status
   // If already settled or completed, return success (idempotent)
   if (payment.status === "settled" || payment.status === "completed") {
     return jsonResponse(buildResponse());
@@ -529,37 +487,30 @@ const payAction = httpAction(async (ctx, request) => {
     return jsonResponse(response, 403);
   }
 
-  // Step 7: Mark payment as pending (on-chain execution will happen in Next.js route)
-  // Don't mark as settled until on-chain payment succeeds
+  // Step 6: Mark payment as pending (MNEE execution will happen in Next.js route)
   await ctx.runMutation(internal.gateway.updatePaymentStatus, {
     paymentId: paymentId as Id<"payments">,
     status: "pending",
   });
 
-  // Step 8: Update API key last used
+  // Step 7: Update API key last used
   await ctx.runMutation(internal.gateway.markApiKeyUsedInternal, { apiKeyId });
 
-  // Step 9: Return success response with chain and token details
-  // The Next.js route will handle on-chain execution and update status accordingly
+  // Step 8: Return success response with MNEE wallet details
   return jsonResponse(buildResponse());
 });
 
 // ============================================
-// UPDATE SWAP DETAILS ACTION
+// MARK PAYMENT AS SETTLED ACTION
 // ============================================
 
-interface UpdateSwapRequest {
+interface MarkSettledRequest {
   paymentId: string;
   txHash?: string;
-  swapTxHash?: string;
-  swapSellAmount?: number;
-  swapSellToken?: string;
-  swapBuyAmount?: number;
-  swapBuyToken?: string;
-  swapFee?: number;
+  ticketId?: string;
 }
 
-const updateSwapAction = httpAction(async (ctx, request) => {
+const markSettledAction = httpAction(async (ctx, request) => {
   // Handle CORS preflight
   if (request.method === "OPTIONS") {
     return new Response(null, {
@@ -578,7 +529,7 @@ const updateSwapAction = httpAction(async (ctx, request) => {
   }
 
   // Parse request body
-  let body: UpdateSwapRequest;
+  let body: MarkSettledRequest;
   try {
     body = await request.json();
   } catch {
@@ -592,22 +543,17 @@ const updateSwapAction = httpAction(async (ctx, request) => {
   }
 
   try {
-    // Update swap details
-    await ctx.runMutation(internal.gateway.updatePaymentSwapDetails, {
+    // Mark payment as settled with transaction details
+    await ctx.runMutation(internal.gateway.markPaymentSettled, {
       paymentId: paymentId as Id<"payments">,
       txHash: body.txHash,
-      swapTxHash: body.swapTxHash,
-      swapSellAmount: body.swapSellAmount,
-      swapSellToken: body.swapSellToken,
-      swapBuyAmount: body.swapBuyAmount,
-      swapBuyToken: body.swapBuyToken,
-      swapFee: body.swapFee,
+      ticketId: body.ticketId,
     });
 
     return jsonResponse({ status: "ok" });
   } catch (error) {
-    console.error("Failed to update swap details:", error);
-    return errorResponse("Failed to update swap details", 500);
+    console.error("Failed to mark payment as settled:", error);
+    return errorResponse("Failed to mark payment as settled", 500);
   }
 });
 
@@ -667,6 +613,153 @@ const markFailedAction = httpAction(async (ctx, request) => {
 });
 
 // ============================================
+// PAYMENT VERIFICATION ACTION (for providers)
+// ============================================
+
+interface VerifyRequest {
+  apiKey: string;
+  invoiceId: string;
+}
+
+interface VerifyResponseSuccess {
+  verified: true;
+  paymentId: string;
+  amount: number;
+  paidAt: number;
+  txHash?: string;
+}
+
+interface VerifyResponseFailed {
+  verified: false;
+  error: string;
+  code: string;
+}
+
+type VerifyResponse = VerifyResponseSuccess | VerifyResponseFailed;
+
+/**
+ * POST /gateway/verify
+ * 
+ * Verifies a payment by invoice ID for API providers.
+ * Providers use this to check if a payment proof is valid.
+ * 
+ * Request body:
+ * {
+ *   "apiKey": "x402_...",  // Provider's API key
+ *   "invoiceId": "inv_..."  // Invoice ID from payment proof header
+ * }
+ * 
+ * Response (verified):
+ * {
+ *   "verified": true,
+ *   "paymentId": "<payment_id>",
+ *   "amount": <amount in MNEE>,
+ *   "paidAt": <timestamp>,
+ *   "txHash": "<optional transaction hash>"
+ * }
+ * 
+ * Response (not verified):
+ * {
+ *   "verified": false,
+ *   "error": "<error message>",
+ *   "code": "INVALID_API_KEY" | "PAYMENT_NOT_FOUND" | "PAYMENT_NOT_SETTLED"
+ * }
+ */
+const verifyAction = httpAction(async (ctx, request) => {
+  // Handle CORS preflight
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      },
+    });
+  }
+
+  // Only accept POST
+  if (request.method !== "POST") {
+    return errorResponse("Method not allowed", 405);
+  }
+
+  // Parse request body
+  let body: VerifyRequest;
+  try {
+    body = await request.json();
+  } catch {
+    return errorResponse("Invalid JSON body", 400);
+  }
+
+  // Validate required fields
+  const { apiKey, invoiceId } = body;
+  if (!apiKey || typeof apiKey !== "string") {
+    const response: VerifyResponseFailed = {
+      verified: false,
+      error: "Missing or invalid apiKey",
+      code: "INVALID_API_KEY",
+    };
+    return jsonResponse(response, 400);
+  }
+
+  if (!invoiceId || typeof invoiceId !== "string") {
+    const response: VerifyResponseFailed = {
+      verified: false,
+      error: "Missing or invalid invoiceId",
+      code: "INVALID_REQUEST",
+    };
+    return jsonResponse(response, 400);
+  }
+
+  // Step 1: Authenticate provider API key
+  const authResult = await ctx.runQuery(internal.gateway.validateApiKeyInternal, { apiKey });
+  
+  if (!authResult.valid) {
+    const response: VerifyResponseFailed = {
+      verified: false,
+      error: "Invalid API key",
+      code: "INVALID_API_KEY",
+    };
+    return jsonResponse(response, 401);
+  }
+
+  // Step 2: Find payment by invoice ID
+  const payment = await ctx.runQuery(internal.gateway.getPaymentByInvoiceId, { 
+    invoiceId 
+  });
+
+  if (!payment) {
+    const response: VerifyResponseFailed = {
+      verified: false,
+      error: "Payment not found",
+      code: "PAYMENT_NOT_FOUND",
+    };
+    return jsonResponse(response, 404);
+  }
+
+  // Step 3: Check if payment is settled/completed
+  if (payment.status !== "settled" && payment.status !== "completed") {
+    const response: VerifyResponseFailed = {
+      verified: false,
+      error: `Payment status is ${payment.status}, not settled`,
+      code: "PAYMENT_NOT_SETTLED",
+    };
+    return jsonResponse(response, 400);
+  }
+
+  // Step 4: Payment is verified - return success
+  const response: VerifyResponseSuccess = {
+    verified: true,
+    paymentId: payment._id,
+    amount: payment.amount,
+    paidAt: payment.completedAt ?? payment.createdAt,
+    txHash: payment.txHash,
+  };
+
+  return jsonResponse(response, 200);
+});
+
+// ============================================
 // ROUTE REGISTRATION
 // ============================================
 
@@ -698,21 +791,21 @@ http.route({
   handler: payAction,
 });
 
-// Update swap details endpoint (called by Next.js after on-chain swap)
+// Mark payment as settled endpoint (called by Next.js after MNEE payment succeeds)
 http.route({
-  path: "/gateway/update-swap",
+  path: "/gateway/mark-settled",
   method: "POST",
-  handler: updateSwapAction,
+  handler: markSettledAction,
 });
 
-// CORS preflight for update-swap
+// CORS preflight for mark-settled
 http.route({
-  path: "/gateway/update-swap",
+  path: "/gateway/mark-settled",
   method: "OPTIONS",
-  handler: updateSwapAction,
+  handler: markSettledAction,
 });
 
-// Mark payment as failed endpoint (called by Next.js when on-chain payment fails)
+// Mark payment as failed endpoint (called by Next.js when MNEE payment fails)
 http.route({
   path: "/gateway/mark-failed",
   method: "POST",
@@ -726,5 +819,108 @@ http.route({
   handler: markFailedAction,
 });
 
-export default http;
+// Verify payment endpoint (for API providers)
+http.route({
+  path: "/gateway/verify",
+  method: "POST",
+  handler: verifyAction,
+});
 
+// CORS preflight for verify
+http.route({
+  path: "/gateway/verify",
+  method: "OPTIONS",
+  handler: verifyAction,
+});
+
+// ============================================
+// PROVIDER CONFIG ENDPOINT
+// ============================================
+
+/**
+ * GET /gateway/provider-config
+ * 
+ * Returns the receiving address for a provider API key.
+ * This allows the server SDK to dynamically fetch the address
+ * without hardcoding it.
+ */
+const providerConfigAction = httpAction(async (ctx, request) => {
+  // Handle CORS preflight
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+      },
+    });
+  }
+
+  if (request.method !== "GET") {
+    return errorResponse("Method not allowed", 405);
+  }
+
+  // Get API key from Authorization header
+  const authHeader = request.headers.get("Authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return errorResponse("Missing or invalid Authorization header", 401);
+  }
+
+  const apiKey = authHeader.substring(7); // Remove "Bearer " prefix
+
+  // Validate API key
+  const authResult = await ctx.runQuery(internal.gateway.validateApiKeyInternal, { apiKey });
+
+  if (!authResult.valid) {
+    return jsonResponse({ status: "error", code: "INVALID_API_KEY" }, 401);
+  }
+
+  // Get the API key details
+  const keyRecord = await ctx.runQuery(internal.gateway.getApiKeyDetails, { 
+    apiKeyId: authResult.apiKeyId 
+  });
+
+  if (!keyRecord) {
+    return jsonResponse({ status: "error", code: "API_KEY_NOT_FOUND" }, 404);
+  }
+
+  // Check if it's a provider key
+  if (keyRecord.type !== "provider") {
+    return jsonResponse({ 
+      status: "error", 
+      code: "INVALID_KEY_TYPE",
+      message: "This endpoint requires a provider API key" 
+    }, 400);
+  }
+
+  if (!keyRecord.receivingAddress || !keyRecord.receivingNetwork) {
+    return jsonResponse({ 
+      status: "error", 
+      code: "NO_RECEIVING_ADDRESS",
+      message: "Provider key does not have a receiving address configured" 
+    }, 400);
+  }
+
+  return jsonResponse({
+    status: "ok",
+    receivingAddress: keyRecord.receivingAddress,
+    network: keyRecord.receivingNetwork,
+  }, 200);
+});
+
+// Provider config endpoint
+http.route({
+  path: "/gateway/provider-config",
+  method: "GET",
+  handler: providerConfigAction,
+});
+
+// CORS preflight for provider config
+http.route({
+  path: "/gateway/provider-config",
+  method: "OPTIONS",
+  handler: providerConfigAction,
+});
+
+export default http;

@@ -4,47 +4,6 @@ import { Id } from "./_generated/dataModel";
 import { getCurrentWorkspaceContext, requireRole, ALL_ROLES } from "./lib/auth";
 
 // ============================================
-// FX CONVERSION
-// ============================================
-
-/**
- * Convert amount from one currency to treasury token amount
- * For now, uses fixed rates. Later can be dynamic based on currency pairs.
- */
-interface ConvertToTreasuryResult {
-  treasuryAmount: number;
-  rate: number;
-}
-
-export function convertToTreasuryToken(amount: number, fromSymbol: string, toSymbol: string): ConvertToTreasuryResult {
-  // Fixed rates for now - will be dynamic later
-  // These are rates TO the treasury token (e.g., how much treasury token per 1 unit of fromSymbol)
-  const rates: Record<string, number> = {
-    USDC: 0.98, // 1 USDC = 0.98 treasury token
-    USDT: 0.98,
-    USD: 1.0,
-    ETH: 2000.0,
-    MNEE: 1.0, // 1:1 if same currency
-  };
-
-  // If converting to same currency, rate is 1:1
-  if (fromSymbol.toUpperCase() === toSymbol.toUpperCase()) {
-    return {
-      treasuryAmount: amount,
-      rate: 1.0,
-    };
-  }
-
-  const rate = rates[fromSymbol.toUpperCase()] ?? 1.0;
-  const treasuryAmount = amount * rate;
-
-  return {
-    treasuryAmount: Math.round(treasuryAmount * 1000000) / 1000000, // 6 decimal precision
-    rate,
-  };
-}
-
-// ============================================
 // API KEY VALIDATION (for HTTP actions)
 // ============================================
 
@@ -84,7 +43,29 @@ export const validateApiKeyInternal = internalQuery({
       apiKeyId: keyRecord._id,
       workspaceId: keyRecord.workspaceId,
       workspaceName: workspace.name,
-      preferredPaymentToken: keyRecord.preferredPaymentToken,
+      mneeNetwork: keyRecord.mneeNetwork,
+    };
+  },
+});
+
+/**
+ * Get API key details (for provider config endpoint)
+ */
+export const getApiKeyDetails = internalQuery({
+  args: {
+    apiKeyId: v.id("apiKeys"),
+  },
+  handler: async (ctx, args) => {
+    const keyRecord = await ctx.db.get(args.apiKeyId);
+    if (!keyRecord) {
+      return null;
+    }
+
+    return {
+      type: keyRecord.type,
+      receivingAddress: keyRecord.receivingAddress,
+      receivingNetwork: keyRecord.receivingNetwork,
+      mneeNetwork: keyRecord.mneeNetwork,
     };
   },
 });
@@ -156,29 +137,23 @@ export const getOrCreateProviderForHost = internalMutation({
 });
 
 // ============================================
-// PAYMENT RECORDS
+// PAYMENT RECORDS (MNEE-only)
 // ============================================
 
 /**
- * Create a payment quote record
+ * Create an MNEE payment quote record
  * Records the quote attempt with status allowed/denied
  */
-export const createPaymentQuote = internalMutation({
+export const createMneePaymentQuote = internalMutation({
   args: {
     workspaceId: v.id("workspaces"),
     apiKeyId: v.id("apiKeys"),
     providerId: v.optional(v.id("providers")),
     providerHost: v.string(),
     invoiceId: v.string(),
-    originalAmount: v.number(),
-    originalCurrency: v.string(),
-    originalNetwork: v.string(),
-    chainId: v.optional(v.number()), // Chain ID for efficient filtering
-    payTo: v.string(),
-    paymentToken: v.optional(v.string()), // Token address from API key preference
-    paymentTokenSymbol: v.optional(v.string()), // Token symbol (e.g., "MNEE", "USDC")
-    treasuryAmount: v.number(), // Amount in treasury token after FX conversion
-    fxRate: v.number(),
+    amount: v.number(), // Amount in MNEE
+    payTo: v.string(), // MNEE payment address (Bitcoin address)
+    network: v.union(v.literal("sandbox"), v.literal("mainnet")),
     status: v.union(v.literal("allowed"), v.literal("denied")),
     denialReason: v.optional(v.string()),
   },
@@ -191,15 +166,9 @@ export const createPaymentQuote = internalMutation({
       providerId: args.providerId,
       providerHost: args.providerHost,
       invoiceId: args.invoiceId,
-      originalAmount: args.originalAmount,
-      originalCurrency: args.originalCurrency,
-      originalNetwork: args.originalNetwork,
-      chainId: args.chainId,
+      amount: args.amount,
       payTo: args.payTo,
-      paymentToken: args.paymentToken,
-      paymentTokenSymbol: args.paymentTokenSymbol,
-      treasuryAmount: args.treasuryAmount,
-      fxRate: args.fxRate,
+      network: args.network,
       status: args.status,
       denialReason: args.denialReason,
       createdAt: now,
@@ -243,11 +212,28 @@ export const getPaymentById = internalQuery({
 });
 
 /**
- * Settle a payment - marks it as confirmed (on-chain payment succeeded)
+ * Get a payment by invoice ID (for provider verification)
  */
-export const settlePayment = internalMutation({
+export const getPaymentByInvoiceId = internalQuery({
+  args: {
+    invoiceId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("payments")
+      .withIndex("by_invoiceId", (q) => q.eq("invoiceId", args.invoiceId))
+      .unique();
+  },
+});
+
+/**
+ * Mark a payment as settled with transaction details
+ */
+export const markPaymentSettled = internalMutation({
   args: {
     paymentId: v.id("payments"),
+    txHash: v.optional(v.string()),
+    ticketId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const payment = await ctx.db.get(args.paymentId);
@@ -255,9 +241,13 @@ export const settlePayment = internalMutation({
       return { success: false, error: "Payment not found" };
     }
 
+    const now = Date.now();
     await ctx.db.patch(args.paymentId, {
       status: "settled",
-      updatedAt: Date.now(),
+      txHash: args.txHash,
+      ticketId: args.ticketId,
+      updatedAt: now,
+      completedAt: now,
     });
 
     return { success: true };
@@ -265,7 +255,7 @@ export const settlePayment = internalMutation({
 });
 
 /**
- * Mark a payment as failed (on-chain payment failed)
+ * Mark a payment as failed
  */
 export const markPaymentFailed = internalMutation({
   args: {
@@ -319,64 +309,456 @@ export const updatePaymentStatus = internalMutation({
   },
 });
 
+// ============================================
+// POLICY ENFORCEMENT (MNEE-only)
+// ============================================
+
 /**
- * Update swap details on a payment after on-chain swap execution
- * Also marks payment as "settled" when transaction details are saved
+ * List payments for a specific workspace (user-facing)
  */
-export const updatePaymentSwapDetails = internalMutation({
+export const listWorkspacePayments = query({
   args: {
-    paymentId: v.id("payments"),
-    txHash: v.optional(v.string()),
-    swapTxHash: v.optional(v.string()),
-    swapSellAmount: v.optional(v.number()),
-    swapSellToken: v.optional(v.string()),
-    swapBuyAmount: v.optional(v.number()),
-    swapBuyToken: v.optional(v.string()),
-    swapFee: v.optional(v.number()),
+    limit: v.optional(v.number()),
+    status: v.optional(
+      v.union(
+        v.literal("allowed"),
+        v.literal("denied"),
+        v.literal("settled"),
+        v.literal("pending"),
+        v.literal("completed"),
+        v.literal("failed"),
+        v.literal("refunded")
+      )
+    ),
   },
   handler: async (ctx, args) => {
-    const payment = await ctx.db.get(args.paymentId);
-    if (!payment) {
-      return { success: false, error: "Payment not found" };
+    const { workspaceId } = await getCurrentWorkspaceContext(ctx);
+    
+    const limit = args.limit || 100;
+
+    // Get payments for this workspace
+    let query = ctx.db
+      .query("payments")
+      .withIndex("by_workspace_created", (q) => q.eq("workspaceId", workspaceId))
+      .order("desc");
+
+    const payments = await query.take(limit);
+
+    // Get related data
+    const paymentsWithDetails = await Promise.all(
+      payments.map(async (payment) => {
+        const apiKey = await ctx.db.get(payment.apiKeyId);
+        const provider = payment.providerId ? await ctx.db.get(payment.providerId) : null;
+
+        return {
+          _id: payment._id,
+          invoiceId: payment.invoiceId,
+          amount: payment.amount,
+          payTo: payment.payTo,
+          network: payment.network,
+          status: payment.status,
+          providerHost: payment.providerHost,
+          txHash: payment.txHash,
+          ticketId: payment.ticketId,
+          denialReason: payment.denialReason,
+          createdAt: payment.createdAt,
+          completedAt: payment.completedAt,
+          updatedAt: payment.updatedAt,
+          // Related data
+          apiKeyName: apiKey?.name,
+          providerName: provider?.name,
+        };
+      })
+    );
+
+    // Filter by status if provided
+    if (args.status) {
+      return paymentsWithDetails.filter((p) => p.status === args.status);
     }
 
-    const now = Date.now();
-    await ctx.db.patch(args.paymentId, {
-      status: "settled", // Mark as settled when tx details are saved
-      txHash: args.txHash,
-      swapTxHash: args.swapTxHash,
-      swapSellAmount: args.swapSellAmount,
-      swapSellToken: args.swapSellToken,
-      swapBuyAmount: args.swapBuyAmount,
-      swapBuyToken: args.swapBuyToken,
-      swapFee: args.swapFee,
-      updatedAt: now,
-      completedAt: now,
-    });
-
-    return { success: true };
+    return paymentsWithDetails;
   },
 });
 
-// ============================================
-// POLICY ENFORCEMENT
-// ============================================
+/**
+ * Get payment statistics for a workspace (user-facing)
+ */
+export const getWorkspacePaymentStats = query({
+  args: {},
+  handler: async (ctx) => {
+    const { workspaceId } = await getCurrentWorkspaceContext(ctx);
+
+    const allPayments = await ctx.db
+      .query("payments")
+      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
+      .collect();
+
+    // Calculate stats
+    const totalPayments = allPayments.length;
+    const settledPayments = allPayments.filter(
+      (p) => p.status === "settled" || p.status === "completed"
+    );
+    const pendingPayments = allPayments.filter((p) => p.status === "pending");
+    const failedPayments = allPayments.filter((p) => p.status === "failed");
+    const deniedPayments = allPayments.filter((p) => p.status === "denied");
+
+    const totalSpent = settledPayments.reduce((sum, p) => sum + p.amount, 0);
+
+    // Calculate today's stats
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const todayPayments = allPayments.filter((p) => p.createdAt >= startOfDay.getTime());
+    const todaySpent = todayPayments
+      .filter((p) => p.status === "settled" || p.status === "completed")
+      .reduce((sum, p) => sum + p.amount, 0);
+
+    // Calculate this month's stats
+    const startOfMonth = new Date();
+    startOfMonth.setUTCDate(1);
+    startOfMonth.setUTCHours(0, 0, 0, 0);
+    const monthPayments = allPayments.filter((p) => p.createdAt >= startOfMonth.getTime());
+    const monthSpent = monthPayments
+      .filter((p) => p.status === "settled" || p.status === "completed")
+      .reduce((sum, p) => sum + p.amount, 0);
+
+    return {
+      totalPayments,
+      settledCount: settledPayments.length,
+      pendingCount: pendingPayments.length,
+      failedCount: failedPayments.length,
+      deniedCount: deniedPayments.length,
+      totalSpent,
+      todayPayments: todayPayments.length,
+      todaySpent,
+      monthPayments: monthPayments.length,
+      monthSpent,
+    };
+  },
+});
 
 /**
- * Check agent policy against a payment request
- * Returns whether the request is allowed and a reason if denied
- * Requires per-chain/token limits - no global limits
+ * List payments received to workspace provider API keys (provider income)
  */
-export const checkAgentPolicy = internalQuery({
+export const listReceivedPayments = query({
+  args: {
+    limit: v.optional(v.number()),
+    status: v.optional(
+      v.union(
+        v.literal("allowed"),
+        v.literal("denied"),
+        v.literal("settled"),
+        v.literal("pending"),
+        v.literal("completed"),
+        v.literal("failed"),
+        v.literal("refunded")
+      )
+    ),
+  },
+  handler: async (ctx, args) => {
+    const { workspaceId } = await getCurrentWorkspaceContext(ctx);
+    
+    // Get all provider API keys for this workspace
+    const providerKeys = await ctx.db
+      .query("apiKeys")
+      .withIndex("by_workspace_type", (q) => 
+        q.eq("workspaceId", workspaceId).eq("type", "provider")
+      )
+      .collect();
+
+    if (providerKeys.length === 0) {
+      return [];
+    }
+
+    // Get receiving addresses from provider keys
+    const receivingAddresses = providerKeys
+      .filter(k => k.receivingAddress && k.receivingNetwork)
+      .map(k => ({ address: k.receivingAddress!, network: k.receivingNetwork! }));
+
+    if (receivingAddresses.length === 0) {
+      return [];
+    }
+
+    const limit = args.limit || 100;
+
+    // Get all payments where payTo matches any of our receiving addresses
+    const allPayments = await ctx.db.query("payments").order("desc").take(limit * 10); // Get more to filter
+
+    const receivedPayments = allPayments.filter((payment) =>
+      receivingAddresses.some(
+        (addr) => addr.address === payment.payTo && addr.network === payment.network
+      )
+    ).slice(0, limit);
+
+    // Get related data
+    const paymentsWithDetails = await Promise.all(
+      receivedPayments.map(async (payment) => {
+        const payerWorkspace = await ctx.db.get(payment.workspaceId);
+        const apiKey = await ctx.db.get(payment.apiKeyId);
+        const provider = payment.providerId ? await ctx.db.get(payment.providerId) : null;
+
+        return {
+          _id: payment._id,
+          invoiceId: payment.invoiceId,
+          amount: payment.amount,
+          payTo: payment.payTo,
+          network: payment.network,
+          status: payment.status,
+          providerHost: payment.providerHost,
+          txHash: payment.txHash,
+          ticketId: payment.ticketId,
+          denialReason: payment.denialReason,
+          createdAt: payment.createdAt,
+          completedAt: payment.completedAt,
+          updatedAt: payment.updatedAt,
+          // Related data
+          payerWorkspaceName: payerWorkspace?.name,
+          apiKeyName: apiKey?.name,
+          providerName: provider?.name,
+        };
+      })
+    );
+
+    // Filter by status if provided
+    if (args.status) {
+      return paymentsWithDetails.filter((p) => p.status === args.status);
+    }
+
+    return paymentsWithDetails;
+  },
+});
+
+/**
+ * Get received payment statistics (provider income stats)
+ */
+export const getReceivedPaymentStats = query({
+  args: {},
+  handler: async (ctx) => {
+    const { workspaceId } = await getCurrentWorkspaceContext(ctx);
+
+    // Get all provider API keys for this workspace
+    const providerKeys = await ctx.db
+      .query("apiKeys")
+      .withIndex("by_workspace_type", (q) => 
+        q.eq("workspaceId", workspaceId).eq("type", "provider")
+      )
+      .collect();
+
+    // Get receiving addresses from provider keys
+    const receivingAddresses = providerKeys
+      .filter(k => k.receivingAddress && k.receivingNetwork)
+      .map(k => ({ address: k.receivingAddress!, network: k.receivingNetwork! }));
+
+    if (receivingAddresses.length === 0) {
+      return {
+        totalPayments: 0,
+        settledCount: 0,
+        pendingCount: 0,
+        failedCount: 0,
+        deniedCount: 0,
+        totalEarned: 0,
+        todayPayments: 0,
+        todayEarned: 0,
+        monthPayments: 0,
+        monthEarned: 0,
+      };
+    }
+
+    // Get all payments to our receiving addresses
+    const allPayments = await ctx.db.query("payments").collect();
+    
+    const receivedPayments = allPayments.filter((payment) =>
+      receivingAddresses.some(
+        (addr) => addr.address === payment.payTo && addr.network === payment.network
+      )
+    );
+
+    // Calculate stats
+    const totalPayments = receivedPayments.length;
+    const settledPayments = receivedPayments.filter(
+      (p) => p.status === "settled" || p.status === "completed"
+    );
+    const pendingPayments = receivedPayments.filter((p) => p.status === "pending");
+    const failedPayments = receivedPayments.filter((p) => p.status === "failed");
+    const deniedPayments = receivedPayments.filter((p) => p.status === "denied");
+
+    const totalEarned = settledPayments.reduce((sum, p) => sum + p.amount, 0);
+
+    // Calculate today's stats
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const todayPayments = receivedPayments.filter((p) => p.createdAt >= startOfDay.getTime());
+    const todayEarned = todayPayments
+      .filter((p) => p.status === "settled" || p.status === "completed")
+      .reduce((sum, p) => sum + p.amount, 0);
+
+    // Calculate this month's stats
+    const startOfMonth = new Date();
+    startOfMonth.setUTCDate(1);
+    startOfMonth.setUTCHours(0, 0, 0, 0);
+    const monthPayments = receivedPayments.filter((p) => p.createdAt >= startOfMonth.getTime());
+    const monthEarned = monthPayments
+      .filter((p) => p.status === "settled" || p.status === "completed")
+      .reduce((sum, p) => sum + p.amount, 0);
+
+    return {
+      totalPayments,
+      settledCount: settledPayments.length,
+      pendingCount: pendingPayments.length,
+      failedCount: failedPayments.length,
+      deniedCount: deniedPayments.length,
+      totalEarned,
+      todayPayments: todayPayments.length,
+      todayEarned,
+      monthPayments: monthPayments.length,
+      monthEarned,
+    };
+  },
+});
+
+/**
+ * List all payments for admin dashboard (platform-wide)
+ */
+export const listAllPaymentsForAdmin = query({
+  args: {
+    limit: v.optional(v.number()),
+    status: v.optional(
+      v.union(
+        v.literal("allowed"),
+        v.literal("denied"),
+        v.literal("settled"),
+        v.literal("pending"),
+        v.literal("completed"),
+        v.literal("failed"),
+        v.literal("refunded")
+      )
+    ),
+  },
+  handler: async (ctx, args) => {
+    // Check if user is admin
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", identity.subject))
+      .unique();
+
+    if (!user || !user.isAdmin) {
+      throw new Error("Not authorized - admin access required");
+    }
+
+    const limit = args.limit || 100;
+
+    // Build query
+    let query = ctx.db.query("payments").order("desc");
+
+    const payments = await query.take(limit);
+
+    // Get related data
+    const paymentsWithDetails = await Promise.all(
+      payments.map(async (payment) => {
+        const workspace = await ctx.db.get(payment.workspaceId);
+        const apiKey = await ctx.db.get(payment.apiKeyId);
+        const provider = payment.providerId ? await ctx.db.get(payment.providerId) : null;
+
+        return {
+          _id: payment._id,
+          invoiceId: payment.invoiceId,
+          amount: payment.amount,
+          payTo: payment.payTo,
+          network: payment.network,
+          status: payment.status,
+          providerHost: payment.providerHost,
+          txHash: payment.txHash,
+          ticketId: payment.ticketId,
+          denialReason: payment.denialReason,
+          createdAt: payment.createdAt,
+          completedAt: payment.completedAt,
+          updatedAt: payment.updatedAt,
+          // Related data
+          workspaceName: workspace?.name,
+          apiKeyName: apiKey?.name,
+          providerName: provider?.name,
+        };
+      })
+    );
+
+    // Filter by status if provided
+    if (args.status) {
+      return paymentsWithDetails.filter((p) => p.status === args.status);
+    }
+
+    return paymentsWithDetails;
+  },
+});
+
+/**
+ * Get payment statistics for admin dashboard
+ */
+export const getPaymentStatsForAdmin = query({
+  args: {},
+  handler: async (ctx) => {
+    // Check if user is admin
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", identity.subject))
+      .unique();
+
+    if (!user || !user.isAdmin) {
+      throw new Error("Not authorized - admin access required");
+    }
+
+    const allPayments = await ctx.db.query("payments").collect();
+
+    // Calculate stats
+    const totalPayments = allPayments.length;
+    const settledPayments = allPayments.filter(
+      (p) => p.status === "settled" || p.status === "completed"
+    );
+    const pendingPayments = allPayments.filter((p) => p.status === "pending");
+    const failedPayments = allPayments.filter((p) => p.status === "failed");
+
+    const totalRevenue = settledPayments.reduce((sum, p) => sum + p.amount, 0);
+
+    // Calculate today's stats
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const todayPayments = allPayments.filter((p) => p.createdAt >= startOfDay.getTime());
+    const todayRevenue = todayPayments
+      .filter((p) => p.status === "settled" || p.status === "completed")
+      .reduce((sum, p) => sum + p.amount, 0);
+
+    return {
+      totalPayments,
+      settledCount: settledPayments.length,
+      pendingCount: pendingPayments.length,
+      failedCount: failedPayments.length,
+      totalRevenue,
+      todayPayments: todayPayments.length,
+      todayRevenue,
+    };
+  },
+});
+
+/**
+ * Check agent policy against an MNEE payment request
+ * Returns whether the request is allowed and a reason if denied
+ */
+export const checkAgentPolicyMnee = internalQuery({
   args: {
     apiKeyId: v.id("apiKeys"),
     providerId: v.optional(v.id("providers")),
-    treasuryAmount: v.number(), // Amount in treasury token
-    chainId: v.number(), // Chain ID for per-chain/token limits
-    tokenAddress: v.optional(v.string()), // Token address for per-chain/token limits
+    amount: v.number(), // Amount in MNEE
   },
   handler: async (ctx, args) => {
-    // Get agent policy (for allowedProviders and isActive check)
+    // Get agent policy
     const policy = await ctx.db
       .query("agentPolicies")
       .withIndex("by_apiKeyId", (q) => q.eq("apiKeyId", args.apiKeyId))
@@ -394,36 +776,17 @@ export const checkAgentPolicy = internalQuery({
       }
     }
 
-    // Require tokenAddress for per-chain/token limits
-    if (!args.tokenAddress) {
-      // If no token address provided, allow (backward compatible for now)
-      // In the future, we might want to require tokenAddress
+    // If no policy exists, allow (no limits configured)
+    if (!policy) {
       return { allowed: true, reason: null };
     }
-
-    // Get per-chain/token limits
-    const chainTokenPolicy = await ctx.db
-      .query("agentPolicyLimits")
-      .withIndex("by_apiKey_chain_token", (q) =>
-        q.eq("apiKeyId", args.apiKeyId)
-          .eq("chainId", args.chainId)
-          .eq("tokenAddress", args.tokenAddress!.toLowerCase())
-      )
-      .first();
-
-    // If no per-chain/token limit exists, allow (no limits configured for this token)
-    if (!chainTokenPolicy || !chainTokenPolicy.isActive) {
-      return { allowed: true, reason: null };
-    }
-
-    const limit = chainTokenPolicy;
 
     // Check maxRequest limit (fastest check)
-    if (limit.maxRequest !== undefined && args.treasuryAmount > limit.maxRequest) {
+    if (policy.maxRequest !== undefined && args.amount > policy.maxRequest) {
       return { allowed: false, reason: "AGENT_MAX_REQUEST_EXCEEDED" };
     }
 
-    // Calculate spend for this specific chain/token combination
+    // Calculate spend for MNEE payments
     const now = Date.now();
     const startOfDay = new Date(now);
     startOfDay.setUTCHours(0, 0, 0, 0);
@@ -434,42 +797,33 @@ export const checkAgentPolicy = internalQuery({
     startOfMonth.setUTCHours(0, 0, 0, 0);
     const startOfMonthTimestamp = startOfMonth.getTime();
 
-    // Get all payments for this agent, filtered by chain/token
+    // Get all settled/completed payments for this agent
     const allPayments = await ctx.db
       .query("payments")
       .withIndex("by_apiKeyId", (q) => q.eq("apiKeyId", args.apiKeyId))
       .filter((q) =>
-        q.and(
-          q.or(
-            q.eq(q.field("status"), "settled"),
-            q.eq(q.field("status"), "completed")
-          )
+        q.or(
+          q.eq(q.field("status"), "settled"),
+          q.eq(q.field("status"), "completed")
         )
       )
       .collect();
 
-    // Filter payments by chainId and token address
-    const relevantPayments = allPayments.filter((p) => {
-      const matchesChain = p.chainId === args.chainId;
-      const matchesToken = p.paymentToken?.toLowerCase() === args.tokenAddress!.toLowerCase();
-      return matchesChain && matchesToken;
-    });
-
     // Calculate daily spend
-    const dailyPayments = relevantPayments.filter((p) => p.createdAt >= startOfDayTimestamp);
-    const dailySpend = dailyPayments.reduce((sum, p) => sum + p.treasuryAmount, 0);
+    const dailyPayments = allPayments.filter((p) => p.createdAt >= startOfDayTimestamp);
+    const dailySpend = dailyPayments.reduce((sum, p) => sum + p.amount, 0);
 
     // Check daily limit
-    if (limit.dailyLimit !== undefined && dailySpend + args.treasuryAmount > limit.dailyLimit) {
+    if (policy.dailyLimit !== undefined && dailySpend + args.amount > policy.dailyLimit) {
       return { allowed: false, reason: "AGENT_DAILY_LIMIT_EXCEEDED" };
     }
 
     // Calculate monthly spend
-    const monthlyPayments = relevantPayments.filter((p) => p.createdAt >= startOfMonthTimestamp);
-    const monthlySpend = monthlyPayments.reduce((sum, p) => sum + p.treasuryAmount, 0);
+    const monthlyPayments = allPayments.filter((p) => p.createdAt >= startOfMonthTimestamp);
+    const monthlySpend = monthlyPayments.reduce((sum, p) => sum + p.amount, 0);
 
     // Check monthly limit
-    if (limit.monthlyLimit !== undefined && monthlySpend + args.treasuryAmount > limit.monthlyLimit) {
+    if (policy.monthlyLimit !== undefined && monthlySpend + args.amount > policy.monthlyLimit) {
       return { allowed: false, reason: "AGENT_MONTHLY_LIMIT_EXCEEDED" };
     }
 
@@ -477,4 +831,3 @@ export const checkAgentPolicy = internalQuery({
     return { allowed: true, reason: null };
   },
 });
-

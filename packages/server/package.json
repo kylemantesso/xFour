@@ -1,0 +1,49 @@
+{
+  "name": "@x402/server",
+  "version": "0.1.0",
+  "description": "x402 Server SDK - For API providers who want to receive payments for their APIs",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "import": "./dist/index.mjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "x402",
+    "payment",
+    "gateway",
+    "api-monetization",
+    "mnee",
+    "bitcoin",
+    "middleware"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0"
+  },
+  "peerDependencies": {
+    "express": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "express": {
+      "optional": true
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ]
+}
+

@@ -115,16 +115,15 @@ function UsageContent() {
             loading={!summary}
           />
           <MiniStat
-            label="Token Swaps"
-            value={summary?.swapCount ?? 0}
-            icon={<SwapIcon className="w-4 h-4" />}
+            label="Settled"
+            value={summary?.settledPayments ?? 0}
+            icon={<CheckIcon className="w-4 h-4" />}
             loading={!summary}
           />
           <MiniStat
-            label="Swap Fees"
-            value={summary?.swapFees ?? 0}
-            format="currency"
-            icon={<FeeIcon className="w-4 h-4" />}
+            label="Denied"
+            value={summary?.deniedPayments ?? 0}
+            icon={<XIcon className="w-4 h-4" />}
             loading={!summary}
           />
         </div>
@@ -320,7 +319,6 @@ interface TimeSeriesData {
   settledPayments: number;
   deniedPayments: number;
   totalSpent: number;
-  swapCount: number;
 }
 
 function SpendingChart({ data }: { data: TimeSeriesData[] }) {
@@ -428,7 +426,6 @@ interface AgentData {
   settledPayments: number;
   deniedPayments: number;
   totalSpent: number;
-  swapCount: number;
   lastUsed?: number;
 }
 
@@ -485,7 +482,6 @@ interface ProviderData {
   settledPayments: number;
   deniedPayments: number;
   totalSpent: number;
-  swapCount: number;
 }
 
 function ProviderTable({ data }: { data: ProviderData[] }) {
@@ -511,7 +507,6 @@ function ProviderTable({ data }: { data: ProviderData[] }) {
                   <p className="text-sm text-white font-medium">{provider.providerName}</p>
                   <p className="text-xs text-[#666]">
                     {provider.totalPayments} payments
-                    {provider.swapCount > 0 && ` • ${provider.swapCount} swaps`}
                   </p>
                 </div>
               </div>
@@ -666,27 +661,27 @@ function ProviderIcon({ className }: { className?: string }) {
   );
 }
 
-function SwapIcon({ className }: { className?: string }) {
+function CheckIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth={2}
-        d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
+        d="M5 13l4 4L19 7"
       />
     </svg>
   );
 }
 
-function FeeIcon({ className }: { className?: string }) {
+function XIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth={2}
-        d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
+        d="M6 18L18 6M6 6l12 12"
       />
     </svg>
   );

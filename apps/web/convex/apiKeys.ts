@@ -14,23 +14,35 @@ import {
  * List all API keys for the current workspace
  */
 export const listApiKeys = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    type: v.optional(v.union(v.literal("agent"), v.literal("provider"))),
+  },
+  handler: async (ctx, args) => {
     const { workspaceId, role } = await getCurrentWorkspaceContext(ctx);
     requireRole(role, ALL_ROLES, "view API keys");
 
-    const apiKeys = await ctx.db
+    let query = ctx.db
       .query("apiKeys")
-      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
-      .collect();
+      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId));
+
+    const apiKeys = await query.collect();
+
+    // Filter by type if specified
+    const filteredKeys = args.type 
+      ? apiKeys.filter(k => k.type === args.type)
+      : apiKeys;
 
     // Don't return the full API key for security
-    return apiKeys.map((key) => ({
+    return filteredKeys.map((key) => ({
       _id: key._id,
       name: key.name,
       description: key.description,
       apiKeyPrefix: key.apiKeyPrefix,
-      preferredPaymentToken: key.preferredPaymentToken,
+      type: key.type,
+      walletId: key.walletId,
+      mneeNetwork: key.mneeNetwork,
+      receivingAddress: key.receivingAddress,
+      receivingNetwork: key.receivingNetwork,
       createdByUserId: key.createdByUserId,
       lastUsedAt: key.lastUsedAt,
       expiresAt: key.expiresAt,
@@ -48,15 +60,63 @@ export const createApiKey = mutation({
   args: {
     name: v.string(),
     description: v.optional(v.string()),
-    preferredPaymentToken: v.string(), // Required: token address for payments
+    type: v.optional(v.union(v.literal("agent"), v.literal("provider"))), // Optional, defaults to "agent"
+    // Wallet reference (preferred method)
+    walletId: v.optional(v.id("wallets")),
+    // For agent keys (legacy, use walletId instead)
+    mneeNetwork: v.optional(v.union(v.literal("sandbox"), v.literal("mainnet"))),
+    // For provider keys (legacy, use walletId instead)
+    receivingAddress: v.optional(v.string()),
+    receivingNetwork: v.optional(v.union(v.literal("sandbox"), v.literal("mainnet"))),
     expiresAt: v.optional(v.number()),
+    // Policy/usage limits (optional, creates policy if any are provided)
+    dailyLimit: v.optional(v.number()),
+    monthlyLimit: v.optional(v.number()),
+    maxRequest: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const { workspaceId, role, clerkUserId } = await getCurrentWorkspaceContext(ctx);
     requireRole(role, WRITE_ROLES, "create API keys");
 
+    // Default to "agent" type for backward compatibility
+    const keyType = args.type ?? "agent";
+
+    // If walletId is provided, validate it belongs to workspace
+    if (args.walletId) {
+      const wallet = await ctx.db.get(args.walletId);
+      if (!wallet || wallet.workspaceId !== workspaceId) {
+        throw new Error("Wallet not found in this workspace");
+      }
+      if (!wallet.isActive) {
+        throw new Error("Cannot link to an inactive wallet");
+      }
+    } else {
+      // Legacy validation for non-wallet keys
+      if (keyType === "provider") {
+        if (!args.receivingAddress) {
+          throw new Error("Provider keys must have a wallet or receiving address");
+        }
+        if (!args.receivingNetwork) {
+          throw new Error("Provider keys must specify a receiving network");
+        }
+      }
+    }
+
     const now = Date.now();
     const { key, prefix } = generateApiKey();
+
+    // Determine network from wallet if provided, otherwise use args or default to mainnet
+    let network: "sandbox" | "mainnet" | undefined;
+    if (args.walletId) {
+      const wallet = await ctx.db.get(args.walletId);
+      if (wallet) {
+        network = wallet.network;
+      }
+    } else if (keyType === "agent") {
+      network = args.mneeNetwork ?? "mainnet";
+    } else if (keyType === "provider") {
+      network = args.receivingNetwork;
+    }
 
     const apiKeyId = await ctx.db.insert("apiKeys", {
       workspaceId,
@@ -64,13 +124,31 @@ export const createApiKey = mutation({
       description: args.description,
       apiKey: key,
       apiKeyPrefix: prefix,
-      preferredPaymentToken: args.preferredPaymentToken,
+      type: keyType,
+      walletId: args.walletId,
+      mneeNetwork: keyType === "agent" ? network : undefined,
+      receivingAddress: keyType === "provider" ? args.receivingAddress : undefined,
+      receivingNetwork: keyType === "provider" ? network : undefined,
       createdByUserId: clerkUserId,
       expiresAt: args.expiresAt,
       isActive: true,
       createdAt: now,
       updatedAt: now,
     });
+
+    // Create policy if any limits are provided
+    if (args.dailyLimit !== undefined || args.monthlyLimit !== undefined || args.maxRequest !== undefined) {
+      await ctx.db.insert("agentPolicies", {
+        workspaceId,
+        apiKeyId,
+        dailyLimit: args.dailyLimit,
+        monthlyLimit: args.monthlyLimit,
+        maxRequest: args.maxRequest,
+        isActive: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
 
     // Return the full key only once on creation
     return { apiKeyId, apiKey: key, prefix };
@@ -85,7 +163,13 @@ export const updateApiKey = mutation({
     apiKeyId: v.id("apiKeys"),
     name: v.optional(v.string()),
     description: v.optional(v.string()),
-    preferredPaymentToken: v.optional(v.string()),
+    // Wallet reference
+    walletId: v.optional(v.union(v.id("wallets"), v.null())),
+    // For agent keys (legacy)
+    mneeNetwork: v.optional(v.union(v.literal("sandbox"), v.literal("mainnet"))),
+    // For provider keys (legacy)
+    receivingAddress: v.optional(v.string()),
+    receivingNetwork: v.optional(v.union(v.literal("sandbox"), v.literal("mainnet"))),
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
@@ -97,17 +181,42 @@ export const updateApiKey = mutation({
       throw new Error("API key not found in this workspace");
     }
 
+    // If walletId is provided (and not null), validate it belongs to workspace
+    if (args.walletId !== undefined && args.walletId !== null) {
+      const wallet = await ctx.db.get(args.walletId);
+      if (!wallet || wallet.workspaceId !== workspaceId) {
+        throw new Error("Wallet not found in this workspace");
+      }
+      if (!wallet.isActive) {
+        throw new Error("Cannot link to an inactive wallet");
+      }
+    }
+
     const updates: {
       name?: string;
       description?: string;
-      preferredPaymentToken?: string;
+      walletId?: Id<"wallets"> | undefined;
+      mneeNetwork?: "sandbox" | "mainnet";
+      receivingAddress?: string;
+      receivingNetwork?: "sandbox" | "mainnet";
       isActive?: boolean;
       updatedAt: number;
     } = { updatedAt: Date.now() };
 
     if (args.name !== undefined) updates.name = args.name;
     if (args.description !== undefined) updates.description = args.description;
-    if (args.preferredPaymentToken !== undefined) updates.preferredPaymentToken = args.preferredPaymentToken;
+    if (args.walletId !== undefined) {
+      updates.walletId = args.walletId === null ? undefined : args.walletId;
+    }
+    if (args.mneeNetwork !== undefined && apiKey.type === "agent") {
+      updates.mneeNetwork = args.mneeNetwork;
+    }
+    if (args.receivingAddress !== undefined && apiKey.type === "provider") {
+      updates.receivingAddress = args.receivingAddress;
+    }
+    if (args.receivingNetwork !== undefined && apiKey.type === "provider") {
+      updates.receivingNetwork = args.receivingNetwork;
+    }
     if (args.isActive !== undefined) updates.isActive = args.isActive;
 
     await ctx.db.patch(args.apiKeyId, updates);
@@ -211,6 +320,7 @@ export const validateApiKey = query({
       apiKeyId: keyRecord._id,
       workspaceId: keyRecord.workspaceId,
       workspaceName: workspace.name,
+      mneeNetwork: keyRecord.mneeNetwork,
     };
   },
 });
@@ -258,7 +368,7 @@ export const getApiKey = query({
 });
 
 // ============================================
-// AGENT POLICY MANAGEMENT
+// AGENT POLICY MANAGEMENT (MNEE spending limits)
 // ============================================
 
 /**
@@ -287,12 +397,14 @@ export const getAgentPolicy = query({
 });
 
 /**
- * Create an agent policy (for allowedProviders and isActive only)
- * Note: Spending limits are now per-chain/token only, use upsertAgentPolicyLimit
+ * Create an agent policy with MNEE spending limits
  */
 export const createAgentPolicy = mutation({
   args: {
     apiKeyId: v.id("apiKeys"),
+    dailyLimit: v.optional(v.number()), // Daily spend limit in MNEE
+    monthlyLimit: v.optional(v.number()), // Monthly spend limit in MNEE
+    maxRequest: v.optional(v.number()), // Max per-request amount in MNEE
     allowedProviders: v.optional(v.array(v.id("providers"))),
     isActive: v.optional(v.boolean()),
   },
@@ -329,6 +441,9 @@ export const createAgentPolicy = mutation({
     const policyId = await ctx.db.insert("agentPolicies", {
       workspaceId,
       apiKeyId: args.apiKeyId,
+      dailyLimit: args.dailyLimit,
+      monthlyLimit: args.monthlyLimit,
+      maxRequest: args.maxRequest,
       allowedProviders: args.allowedProviders,
       isActive: args.isActive ?? true,
       createdAt: now,
@@ -340,12 +455,14 @@ export const createAgentPolicy = mutation({
 });
 
 /**
- * Update an agent policy (for allowedProviders and isActive only)
- * Note: Spending limits are now per-chain/token only, use upsertAgentPolicyLimit
+ * Update an agent policy with MNEE spending limits
  */
 export const updateAgentPolicy = mutation({
   args: {
     apiKeyId: v.id("apiKeys"),
+    dailyLimit: v.optional(v.number()), // Daily spend limit in MNEE
+    monthlyLimit: v.optional(v.number()), // Monthly spend limit in MNEE
+    maxRequest: v.optional(v.number()), // Max per-request amount in MNEE
     allowedProviders: v.optional(v.array(v.id("providers"))),
     isActive: v.optional(v.boolean()),
   },
@@ -378,11 +495,17 @@ export const updateAgentPolicy = mutation({
     }
 
     const updates: {
+      dailyLimit?: number;
+      monthlyLimit?: number;
+      maxRequest?: number;
       allowedProviders?: Id<"providers">[];
       isActive?: boolean;
       updatedAt: number;
     } = { updatedAt: Date.now() };
 
+    if (args.dailyLimit !== undefined) updates.dailyLimit = args.dailyLimit;
+    if (args.monthlyLimit !== undefined) updates.monthlyLimit = args.monthlyLimit;
+    if (args.maxRequest !== undefined) updates.maxRequest = args.maxRequest;
     if (args.allowedProviders !== undefined) updates.allowedProviders = args.allowedProviders;
     if (args.isActive !== undefined) updates.isActive = args.isActive;
 
@@ -421,119 +544,53 @@ export const deleteAgentPolicy = mutation({
   },
 });
 
-// ============================================
-// PER-CHAIN/TOKEN POLICY LIMITS MANAGEMENT
-// ============================================
-
 /**
- * List all per-chain/token limits for an API key
+ * Upsert (create or update) an agent policy
+ * This simplifies frontend code by handling both cases
  */
-export const listAgentPolicyLimits = query({
+export const upsertAgentPolicy = mutation({
   args: {
     apiKeyId: v.id("apiKeys"),
-  },
-  handler: async (ctx, args) => {
-    const { workspaceId, role } = await getCurrentWorkspaceContext(ctx);
-    requireRole(role, ALL_ROLES, "view agent policy limits");
-
-    const apiKey = await ctx.db.get(args.apiKeyId);
-    if (!apiKey || apiKey.workspaceId !== workspaceId) {
-      throw new Error("API key not found in this workspace");
-    }
-
-    const limits = await ctx.db
-      .query("agentPolicyLimits")
-      .withIndex("by_apiKeyId", (q) => q.eq("apiKeyId", args.apiKeyId))
-      .collect();
-
-    return limits;
-  },
-});
-
-/**
- * Create or update a per-chain/token limit
- */
-export const upsertAgentPolicyLimit = mutation({
-  args: {
-    apiKeyId: v.id("apiKeys"),
-    chainId: v.number(),
-    tokenAddress: v.string(),
-    dailyLimit: v.optional(v.number()),
-    monthlyLimit: v.optional(v.number()),
-    maxRequest: v.optional(v.number()),
+    dailyLimit: v.optional(v.number()), // Daily spend limit in MNEE
+    monthlyLimit: v.optional(v.number()), // Monthly spend limit in MNEE
+    maxRequest: v.optional(v.number()), // Max per-request amount in MNEE
+    allowedProviders: v.optional(v.array(v.id("providers"))),
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const { workspaceId, role } = await getCurrentWorkspaceContext(ctx);
-    requireRole(role, ADMIN_ROLES, "manage agent policy limits");
+    requireRole(role, ADMIN_ROLES, "manage agent policies");
 
     const apiKey = await ctx.db.get(args.apiKeyId);
     if (!apiKey || apiKey.workspaceId !== workspaceId) {
       throw new Error("API key not found in this workspace");
     }
 
-    // Verify chain exists
-    const chain = await ctx.db
-      .query("supportedChains")
-      .withIndex("by_chainId", (q) => q.eq("chainId", args.chainId))
-      .first();
-
-    if (!chain) {
-      throw new Error(`Chain with ID ${args.chainId} not found`);
-    }
-
-    // Verify token exists on this chain (check if it's in workspace tokens)
-    // First check if it's a workspace token
-    const workspaceTokens = await ctx.db
-      .query("workspaceTokens")
-      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
-      .filter((q) => q.eq(q.field("isActive"), true))
-      .collect();
-
-    let tokenFound = false;
-    for (const wt of workspaceTokens) {
-      const token = await ctx.db.get(wt.tokenId);
-      if (token && 
-          token.isActive && 
-          token.chainId === args.chainId &&
-          token.address.toLowerCase() === args.tokenAddress.toLowerCase()) {
-        tokenFound = true;
-        break;
+    // Validate allowed providers belong to workspace
+    if (args.allowedProviders && args.allowedProviders.length > 0) {
+      for (const providerId of args.allowedProviders) {
+        const provider = await ctx.db.get(providerId);
+        if (!provider || provider.workspaceId !== workspaceId) {
+          throw new Error(`Provider ${providerId} not found in this workspace`);
+        }
       }
     }
 
-    // If not found in workspace tokens, check global supportedTokens as fallback
-    if (!tokenFound) {
-      const token = await ctx.db
-        .query("supportedTokens")
-        .withIndex("by_address_chainId", (q) =>
-          q.eq("address", args.tokenAddress.toLowerCase()).eq("chainId", args.chainId)
-        )
-        .first();
-
-      if (!token || !token.isActive) {
-        throw new Error(`Token ${args.tokenAddress} not found on chain ${args.chainId}. Please add it to your workspace tokens first.`);
-      }
-    }
-
-    // Check if limit already exists
-    const existingLimit = await ctx.db
-      .query("agentPolicyLimits")
-      .withIndex("by_apiKey_chain_token", (q) =>
-        q.eq("apiKeyId", args.apiKeyId)
-          .eq("chainId", args.chainId)
-          .eq("tokenAddress", args.tokenAddress.toLowerCase())
-      )
-      .first();
+    // Check if policy already exists
+    const existingPolicy = await ctx.db
+      .query("agentPolicies")
+      .withIndex("by_apiKeyId", (q) => q.eq("apiKeyId", args.apiKeyId))
+      .unique();
 
     const now = Date.now();
 
-    if (existingLimit) {
-      // Update existing limit
+    if (existingPolicy) {
+      // Update existing policy
       const updates: {
         dailyLimit?: number;
         monthlyLimit?: number;
         maxRequest?: number;
+        allowedProviders?: Id<"providers">[];
         isActive?: boolean;
         updatedAt: number;
       } = { updatedAt: now };
@@ -541,49 +598,25 @@ export const upsertAgentPolicyLimit = mutation({
       if (args.dailyLimit !== undefined) updates.dailyLimit = args.dailyLimit;
       if (args.monthlyLimit !== undefined) updates.monthlyLimit = args.monthlyLimit;
       if (args.maxRequest !== undefined) updates.maxRequest = args.maxRequest;
+      if (args.allowedProviders !== undefined) updates.allowedProviders = args.allowedProviders;
       if (args.isActive !== undefined) updates.isActive = args.isActive;
 
-      await ctx.db.patch(existingLimit._id, updates);
-      return { limitId: existingLimit._id };
+      await ctx.db.patch(existingPolicy._id, updates);
+      return { success: true, policyId: existingPolicy._id };
     } else {
-      // Create new limit
-      const limitId = await ctx.db.insert("agentPolicyLimits", {
+      // Create new policy
+      const policyId = await ctx.db.insert("agentPolicies", {
         workspaceId,
         apiKeyId: args.apiKeyId,
-        chainId: args.chainId,
-        tokenAddress: args.tokenAddress.toLowerCase(),
         dailyLimit: args.dailyLimit,
         monthlyLimit: args.monthlyLimit,
         maxRequest: args.maxRequest,
+        allowedProviders: args.allowedProviders,
         isActive: args.isActive ?? true,
         createdAt: now,
         updatedAt: now,
       });
-
-      return { limitId };
+      return { success: true, policyId };
     }
   },
 });
-
-/**
- * Delete a per-chain/token limit
- */
-export const deleteAgentPolicyLimit = mutation({
-  args: {
-    limitId: v.id("agentPolicyLimits"),
-  },
-  handler: async (ctx, args) => {
-    const { workspaceId, role } = await getCurrentWorkspaceContext(ctx);
-    requireRole(role, ADMIN_ROLES, "delete agent policy limits");
-
-    const limit = await ctx.db.get(args.limitId);
-    if (!limit || limit.workspaceId !== workspaceId) {
-      throw new Error("Policy limit not found in this workspace");
-    }
-
-    await ctx.db.delete(args.limitId);
-    return { success: true };
-  },
-});
-
-

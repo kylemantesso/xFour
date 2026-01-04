@@ -4,6 +4,12 @@ globs: **/*.ts,**/*.tsx,**/*.js,**/*.jsx
 ---
 
 # Convex guidelines
+## General guidelines
+### Documentation
+- NEVER create README files or other documentation files (*.md) unless explicitly instructed by the user
+- If you have instructions, setup steps, or explanations to provide, put them directly in the chat response instead of creating documentation files
+- Only create documentation when the user specifically asks for it
+
 ## Function guidelines
 ### New function syntax
 - ALWAYS use the new function syntax for Convex functions. For example:

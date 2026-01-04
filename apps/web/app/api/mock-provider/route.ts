@@ -19,8 +19,10 @@ import { NextRequest, NextResponse } from "next/server";
  * verify the invoice ID against their payment records.
  */
 
-// Default test payment address
-const DEFAULT_PAY_TO = "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE0E";
+// Default test payment addresses
+const DEFAULT_EVM_PAY_TO = "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE0E";
+const DEFAULT_MNEE_SANDBOX_PAY_TO = "1KPmRUMAWmddVk6xDwDZk6Lo9VFPB2YMPM";
+const DEFAULT_MNEE_MAINNET_PAY_TO = "1KPmRUMAWmddVk6xDwDZk6Lo9VFPB2YMPM"; // Same for now
 
 // Generate a random invoice ID
 function generateInvoiceId(): string {
@@ -32,13 +34,26 @@ function isValidInvoiceFormat(invoiceId: string): boolean {
   return invoiceId.startsWith("inv_") && invoiceId.length > 10;
 }
 
+// Get default payTo address based on network
+function getDefaultPayToAddress(network: string): string {
+  if (network === "mnee-sandbox") {
+    return DEFAULT_MNEE_SANDBOX_PAY_TO;
+  } else if (network === "mnee-mainnet") {
+    return DEFAULT_MNEE_MAINNET_PAY_TO;
+  }
+  return DEFAULT_EVM_PAY_TO;
+}
+
 // Extract config from URL params
 function getConfig(url: URL) {
+  const network = url.searchParams.get("network") || "localhost";
+  const defaultPayTo = getDefaultPayToAddress(network);
+  
   return {
     currency: url.searchParams.get("currency") || "USDC",
     amount: url.searchParams.get("amount") || "0.50",
-    network: url.searchParams.get("network") || "localhost",
-    payTo: url.searchParams.get("payTo") || DEFAULT_PAY_TO,
+    network,
+    payTo: url.searchParams.get("payTo") || defaultPayTo,
   };
 }
 

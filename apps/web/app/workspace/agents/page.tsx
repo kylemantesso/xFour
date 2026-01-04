@@ -9,15 +9,7 @@ import { useToast } from "../../../components/Toast";
 import { Id } from "../../../convex/_generated/dataModel";
 
 // Types
-type SupportedToken = {
-  _id: string;
-  address: string;
-  symbol: string;
-  name: string;
-  decimals: number;
-  chainId: number;
-  isActive: boolean;
-};
+type MneeNetwork = "sandbox" | "mainnet";
 
 // Icons
 function KeyIcon({ className }: { className?: string }) {
@@ -60,6 +52,14 @@ function ChevronDownIcon({ className }: { className?: string }) {
   );
 }
 
+function ChevronUpIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+    </svg>
+  );
+}
+
 export default function AgentsPage() {
   return (
     <WorkspaceGuard>
@@ -71,8 +71,8 @@ export default function AgentsPage() {
 function AgentsContent() {
   const workspaceData = useQuery(api.workspaces.getCurrentWorkspace);
   const apiKeys = useQuery(api.apiKeys.listApiKeys);
-  // Use workspace tokens (tokens the workspace has enabled)
-  const workspaceTokens = useQuery(api.tokens.listWorkspaceTokens, {});
+  const wallets = useQuery(api.wallets.listWallets, {});
+  const mneeWallets = useQuery(api.mnee.listWorkspaceMneeWallets, {});
 
   if (!workspaceData) {
     return <LoadingSkeleton />;
@@ -81,6 +81,11 @@ function AgentsContent() {
   const { role } = workspaceData;
   const isAdmin = role === "owner" || role === "admin";
   const canWrite = role === "owner" || role === "admin" || role === "member";
+  // Allow creation if they have either new wallets OR old mneeWallets (backward compatibility)
+  const hasWallets = (wallets && wallets.length > 0) || (mneeWallets && mneeWallets.length > 0);
+
+  // Filter to only show agent keys
+  const agentKeys = apiKeys?.filter(key => key.type === "agent" || !key.type) ?? [];
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
@@ -103,7 +108,7 @@ function AgentsContent() {
               </p>
             </div>
           </div>
-          {canWrite && <CreateApiKeyButton workspaceTokens={workspaceTokens as SupportedToken[] | undefined} />}
+          {canWrite && <CreateApiKeyButton hasWallets={hasWallets} wallets={wallets} />}
         </div>
 
         {/* Info Card */}
@@ -116,10 +121,10 @@ function AgentsContent() {
             </div>
             <div>
               <h3 className="text-sm font-medium text-white">
-                How API Keys Work
+                How Agent Keys Work
               </h3>
               <p className="text-sm text-[#888] mt-1">
-                API keys authenticate your agents when calling the x402 Gateway. Each key is shown only once when created — store it securely. Each key has a preferred payment token that will be used for all payments made with that key.
+                Agent keys authenticate your AI agents when making payments through the x402 Gateway. Each key is shown only once when created — store it securely. Looking for provider keys? Visit the <a href="/workspace/providers" className="text-purple-400 hover:text-purple-300 underline">Provider Keys</a> page.
               </p>
             </div>
           </div>
@@ -134,9 +139,8 @@ function AgentsContent() {
           </div>
           <div className="p-6">
             <ApiKeysList 
-              apiKeys={apiKeys} 
+              apiKeys={agentKeys} 
               canManage={isAdmin} 
-              workspaceTokens={workspaceTokens as SupportedToken[] | undefined}
             />
           </div>
         </div>
@@ -146,55 +150,70 @@ function AgentsContent() {
 }
 
 // ============================================
-// API KEYS COMPONENTS
+// CREATE API KEY BUTTON
 // ============================================
 
-type ApiKeyData = {
-  _id: Id<"apiKeys">;
+type WalletData = {
+  _id: string;
   name: string;
-  description?: string;
-  apiKeyPrefix: string;
-  preferredPaymentToken?: string; // Optional for backwards compat with old keys
-  createdByUserId: string;
-  lastUsedAt?: number;
-  expiresAt?: number;
+  address: string;
+  network: MneeNetwork;
   isActive: boolean;
   createdAt: number;
   updatedAt: number;
 };
 
-function CreateApiKeyButton({ workspaceTokens }: { workspaceTokens: SupportedToken[] | undefined }) {
+function CreateApiKeyButton({ 
+  hasWallets, 
+  wallets 
+}: { 
+  hasWallets: boolean; 
+  wallets: WalletData[] | undefined;
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [selectedToken, setSelectedToken] = useState<SupportedToken | null>(null);
-  const [isTokenDropdownOpen, setIsTokenDropdownOpen] = useState(false);
+  const [selectedWalletId, setSelectedWalletId] = useState<string>("");
+  const [showCreateWallet, setShowCreateWallet] = useState(false);
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  // Usage limits
+  const [dailyLimit, setDailyLimit] = useState("");
+  const [monthlyLimit, setMonthlyLimit] = useState("");
+  const [maxRequest, setMaxRequest] = useState("");
+  const [showLimits, setShowLimits] = useState(false);
   const createApiKey = useMutation(api.apiKeys.createApiKey);
 
-  // Set default token when workspaceTokens loads
+  // Set default wallet when wallets load
   useEffect(() => {
-    if (workspaceTokens && workspaceTokens.length > 0 && !selectedToken) {
-      setSelectedToken(workspaceTokens[0]);
+    if (wallets && wallets.length > 0 && !selectedWalletId) {
+      setSelectedWalletId(wallets[0]._id);
     }
-  }, [workspaceTokens, selectedToken]);
+  }, [wallets, selectedWalletId]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !selectedToken) return;
+    if (!name.trim() || !selectedWalletId) return;
 
     setIsCreating(true);
     try {
       const result = await createApiKey({
         name: name.trim(),
         description: description.trim() || undefined,
-        preferredPaymentToken: selectedToken.address,
+        type: "agent",
+        walletId: selectedWalletId as Id<"wallets">,
+        dailyLimit: dailyLimit ? parseFloat(dailyLimit) : undefined,
+        monthlyLimit: monthlyLimit ? parseFloat(monthlyLimit) : undefined,
+        maxRequest: maxRequest ? parseFloat(maxRequest) : undefined,
       });
       setNewApiKey(result.apiKey);
       setName("");
       setDescription("");
+      setDailyLimit("");
+      setMonthlyLimit("");
+      setMaxRequest("");
+      setShowLimits(false);
     } finally {
       setIsCreating(false);
     }
@@ -214,30 +233,32 @@ function CreateApiKeyButton({ workspaceTokens }: { workspaceTokens: SupportedTok
     setCopied(false);
     setName("");
     setDescription("");
+    setDailyLimit("");
+    setMonthlyLimit("");
+    setMaxRequest("");
+    setShowLimits(false);
   };
-
-  const noTokensAvailable = !workspaceTokens || workspaceTokens.length === 0;
 
   return (
     <>
       <button
         onClick={() => setIsOpen(true)}
-        disabled={noTokensAvailable}
-        className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        title={noTokensAvailable ? "No payment tokens configured" : undefined}
+        disabled={!hasWallets}
+        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        title={!hasWallets ? "Create a wallet in the Treasury page first" : undefined}
       >
-        <PlusIcon className="w-5 h-5" />
+        <PlusIcon className="w-4 h-4" />
         Create API Key
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-          <div className="bg-[#111] border border-[#333] rounded-2xl p-6 w-full max-w-md shadow-2xl">
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-[#111] border border-[#333] rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
             {newApiKey ? (
               <div className="space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-emerald-900/50 flex items-center justify-center">
-                    <CheckIcon className="w-6 h-6 text-emerald-400" />
+                  <div className="w-10 h-10 rounded-lg bg-emerald-900/50 flex items-center justify-center">
+                    <CheckIcon className="w-5 h-5 text-emerald-400" />
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold text-white">
@@ -249,14 +270,14 @@ function CreateApiKeyButton({ workspaceTokens }: { workspaceTokens: SupportedTok
                   </div>
                 </div>
 
-                <div className="bg-[#0a0a0a] border border-[#333] rounded-xl p-4">
+                <div className="bg-[#0a0a0a] border border-[#333] rounded-lg p-4">
                   <div className="flex items-center justify-between gap-3">
                     <code className="text-sm font-mono text-white break-all">
                       {newApiKey}
                     </code>
                     <button
                       onClick={handleCopy}
-                      className="flex-shrink-0 p-2.5 text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors"
+                      className="flex-shrink-0 p-2 text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors"
                       title="Copy to clipboard"
                     >
                       {copied ? (
@@ -268,7 +289,7 @@ function CreateApiKeyButton({ workspaceTokens }: { workspaceTokens: SupportedTok
                   </div>
                 </div>
 
-                <div className="bg-amber-900/20 border border-amber-800 rounded-xl p-4">
+                <div className="bg-amber-900/20 border border-amber-800 rounded-lg p-3">
                   <p className="text-sm text-amber-200">
                     <strong>Important:</strong> This is the only time you&apos;ll see this key. 
                     Store it securely — we only save a hash on our servers.
@@ -277,16 +298,16 @@ function CreateApiKeyButton({ workspaceTokens }: { workspaceTokens: SupportedTok
 
                 <button
                   onClick={handleClose}
-                  className="w-full px-4 py-3 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-xl transition-colors"
+                  className="w-full px-4 py-2.5 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors"
                 >
                   Done
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleCreate} className="space-y-5">
+              <form onSubmit={handleCreate} className="space-y-4">
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-                    <KeyIcon className="w-6 h-6 text-white" />
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+                    <KeyIcon className="w-5 h-5 text-white" />
                   </div>
                   <h3 className="text-lg font-semibold text-white">
                     Create API Key
@@ -294,7 +315,7 @@ function CreateApiKeyButton({ workspaceTokens }: { workspaceTokens: SupportedTok
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-[#888] mb-2">
+                  <label className="block text-sm font-medium text-[#888] mb-1">
                     Name <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -302,14 +323,14 @@ function CreateApiKeyButton({ workspaceTokens }: { workspaceTokens: SupportedTok
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="e.g., dev-bot-1, production-agent"
-                    className="w-full px-4 py-3 border border-[#333] rounded-xl bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
+                    className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
                     required
                     autoFocus
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-[#888] mb-2">
+                  <label className="block text-sm font-medium text-[#888] mb-1">
                     Description <span className="text-[#666]">(optional)</span>
                   </label>
                   <input
@@ -317,79 +338,114 @@ function CreateApiKeyButton({ workspaceTokens }: { workspaceTokens: SupportedTok
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="What is this key used for?"
-                    className="w-full px-4 py-3 border border-[#333] rounded-xl bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
+                    className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
                   />
                 </div>
 
-                {/* Payment Token Selector */}
                 <div>
-                  <label className="block text-sm font-medium text-[#888] mb-2">
-                    Payment Token <span className="text-red-500">*</span>
+                  <label className="block text-sm font-medium text-[#888] mb-1">
+                    Wallet <span className="text-red-500">*</span>
                   </label>
-                  <div className="relative">
+                  <div className="flex gap-2">
+                    <select
+                      value={selectedWalletId}
+                      onChange={(e) => setSelectedWalletId(e.target.value)}
+                      className="flex-1 px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white focus:outline-none focus:border-[#555]"
+                      required
+                    >
+                      <option value="">Select a wallet</option>
+                      {wallets?.map((wallet) => (
+                        <option key={wallet._id} value={wallet._id}>
+                          {wallet.name} ({wallet.network})
+                        </option>
+                      ))}
+                    </select>
                     <button
                       type="button"
-                      onClick={() => setIsTokenDropdownOpen(!isTokenDropdownOpen)}
-                      className="w-full flex items-center justify-between px-4 py-3 border border-[#333] rounded-xl bg-[#0a0a0a] text-white focus:outline-none focus:border-[#555]"
+                      onClick={() => setShowCreateWallet(true)}
+                      className="px-3 py-2 text-sm font-medium text-[#888] hover:text-white border border-[#333] hover:border-[#555] rounded-lg transition-colors"
+                      title="Create new wallet"
                     >
-                      {selectedToken ? (
-                        <div className="flex items-center gap-3">
-                          <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-xs font-bold text-white">
-                            {selectedToken.symbol.slice(0, 2)}
-                          </div>
-                          <span>{selectedToken.symbol}</span>
-                          <span className="text-[#666]">-</span>
-                          <span className="text-[#888] text-sm">{selectedToken.name}</span>
-                        </div>
-                      ) : (
-                        <span className="text-[#666]">Select a payment token</span>
-                      )}
-                      <ChevronDownIcon className="w-5 h-5 text-[#888]" />
+                      <PlusIcon className="w-4 h-4" />
                     </button>
-
-                    {isTokenDropdownOpen && workspaceTokens && (
-                      <div className="absolute z-10 mt-2 w-full bg-[#111] border border-[#333] rounded-xl shadow-lg max-h-48 overflow-y-auto">
-                        {workspaceTokens.map((token) => (
-                          <button
-                            key={token._id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedToken(token);
-                              setIsTokenDropdownOpen(false);
-                            }}
-                            className={`w-full flex items-center gap-3 px-4 py-3 hover:bg-[#1a1a1a] transition-colors ${
-                              selectedToken?._id === token._id ? "bg-[#1a1a1a]" : ""
-                            }`}
-                          >
-                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-500 to-violet-600 flex items-center justify-center text-xs font-bold text-white">
-                              {token.symbol.slice(0, 2)}
-                            </div>
-                            <div className="text-left">
-                              <p className="font-medium text-white">{token.symbol}</p>
-                              <p className="text-xs text-[#888]">{token.name}</p>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-                    )}
                   </div>
-                  <p className="text-xs text-[#666] mt-2">
-                    All payments made with this API key will use this token
+                  <p className="text-xs text-[#666] mt-1">
+                    This wallet will be used for all payments with this API key.
                   </p>
                 </div>
 
-                <div className="flex gap-3 pt-2">
+                {/* Usage Limits Section */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowLimits(!showLimits)}
+                    className="flex items-center gap-2 text-sm text-[#888] hover:text-white transition-colors"
+                  >
+                    <svg
+                      className={`w-4 h-4 transition-transform ${showLimits ? "rotate-90" : ""}`}
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                    <span>Usage Limits</span>
+                    <span className="text-[#666]">(optional)</span>
+                  </button>
+                  
+                  {showLimits && (
+                    <div className="mt-3 p-3 bg-[#1a1a1a] rounded-lg border border-[#333] space-y-3">
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs text-[#666] mb-1">Daily Limit</label>
+                          <input
+                            type="number"
+                            value={dailyLimit}
+                            onChange={(e) => setDailyLimit(e.target.value)}
+                            placeholder="No limit"
+                            className="w-full px-2 py-1.5 text-sm border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-[#666] mb-1">Monthly Limit</label>
+                          <input
+                            type="number"
+                            value={monthlyLimit}
+                            onChange={(e) => setMonthlyLimit(e.target.value)}
+                            placeholder="No limit"
+                            className="w-full px-2 py-1.5 text-sm border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs text-[#666] mb-1">Max Request</label>
+                          <input
+                            type="number"
+                            value={maxRequest}
+                            onChange={(e) => setMaxRequest(e.target.value)}
+                            placeholder="No limit"
+                            className="w-full px-2 py-1.5 text-sm border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-[#666]">
+                        Set MNEE spending limits for this API key. You can edit these later.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2 pt-2">
                   <button
                     type="submit"
-                    disabled={isCreating || !name.trim() || !selectedToken}
-                    className="flex-1 px-4 py-3 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={isCreating || !name.trim() || !selectedWalletId}
+                    className="flex-1 px-4 py-2.5 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isCreating ? "Creating..." : "Create Key"}
                   </button>
                   <button
                     type="button"
                     onClick={handleClose}
-                    className="flex-1 px-4 py-3 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-xl transition-colors"
+                    className="flex-1 px-4 py-2.5 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors"
                   >
                     Cancel
                   </button>
@@ -399,47 +455,241 @@ function CreateApiKeyButton({ workspaceTokens }: { workspaceTokens: SupportedTok
           </div>
         </div>
       )}
+
+      {showCreateWallet && (
+        <CreateWalletDialogForAgents 
+          onClose={() => setShowCreateWallet(false)}
+          onWalletCreated={(walletId) => {
+            setSelectedWalletId(walletId);
+            setShowCreateWallet(false);
+          }}
+        />
+      )}
     </>
   );
 }
 
+// ============================================
+// CREATE WALLET DIALOG (FOR AGENTS PAGE)
+// ============================================
+
+function CreateWalletDialogForAgents({
+  onClose,
+  onWalletCreated,
+}: {
+  onClose: () => void;
+  onWalletCreated: (walletId: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [network, setNetwork] = useState<MneeNetwork>("sandbox");
+  const [isCreating, setIsCreating] = useState(false);
+  const toast = useToast();
+  const generateWallet = useMutation(api.wallets.generateWallet);
+  const mneeNetworks = useQuery(api.mneeNetworks.listNetworks, { includeSandbox: true });
+  const wallets = useQuery(api.wallets.listWallets, {});
+
+  // Set default network when mneeNetworks loads
+  useEffect(() => {
+    if (mneeNetworks && mneeNetworks.length > 0) {
+      const sandbox = mneeNetworks.find(n => n.network === "sandbox");
+      if (sandbox) {
+        setNetwork(sandbox.network);
+      } else {
+        setNetwork(mneeNetworks[0].network);
+      }
+    }
+  }, [mneeNetworks]);
+
+  // Poll for the new wallet after creation
+  useEffect(() => {
+    if (isCreating && wallets) {
+      const newWallet = wallets.find(w => w.name === name.trim() && w.network === network);
+      if (newWallet) {
+        onWalletCreated(newWallet._id);
+        setIsCreating(false);
+      }
+    }
+  }, [wallets, isCreating, name, network, onWalletCreated]);
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+
+    setIsCreating(true);
+    try {
+      const result = await generateWallet({
+        name: name.trim(),
+        network,
+      });
+      toast.success(result.message);
+      // The useEffect will handle selecting the wallet once it appears
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to create wallet");
+      setIsCreating(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+      <div className="bg-[#111] border border-[#333] rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
+        <form onSubmit={handleCreate} className="space-y-4">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
+              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-white">
+              Create Wallet
+            </h3>
+          </div>
+
+          <div className="bg-[#1a1a1a] border border-[#333] rounded-lg p-3">
+            <p className="text-sm text-[#888]">
+              A new MNEE wallet will be automatically generated with a secure address and encrypted private key.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-[#888] mb-1">
+              Wallet Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g., Main Wallet, Dev Wallet"
+              className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
+              required
+              autoFocus
+              disabled={isCreating}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-[#888] mb-1">
+              Network <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={network}
+              onChange={(e) => setNetwork(e.target.value as MneeNetwork)}
+              className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white focus:outline-none focus:border-[#555]"
+              disabled={isCreating}
+            >
+              {mneeNetworks && mneeNetworks.length > 0 ? (
+                mneeNetworks.map((n) => (
+                  <option key={n._id} value={n.network}>
+                    {n.name}
+                  </option>
+                ))
+              ) : (
+                <>
+                  <option value="sandbox">MNEE Sandbox</option>
+                  <option value="mainnet">MNEE Mainnet</option>
+                </>
+              )}
+            </select>
+            <p className="text-xs text-[#666] mt-1">
+              Choose sandbox for testing or mainnet for production
+            </p>
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button
+              type="submit"
+              disabled={isCreating || !name.trim()}
+              className="flex-1 px-4 py-2.5 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isCreating ? "Generating..." : "Generate Wallet"}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isCreating}
+              className="flex-1 px-4 py-2.5 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// API KEYS LIST
+// ============================================
+
+type ApiKeyData = {
+  _id: Id<"apiKeys">;
+  name: string;
+  description?: string;
+  apiKeyPrefix: string;
+  type: "agent" | "provider";
+  walletId?: Id<"wallets">;
+  mneeNetwork?: MneeNetwork;
+  receivingAddress?: string;
+  receivingNetwork?: MneeNetwork;
+  createdByUserId: string;
+  lastUsedAt?: number;
+  expiresAt?: number;
+  isActive: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+
 function ApiKeysList({
   apiKeys,
   canManage,
-  workspaceTokens,
 }: {
   apiKeys: ApiKeyData[] | undefined;
   canManage: boolean;
-  workspaceTokens: SupportedToken[] | undefined;
 }) {
-  const updateApiKey = useMutation(api.apiKeys.updateApiKey);
+  const toast = useToast();
   const deleteApiKey = useMutation(api.apiKeys.deleteApiKey);
-  const [togglingId, setTogglingId] = useState<Id<"apiKeys"> | null>(null);
-  const [deletingId, setDeletingId] = useState<Id<"apiKeys"> | null>(null);
-  const [editingPolicyId, setEditingPolicyId] = useState<Id<"apiKeys"> | null>(null);
-  const [showingKeyId, setShowingKeyId] = useState<Id<"apiKeys"> | null>(null);
-  const [copiedKeyId, setCopiedKeyId] = useState<Id<"apiKeys"> | null>(null);
-  const fullApiKeyData = useQuery(
-    api.apiKeys.getApiKey,
-    showingKeyId ? { apiKeyId: showingKeyId } : "skip"
-  );
+  const updateApiKey = useMutation(api.apiKeys.updateApiKey);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  // Helper to get token symbol from address
-  const getTokenSymbol = (tokenAddress: string) => {
-    const token = workspaceTokens?.find(t => t.address.toLowerCase() === tokenAddress.toLowerCase());
-    return token?.symbol || tokenAddress.slice(0, 6) + "...";
+  const handleDelete = async (apiKeyId: string) => {
+    if (!confirm("Are you sure you want to delete this API key? This action cannot be undone.")) {
+      return;
+    }
+
+    setDeletingId(apiKeyId);
+    try {
+      await deleteApiKey({ apiKeyId: apiKeyId as Id<"apiKeys"> });
+      toast.success("API key deleted successfully");
+    } catch {
+      toast.error("Failed to delete API key");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleToggleActive = async (apiKey: ApiKeyData) => {
+    setTogglingId(apiKey._id);
+    try {
+      await updateApiKey({
+        apiKeyId: apiKey._id,
+        isActive: !apiKey.isActive,
+      });
+      toast.success(apiKey.isActive ? "API key deactivated" : "API key activated");
+    } catch {
+      toast.error("Failed to update API key");
+    } finally {
+      setTogglingId(null);
+    }
   };
 
   if (apiKeys === undefined) {
     return (
       <div className="space-y-4">
-        {[1, 2].map((i) => (
-          <div key={i} className="animate-pulse flex items-center gap-4 py-4">
-            <div className="w-12 h-12 bg-[#1a1a1a] rounded-xl" />
-            <div className="flex-1 space-y-2">
-              <div className="h-4 w-32 bg-[#1a1a1a] rounded" />
-              <div className="h-3 w-48 bg-[#1a1a1a] rounded" />
-            </div>
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="animate-pulse">
+            <div className="h-20 bg-[#1a1a1a] rounded-lg" />
           </div>
         ))}
       </div>
@@ -452,967 +702,371 @@ function ApiKeysList({
         <div className="w-16 h-16 rounded-2xl bg-[#1a1a1a] flex items-center justify-center mx-auto mb-4">
           <KeyIcon className="w-8 h-8 text-[#666]" />
         </div>
-        <p className="text-lg font-medium text-white">
-          No API keys yet
-        </p>
-        <p className="text-sm text-[#888] mt-1 max-w-sm mx-auto">
-          Create your first API key to connect your agents and SDKs to the x402 Gateway
+        <h3 className="text-lg font-medium text-white mb-2">No API Keys Yet</h3>
+        <p className="text-sm text-[#888] max-w-sm mx-auto">
+          Create your first API key to start using the x402 Gateway with your agents.
         </p>
       </div>
     );
   }
 
-  const handleToggle = async (apiKey: ApiKeyData) => {
-    setTogglingId(apiKey._id);
-    try {
-      await updateApiKey({
-        apiKeyId: apiKey._id,
-        isActive: !apiKey.isActive,
-      });
-    } finally {
-      setTogglingId(null);
-    }
-  };
-
-  const handleDelete = async (apiKey: ApiKeyData) => {
-    if (!confirm(`Are you sure you want to delete the API key "${apiKey.name}"? This cannot be undone.`)) {
-      return;
-    }
-    setDeletingId(apiKey._id);
-    try {
-      await deleteApiKey({ apiKeyId: apiKey._id });
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
-  const handleShowKey = (apiKeyId: Id<"apiKeys">) => {
-    setShowingKeyId(apiKeyId);
-  };
-
-  const handleHideKey = () => {
-    setShowingKeyId(null);
-  };
-
-  const handleCopyKey = async (apiKey: string, apiKeyId: Id<"apiKeys">) => {
-    await navigator.clipboard.writeText(apiKey);
-    setCopiedKeyId(apiKeyId);
-    setTimeout(() => setCopiedKeyId(null), 2000);
-  };
-
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
-
-  const formatRelativeTime = (timestamp: number) => {
-    const now = Date.now();
-    const diff = now - timestamp;
-    const minutes = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days = Math.floor(diff / 86400000);
-
-    if (minutes < 1) return "Just now";
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    if (days < 7) return `${days}d ago`;
-    return formatDate(timestamp);
-  };
+  return (
+    <div className="space-y-3">
+      {apiKeys.map((apiKey) => {
+        const isExpanded = expandedId === apiKey._id;
+        const isDeleting = deletingId === apiKey._id;
+        const isToggling = togglingId === apiKey._id;
 
   return (
-    <>
-      <div className="divide-y divide-[#333]">
-        {apiKeys.map((apiKey) => (
           <div
             key={apiKey._id}
-            className={`py-5 first:pt-0 last:pb-0 ${
-              !apiKey.isActive ? "opacity-60" : ""
+            className={`border rounded-xl transition-all ${
+              apiKey.isActive
+                ? "border-[#333] bg-[#0a0a0a]"
+                : "border-[#333]/50 bg-[#0a0a0a]/50 opacity-60"
             }`}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4 min-w-0 flex-1">
+            <div
+              className="flex items-center justify-between p-4 cursor-pointer"
+              onClick={() => setExpandedId(isExpanded ? null : apiKey._id)}
+            >
+              <div className="flex items-center gap-4 min-w-0">
                 <div
-                  className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                  className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                     apiKey.isActive
-                      ? "bg-emerald-900/50"
+                      ? "bg-gradient-to-br from-emerald-500/20 to-teal-600/20 border border-emerald-500/30"
                       : "bg-[#1a1a1a]"
                   }`}
                 >
                   <KeyIcon
-                    className={`w-6 h-6 ${
-                      apiKey.isActive
-                        ? "text-emerald-400"
-                        : "text-[#666]"
+                    className={`w-5 h-5 ${
+                      apiKey.isActive ? "text-emerald-400" : "text-[#666]"
                     }`}
                   />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-semibold text-white">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-white truncate">
                       {apiKey.name}
-                    </p>
-                    <span
-                      className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                        apiKey.isActive
-                          ? "bg-emerald-900/50 text-emerald-400"
-                          : "bg-[#1a1a1a] text-[#666]"
-                      }`}
-                    >
-                      {apiKey.isActive ? "Active" : "Disabled"}
-                    </span>
-                    {/* Payment Token Badge */}
-                    {apiKey.preferredPaymentToken ? (
-                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-blue-900/50 text-blue-400">
-                        {getTokenSymbol(apiKey.preferredPaymentToken)}
+                    </h3>
+                    {!apiKey.isActive && (
+                      <span className="px-2 py-0.5 text-xs font-medium bg-[#1a1a1a] text-[#666] rounded-full">
+                        Inactive
                       </span>
-                    ) : (
-                      <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-amber-900/50 text-amber-400">
-                        No token set
+                    )}
+                    {(apiKey.mneeNetwork || apiKey.receivingNetwork) && (
+                      <span className={`px-2 py-0.5 text-xs font-medium rounded-full capitalize ${
+                        (apiKey.mneeNetwork || apiKey.receivingNetwork) === "mainnet"
+                          ? "bg-emerald-900/50 text-emerald-400"
+                          : "bg-amber-900/50 text-amber-400"
+                      }`}>
+                        {apiKey.mneeNetwork || apiKey.receivingNetwork}
                       </span>
                     )}
                   </div>
-                  {showingKeyId === apiKey._id && fullApiKeyData ? (
-                    <div className="mt-2 bg-[#0a0a0a] border border-[#333] rounded-lg p-3">
-                      <div className="flex items-center justify-between gap-3 mb-2">
-                        <code className="text-xs font-mono text-white break-all flex-1">
-                          {fullApiKeyData.apiKey}
-                        </code>
-                        <button
-                          onClick={() => handleCopyKey(fullApiKeyData.apiKey, apiKey._id)}
-                          className="flex-shrink-0 p-1.5 text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors"
-                          title="Copy to clipboard"
-                        >
-                          {copiedKeyId === apiKey._id ? (
-                            <CheckIcon className="w-4 h-4 text-emerald-500" />
-                          ) : (
-                            <CopyIcon className="w-4 h-4" />
-                          )}
-                        </button>
+                  <p className="text-xs text-[#888] font-mono mt-1">
+                    {apiKey.apiKeyPrefix}...
+                  </p>
                       </div>
-                      <button
-                        onClick={handleHideKey}
-                        className="text-xs text-[#666] hover:text-white transition-colors"
-                      >
-                        Hide Key
-                      </button>
                     </div>
-                  ) : (
-                    <div className="flex items-center gap-2 mt-1 flex-wrap">
-                      <code className="text-xs font-mono text-[#666] bg-[#1a1a1a] px-2 py-0.5 rounded">
-                        {apiKey.apiKeyPrefix}
-                      </code>
-                      <button
-                        onClick={() => handleShowKey(apiKey._id)}
-                        className="text-xs text-[#666] hover:text-emerald-400 transition-colors"
-                      >
-                        Show Key
-                      </button>
-                      <span className="text-[#333]">•</span>
-                      <span className="text-xs text-[#666]">
-                        Created {formatDate(apiKey.createdAt)}
-                      </span>
-                      {apiKey.lastUsedAt && (
-                        <>
-                          <span className="text-[#333]">•</span>
-                          <span className="text-xs text-[#666]">
-                            Last used {formatRelativeTime(apiKey.lastUsedAt)}
-                          </span>
-                        </>
+              <div className="flex items-center gap-2">
+                {isExpanded ? (
+                  <ChevronUpIcon className="w-5 h-5 text-[#666]" />
+                ) : (
+                  <ChevronDownIcon className="w-5 h-5 text-[#666]" />
                       )}
                     </div>
-                  )}
+            </div>
+
+            {isExpanded && (
+              <div className="px-4 pb-4 pt-0 space-y-4 border-t border-[#333]">
                   {apiKey.description && (
-                    <p className="text-xs text-[#666] mt-1">
-                      {apiKey.description}
+                  <div className="pt-4">
+                    <p className="text-xs text-[#666] uppercase tracking-wider mb-1">Description</p>
+                    <p className="text-sm text-[#888]">{apiKey.description}</p>
+                  </div>
+                )}
+
+                {/* Show linked wallet info */}
+                {apiKey.walletId && (
+                  <div className="pt-4">
+                    <p className="text-xs text-[#666] uppercase tracking-wider mb-1">Linked Wallet</p>
+                    <WalletInfo walletId={apiKey.walletId} />
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4 pt-2">
+                  <div>
+                    <p className="text-xs text-[#666] uppercase tracking-wider mb-1">Created</p>
+                    <p className="text-sm text-[#888]">
+                      {new Date(apiKey.createdAt).toLocaleDateString()}
                     </p>
-                  )}
+                  </div>
+                  <div>
+                    <p className="text-xs text-[#666] uppercase tracking-wider mb-1">Last Used</p>
+                    <p className="text-sm text-[#888]">
+                      {apiKey.lastUsedAt
+                        ? new Date(apiKey.lastUsedAt).toLocaleDateString()
+                        : "Never"}
+                    </p>
                 </div>
               </div>
 
+                {/* Policy Editor */}
+                <PolicyEditor apiKeyId={apiKey._id} canManage={canManage} />
+
+                {/* Actions */}
               {canManage && (
-                <div className="flex items-center gap-2 flex-shrink-0 ml-4">
+                  <div className="flex items-center gap-2 pt-2 border-t border-[#333]">
                   <button
-                    onClick={() => setEditingPolicyId(apiKey._id)}
-                    className="px-3 py-1.5 text-xs font-medium rounded-lg text-blue-400 hover:bg-blue-900/30 transition-colors"
-                  >
-                    Spend Policy
-                  </button>
-                  <button
-                    onClick={() => handleToggle(apiKey)}
-                    disabled={togglingId === apiKey._id}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleActive(apiKey);
+                      }}
+                      disabled={isToggling}
                     className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 ${
                       apiKey.isActive
                         ? "text-amber-400 hover:bg-amber-900/30"
                         : "text-emerald-400 hover:bg-emerald-900/30"
                     }`}
                   >
-                    {togglingId === apiKey._id
+                      {isToggling
                       ? "..."
                       : apiKey.isActive
-                      ? "Disable"
-                      : "Enable"}
+                        ? "Deactivate"
+                        : "Activate"}
                   </button>
                   <button
-                    onClick={() => handleDelete(apiKey)}
-                    disabled={deletingId === apiKey._id}
-                    className="p-2 text-[#666] hover:text-red-400 rounded-lg hover:bg-[#1a1a1a] transition-colors disabled:opacity-50"
-                    title="Delete API key"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
-                    </svg>
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(apiKey._id);
+                      }}
+                      disabled={isDeleting}
+                      className="px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-900/30 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {isDeleting ? "Deleting..." : "Delete"}
                   </button>
                 </div>
               )}
             </div>
-            {/* Spend Policy Section */}
-            <SpendPolicySection apiKeyId={apiKey._id} canManage={canManage} />
+            )}
           </div>
-        ))}
+        );
+      })}
       </div>
-      {editingPolicyId && canManage && (
-        <SpendPolicyModal
-          apiKeyId={editingPolicyId}
-          onClose={() => setEditingPolicyId(null)}
-        />
-      )}
-    </>
   );
 }
 
 // ============================================
-// SPEND POLICY COMPONENTS
+// POLICY EDITOR
 // ============================================
 
-function SpendPolicySection({
+function PolicyEditor({
   apiKeyId,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   canManage,
 }: {
   apiKeyId: Id<"apiKeys">;
   canManage: boolean;
 }) {
-  const policyLimits = useQuery(api.apiKeys.listAgentPolicyLimits, { apiKeyId });
-  const chains = useQuery(api.chains.listSupportedChains, { includeTestnets: true });
-  const tokens = useQuery(api.tokens.listWorkspaceTokens, {});
   const policy = useQuery(api.apiKeys.getAgentPolicy, { apiKeyId });
-
-  if (policyLimits === undefined || chains === undefined || tokens === undefined || policy === undefined) {
-    return (
-      <div className="mt-4 pt-4 border-t border-[#333]">
-        <div className="animate-pulse h-4 w-32 bg-[#1a1a1a] rounded" />
-      </div>
-    );
-  }
-
-  // Show warning if no limits exist
-  if (!policyLimits || policyLimits.length === 0) {
-    return (
-      <div className="mt-4 pt-4 border-t border-[#333]">
-        <div className="bg-amber-900/20 border border-amber-800 rounded-xl p-4">
-          <div className="flex items-start gap-3">
-            <svg className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-amber-200">
-                No spending limits configured
-              </p>
-              <p className="text-xs text-amber-300/80 mt-1">
-                This agent has no spending limits set. Add per-chain/token limits to control spending for specific tokens.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mt-4 pt-4 border-t border-[#333]">
-      <div className="bg-[#0a0a0a] border border-[#333] rounded-xl p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h4 className="text-xs font-semibold text-white uppercase tracking-wide">
-            Spend Limits
-          </h4>
-          {policy && !policy.isActive && (
-            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-[#1a1a1a] text-[#666]">
-              Policy Inactive
-            </span>
-          )}
-        </div>
-        <div className="space-y-3">
-          {policyLimits.map((limit) => (
-            <LimitRowWithSpend
-              key={limit._id}
-              limit={limit}
-              chains={chains}
-              tokens={tokens}
-              apiKeyId={apiKeyId}
-            />
-          ))}
-        </div>
-        {/* Allowed Providers */}
-        {policy && policy.allowedProviders && policy.allowedProviders.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-[#333]">
-            <span className="text-xs text-[#888]">Allowed Providers: </span>
-            <span className="text-xs text-white">
-              {policy.allowedProviders.length} provider{policy.allowedProviders.length !== 1 ? "s" : ""}
-            </span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function LimitRowWithSpend({
-  limit,
-  chains,
-  tokens,
-  apiKeyId,
-}: {
-  limit: ChainTokenLimit;
-  chains: Array<{ chainId: number; name: string }> | undefined;
-  tokens: SupportedToken[] | undefined;
-  apiKeyId: Id<"apiKeys">;
-}) {
-  const chain = chains?.find((c) => c.chainId === limit.chainId);
-  const token = tokens?.find((t) => t.address.toLowerCase() === limit.tokenAddress.toLowerCase());
-  const spend = useQuery(api.usage.getAgentSpend, {
-    apiKeyId,
-    chainId: limit.chainId,
-    tokenAddress: limit.tokenAddress,
-  });
-
-  if (spend === undefined) {
-    return (
-      <div className="bg-[#111] border border-[#333] rounded-lg p-3">
-        <div className="animate-pulse h-4 w-32 bg-[#1a1a1a] rounded" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-[#111] border border-[#333] rounded-lg p-3">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-white">
-            {chain?.name || `Chain ${limit.chainId}`}
-          </span>
-          <span className="text-[#666]">•</span>
-          <span className="text-sm text-[#888]">
-            {token?.symbol || limit.tokenAddress.slice(0, 8) + "..."}
-          </span>
-          {!limit.isActive && (
-            <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-[#1a1a1a] text-[#666]">
-              Inactive
-            </span>
-          )}
-        </div>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {limit.dailyLimit !== undefined && (
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-[#888]">Daily</span>
-              <span className="text-xs text-white font-medium">
-                {spend.dailySpend.toFixed(6)} / {limit.dailyLimit.toFixed(6)}
-              </span>
-            </div>
-            <div className="w-full bg-[#1a1a1a] rounded-full h-1.5">
-              <div
-                className={`h-1.5 rounded-full ${
-                  spend.dailySpend >= limit.dailyLimit
-                    ? "bg-red-500"
-                    : spend.dailySpend >= limit.dailyLimit * 0.8
-                    ? "bg-amber-500"
-                    : "bg-emerald-500"
-                }`}
-                style={{
-                  width: `${Math.min((spend.dailySpend / limit.dailyLimit) * 100, 100)}%`,
-                }}
-              />
-            </div>
-          </div>
-        )}
-        {limit.monthlyLimit !== undefined && (
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-[#888]">Monthly</span>
-              <span className="text-xs text-white font-medium">
-                {spend.monthlySpend.toFixed(6)} / {limit.monthlyLimit.toFixed(6)}
-              </span>
-            </div>
-            <div className="w-full bg-[#1a1a1a] rounded-full h-1.5">
-              <div
-                className={`h-1.5 rounded-full ${
-                  spend.monthlySpend >= limit.monthlyLimit
-                    ? "bg-red-500"
-                    : spend.monthlySpend >= limit.monthlyLimit * 0.8
-                    ? "bg-amber-500"
-                    : "bg-emerald-500"
-                }`}
-                style={{
-                  width: `${Math.min((spend.monthlySpend / limit.monthlyLimit) * 100, 100)}%`,
-                }}
-              />
-            </div>
-          </div>
-        )}
-        {limit.maxRequest !== undefined && (
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-[#888]">Max Request</span>
-              <span className="text-xs text-white font-medium">
-                {limit.maxRequest.toFixed(6)}
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function SpendPolicyModal({
-  apiKeyId,
-  onClose,
-}: {
-  apiKeyId: Id<"apiKeys">;
-  onClose: () => void;
-}) {
-  const policy = useQuery(api.apiKeys.getAgentPolicy, { apiKeyId });
-  const policyLimits = useQuery(api.apiKeys.listAgentPolicyLimits, { apiKeyId });
-  const chains = useQuery(api.chains.listSupportedChains, { includeTestnets: true });
-  const workspaceTokens = useQuery(api.tokens.listWorkspaceTokens, {});
-  const providers = useQuery(api.gateway.listProviders);
-  const createPolicy = useMutation(api.apiKeys.createAgentPolicy);
-  const updatePolicy = useMutation(api.apiKeys.updateAgentPolicy);
-  const deletePolicy = useMutation(api.apiKeys.deleteAgentPolicy);
-  const upsertLimit = useMutation(api.apiKeys.upsertAgentPolicyLimit);
-  const deleteLimit = useMutation(api.apiKeys.deleteAgentPolicyLimit);
+  const upsertPolicy = useMutation(api.apiKeys.upsertAgentPolicy);
   const toast = useToast();
 
-  const [allowedProviders, setAllowedProviders] = useState<Id<"providers">[]>([]);
-  const [isActive, setIsActive] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [dailyLimit, setDailyLimit] = useState("");
+  const [monthlyLimit, setMonthlyLimit] = useState("");
+  const [maxRequest, setMaxRequest] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
 
-  // Initialize form with existing policy
   useEffect(() => {
     if (policy) {
-      setAllowedProviders(policy.allowedProviders || []);
-      setIsActive(policy.isActive);
+      setDailyLimit(policy.dailyLimit?.toString() ?? "");
+      setMonthlyLimit(policy.monthlyLimit?.toString() ?? "");
+      setMaxRequest(policy.maxRequest?.toString() ?? "");
     }
   }, [policy]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSave = async () => {
     setIsSaving(true);
     try {
-      const args = {
+      await upsertPolicy({
         apiKeyId,
-        allowedProviders: allowedProviders.length > 0 ? allowedProviders : undefined,
-        isActive,
-      };
-
-      if (policy) {
-        await updatePolicy(args);
-      } else {
-        await createPolicy(args);
-      }
-      toast.success("Policy updated successfully");
-      onClose();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to save policy");
+        dailyLimit: dailyLimit ? parseFloat(dailyLimit) : undefined,
+        monthlyLimit: monthlyLimit ? parseFloat(monthlyLimit) : undefined,
+        maxRequest: maxRequest ? parseFloat(maxRequest) : undefined,
+        isActive: true,
+      });
+      toast.success("Policy saved successfully");
+      setIsEditing(false);
+    } catch {
+      toast.error("Failed to save policy");
     } finally {
       setIsSaving(false);
     }
   };
 
-  const handleDelete = async () => {
-    if (!policy) return;
-    if (!confirm("Are you sure you want to delete this policy? This will allow unlimited spending.")) {
-      return;
-    }
-    setIsDeleting(true);
-    try {
-      await deletePolicy({ apiKeyId });
-      toast.success("Policy deleted successfully");
-      onClose();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to delete policy");
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const toggleProvider = (providerId: Id<"providers">) => {
-    setAllowedProviders((prev) =>
-      prev.includes(providerId)
-        ? prev.filter((id) => id !== providerId)
-        : [...prev, providerId]
-    );
-  };
-
+  if (policy === undefined) {
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-[#111] border border-[#333] rounded-2xl p-6 w-full max-w-3xl shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h3 className="text-lg font-semibold text-white">
-              Spend Limits & Policy
-            </h3>
-            <p className="text-sm text-[#888] mt-1">
-              Configure per-chain/token spending limits and provider restrictions
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            className="text-[#666] hover:text-white transition-colors"
-          >
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="space-y-6">
-          {/* Policy Active Toggle */}
-          <div className="flex items-center justify-between p-4 bg-[#0a0a0a] border border-[#333] rounded-xl">
-            <div>
-              <label className="text-sm font-medium text-white">Policy Active</label>
-              <p className="text-xs text-[#888] mt-1">
-                When inactive, all requests will be allowed regardless of limits
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsActive(!isActive)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                isActive ? "bg-emerald-500" : "bg-[#333]"
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  isActive ? "translate-x-6" : "translate-x-1"
-                }`}
-              />
-            </button>
-          </div>
-
-          {/* Per-Chain/Token Limits Section */}
-          <div>
-            <div className="mb-4">
-              <h4 className="text-sm font-semibold text-white mb-1">Per-Chain/Token Limits</h4>
-              <p className="text-xs text-[#666]">
-                Set spending limits for specific chain and token combinations. Limits are enforced per token, so you can have different limits for USDC vs ETH, etc.
-              </p>
-            </div>
-
-            {/* Existing Limits List */}
-            {policyLimits && policyLimits.length > 0 && (
-              <div className="space-y-2 mb-4">
-                {policyLimits.map((limit) => (
-                  <ChainTokenLimitRow
-                    key={limit._id}
-                    limit={limit}
-                    chains={chains}
-                    tokens={workspaceTokens}
-                    onDelete={async () => {
-                      try {
-                        await deleteLimit({ limitId: limit._id });
-                        toast.success("Limit deleted successfully");
-                      } catch (error) {
-                        toast.error(error instanceof Error ? error.message : "Failed to delete limit");
-                      }
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Add New Limit Form */}
-            <AddChainTokenLimitForm
-              chains={chains}
-              tokens={workspaceTokens}
-              onAdd={async (chainId, tokenAddress, dailyLimit, monthlyLimit, maxRequest) => {
-                try {
-                  await upsertLimit({
-                    apiKeyId,
-                    chainId,
-                    tokenAddress,
-                    dailyLimit: dailyLimit ? parseFloat(dailyLimit) : undefined,
-                    monthlyLimit: monthlyLimit ? parseFloat(monthlyLimit) : undefined,
-                    maxRequest: maxRequest ? parseFloat(maxRequest) : undefined,
-                    isActive: true,
-                  });
-                  toast.success("Limit added successfully");
-                } catch (error) {
-                  toast.error(error instanceof Error ? error.message : "Failed to add limit");
-                }
-              }}
-            />
-          </div>
-
-          {/* Allowed Providers */}
-          <div>
-            <label className="block text-sm font-medium text-white mb-2">
-              Allowed Providers <span className="text-[#666]">(optional)</span>
-            </label>
-            {providers && providers.length > 0 ? (
-              <div className="border border-[#333] rounded-xl bg-[#0a0a0a] p-3 max-h-48 overflow-y-auto">
-                {providers.map((provider) => (
-                  <label
-                    key={provider._id}
-                    className="flex items-center gap-3 p-2 hover:bg-[#1a1a1a] rounded-lg cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={allowedProviders.includes(provider._id)}
-                      onChange={() => toggleProvider(provider._id)}
-                      className="w-4 h-4 rounded border-[#333] bg-[#0a0a0a] text-emerald-500 focus:ring-emerald-500"
-                    />
-                    <div className="flex-1">
-                      <p className="text-sm text-white">{provider.name}</p>
-                      <p className="text-xs text-[#666]">{provider.host}</p>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            ) : (
-              <div className="border border-[#333] rounded-xl bg-[#0a0a0a] p-4 text-center">
-                <p className="text-sm text-[#666]">
-                  No providers found. Providers will be created automatically when payments are made.
-                </p>
-              </div>
-            )}
-            <p className="text-xs text-[#666] mt-2">
-              If specified, only payments to these providers will be allowed. Leave empty to allow all providers.
-            </p>
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-3 pt-4 border-t border-[#333]">
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={isSaving}
-              className="flex-1 px-4 py-3 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isSaving ? "Saving..." : policy ? "Update Policy" : "Create Policy"}
-            </button>
-            {policy && (
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={isDeleting}
-                className="px-4 py-3 text-sm font-medium text-red-400 hover:bg-red-900/30 rounded-xl transition-colors disabled:opacity-50"
-              >
-                {isDeleting ? "Deleting..." : "Delete"}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-3 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-xl transition-colors"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      </div>
+      <div className="pt-4">
+        <div className="h-20 bg-[#1a1a1a] rounded-lg animate-pulse" />
     </div>
   );
 }
 
-// Per-chain/token limit components
-type ChainTokenLimit = {
-  _id: Id<"agentPolicyLimits">;
-  chainId: number;
-  tokenAddress: string;
-  dailyLimit?: number;
-  monthlyLimit?: number;
-  maxRequest?: number;
-  isActive: boolean;
-};
-
-function ChainTokenLimitRow({
-  limit,
-  chains,
-  tokens,
-  onDelete,
-}: {
-  limit: ChainTokenLimit;
-  chains: Array<{ chainId: number; name: string }> | undefined;
-  tokens: SupportedToken[] | undefined;
-  onDelete: () => void;
-}) {
-  const chain = chains?.find((c) => c.chainId === limit.chainId);
-  const token = tokens?.find((t) => t.address.toLowerCase() === limit.tokenAddress.toLowerCase());
-
-  return (
-    <div className="bg-[#0a0a0a] border border-[#333] rounded-xl p-4">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-sm font-medium text-white">
-              {chain?.name || `Chain ${limit.chainId}`}
-            </span>
-            <span className="text-[#666]">•</span>
-            <span className="text-sm text-[#888]">
-              {token?.symbol || limit.tokenAddress.slice(0, 8) + "..."}
-            </span>
-            {!limit.isActive && (
-              <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-[#1a1a1a] text-[#666]">
-                Inactive
-              </span>
-            )}
-          </div>
-          <div className="grid grid-cols-3 gap-3 text-xs">
-            {limit.dailyLimit !== undefined && (
-              <div>
-                <span className="text-[#666]">Daily: </span>
-                <span className="text-white">{limit.dailyLimit.toFixed(6)}</span>
-              </div>
-            )}
-            {limit.monthlyLimit !== undefined && (
-              <div>
-                <span className="text-[#666]">Monthly: </span>
-                <span className="text-white">{limit.monthlyLimit.toFixed(6)}</span>
-              </div>
-            )}
-            {limit.maxRequest !== undefined && (
-              <div>
-                <span className="text-[#666]">Max Request: </span>
-                <span className="text-white">{limit.maxRequest.toFixed(6)}</span>
-              </div>
-            )}
-          </div>
-        </div>
-        <button
-          onClick={onDelete}
-          className="p-2 text-[#666] hover:text-red-400 rounded-lg hover:bg-[#1a1a1a] transition-colors"
-          title="Delete limit"
-        >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-            />
-          </svg>
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function AddChainTokenLimitForm({
-  chains,
-  tokens,
-  onAdd,
-}: {
-  chains: Array<{ chainId: number; name: string }> | undefined;
-  tokens: SupportedToken[] | undefined;
-  onAdd: (chainId: number, tokenAddress: string, dailyLimit: string, monthlyLimit: string, maxRequest: string) => Promise<void>;
-}) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [selectedChainId, setSelectedChainId] = useState<number | null>(null);
-  const [selectedTokenAddress, setSelectedTokenAddress] = useState<string>("");
-  const [dailyLimit, setDailyLimit] = useState<string>("");
-  const [monthlyLimit, setMonthlyLimit] = useState<string>("");
-  const [maxRequest, setMaxRequest] = useState<string>("");
-  const [isAdding, setIsAdding] = useState(false);
-
-  // Filter tokens by selected chain
-  const availableTokens = selectedChainId
-    ? tokens?.filter((t) => t.chainId === selectedChainId)
-    : [];
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedChainId || !selectedTokenAddress) return;
-
-    setIsAdding(true);
-    try {
-      await onAdd(selectedChainId, selectedTokenAddress, dailyLimit, monthlyLimit, maxRequest);
-      // Reset form
-      setSelectedChainId(null);
-      setSelectedTokenAddress("");
-      setDailyLimit("");
-      setMonthlyLimit("");
-      setMaxRequest("");
-      setIsExpanded(false);
-    } catch {
-      // Error already handled in onAdd
-    } finally {
-      setIsAdding(false);
-    }
-  };
-
-  if (!isExpanded) {
     return (
-      <button
-        type="button"
-        onClick={() => setIsExpanded(true)}
-        className="w-full px-4 py-2 text-sm font-medium text-blue-400 hover:bg-blue-900/30 border border-[#333] rounded-xl transition-colors"
-      >
-        + Add Chain/Token Limit
-      </button>
-    );
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="bg-[#0a0a0a] border border-[#333] rounded-xl p-4 space-y-4">
+    <div className="pt-4 space-y-3">
       <div className="flex items-center justify-between">
-        <h5 className="text-sm font-medium text-white">Add New Limit</h5>
+        <h4 className="text-sm font-medium text-white">Spending Limits</h4>
+        {canManage && !isEditing && (
         <button
-          type="button"
-          onClick={() => setIsExpanded(false)}
-          className="text-[#666] hover:text-white"
+            onClick={() => setIsEditing(true)}
+            className="text-xs text-[#888] hover:text-white transition-colors"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
+            Edit
         </button>
+        )}
       </div>
 
-      {/* Chain Selection */}
-      <div>
-        <label className="block text-xs font-medium text-[#888] mb-2">
-          Chain <span className="text-red-500">*</span>
-        </label>
-        <select
-          value={selectedChainId || ""}
-          onChange={(e) => {
-            setSelectedChainId(parseInt(e.target.value));
-            setSelectedTokenAddress(""); // Reset token when chain changes
-          }}
-          className="w-full px-4 py-2 border border-[#333] rounded-xl bg-[#111] text-white focus:outline-none focus:border-[#555]"
-          required
-        >
-          <option value="">Select a chain</option>
-          {chains?.map((chain) => (
-            <option key={chain.chainId} value={chain.chainId}>
-              {chain.name} ({chain.chainId})
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Token Selection */}
-      {selectedChainId && (
-        <div>
-          <label className="block text-xs font-medium text-[#888] mb-2">
-            Token <span className="text-red-500">*</span>
-          </label>
-          <select
-            value={selectedTokenAddress}
-            onChange={(e) => setSelectedTokenAddress(e.target.value)}
-            className="w-full px-4 py-2 border border-[#333] rounded-xl bg-[#111] text-white focus:outline-none focus:border-[#555]"
-            required
-          >
-            <option value="">Select a token</option>
-            {availableTokens?.map((token) => (
-              <option key={token._id} value={token.address}>
-                {token.symbol} - {token.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {/* Limits */}
+      {isEditing ? (
+        <div className="space-y-3 bg-[#1a1a1a] rounded-lg p-4">
       <div className="grid grid-cols-3 gap-3">
         <div>
-          <label className="block text-xs font-medium text-[#888] mb-2">Daily Limit</label>
+              <label className="block text-xs text-[#666] mb-1">Daily Limit (MNEE)</label>
           <input
             type="number"
-            step="any"
             value={dailyLimit}
             onChange={(e) => setDailyLimit(e.target.value)}
-            placeholder="Optional"
-            className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#111] text-white placeholder-[#666] focus:outline-none focus:border-[#555] text-sm"
+                placeholder="No limit"
+                className="w-full px-3 py-2 text-sm border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-[#888] mb-2">Monthly Limit</label>
+              <label className="block text-xs text-[#666] mb-1">Monthly Limit (MNEE)</label>
           <input
             type="number"
-            step="any"
             value={monthlyLimit}
             onChange={(e) => setMonthlyLimit(e.target.value)}
-            placeholder="Optional"
-            className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#111] text-white placeholder-[#666] focus:outline-none focus:border-[#555] text-sm"
+                placeholder="No limit"
+                className="w-full px-3 py-2 text-sm border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-[#888] mb-2">Max Request</label>
+              <label className="block text-xs text-[#666] mb-1">Max Request (MNEE)</label>
           <input
             type="number"
-            step="any"
             value={maxRequest}
             onChange={(e) => setMaxRequest(e.target.value)}
-            placeholder="Optional"
-            className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#111] text-white placeholder-[#666] focus:outline-none focus:border-[#555] text-sm"
+                placeholder="No limit"
+                className="w-full px-3 py-2 text-sm border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
           />
         </div>
       </div>
-
-      <div className="flex gap-2">
+          <div className="flex items-center gap-2 pt-2">
         <button
-          type="submit"
-          disabled={isAdding || !selectedChainId || !selectedTokenAddress}
-          className="flex-1 px-4 py-2 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isAdding ? "Adding..." : "Add Limit"}
+              onClick={handleSave}
+              disabled={isSaving}
+              className="px-3 py-1.5 text-xs font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+            >
+              {isSaving ? "Saving..." : "Save"}
         </button>
         <button
-          type="button"
-          onClick={() => setIsExpanded(false)}
-          className="px-4 py-2 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-xl transition-colors"
+              onClick={() => setIsEditing(false)}
+              className="px-3 py-1.5 text-xs font-medium text-[#888] hover:text-white transition-colors"
         >
           Cancel
         </button>
       </div>
-    </form>
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-[#1a1a1a] rounded-lg p-3">
+            <p className="text-xs text-[#666] mb-1">Daily</p>
+            <p className="text-sm text-white font-medium">
+              {policy?.dailyLimit
+                ? `${policy.dailyLimit.toLocaleString()} MNEE`
+                : "No limit"}
+            </p>
+          </div>
+          <div className="bg-[#1a1a1a] rounded-lg p-3">
+            <p className="text-xs text-[#666] mb-1">Monthly</p>
+            <p className="text-sm text-white font-medium">
+              {policy?.monthlyLimit
+                ? `${policy.monthlyLimit.toLocaleString()} MNEE`
+                : "No limit"}
+            </p>
+          </div>
+          <div className="bg-[#1a1a1a] rounded-lg p-3">
+            <p className="text-xs text-[#666] mb-1">Per Request</p>
+            <p className="text-sm text-white font-medium">
+              {policy?.maxRequest
+                ? `${policy.maxRequest.toLocaleString()} MNEE`
+                : "No limit"}
+            </p>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
+
+// ============================================
+// WALLET INFO COMPONENT
+// ============================================
+
+function WalletInfo({ walletId }: { walletId: Id<"wallets"> }) {
+  const wallet = useQuery(api.wallets.getWallet, { walletId });
+
+  if (!wallet) {
+    return (
+      <div className="bg-[#1a1a1a] rounded-lg p-3 animate-pulse">
+        <div className="h-4 bg-[#333] rounded w-32"></div>
+      </div>
+    );
+  }
+
+  const isMainnet = wallet.network === "mainnet";
+
+  return (
+    <div className="bg-[#1a1a1a] rounded-lg p-3 border border-[#333]">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-white">{wallet.name}</p>
+          <p className="text-xs text-[#666] font-mono mt-1">{wallet.address}</p>
+        </div>
+        <span className={`px-2 py-0.5 text-xs font-medium rounded-full capitalize ${
+          isMainnet 
+            ? "bg-emerald-900/50 text-emerald-400" 
+            : "bg-amber-900/50 text-amber-400"
+        }`}>
+          {wallet.network}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// LOADING SKELETON
+// ============================================
 
 function LoadingSkeleton() {
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="h-4 w-32 bg-[#1a1a1a] rounded animate-pulse mb-6" />
-        <div className="flex items-center gap-4 mb-8">
-          <div className="w-14 h-14 bg-[#1a1a1a] rounded-2xl animate-pulse" />
-          <div className="space-y-2">
-            <div className="h-6 w-48 bg-[#1a1a1a] rounded animate-pulse" />
-            <div className="h-4 w-64 bg-[#1a1a1a] rounded animate-pulse" />
+        <div className="h-8 w-32 bg-[#1a1a1a] rounded mb-8 animate-pulse" />
+        <div className="flex items-start justify-between mb-8">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-[#1a1a1a] animate-pulse" />
+            <div>
+              <div className="h-7 w-48 bg-[#1a1a1a] rounded animate-pulse" />
+              <div className="h-4 w-64 bg-[#1a1a1a] rounded animate-pulse mt-2" />
+            </div>
           </div>
         </div>
         <div className="bg-[#111] rounded-xl border border-[#333] p-6">
-          <div className="h-6 w-32 bg-[#1a1a1a] rounded animate-pulse mb-6" />
           <div className="space-y-4">
-            {[1, 2].map((i) => (
-              <div key={i} className="animate-pulse flex items-center gap-4">
-                <div className="w-12 h-12 bg-[#1a1a1a] rounded-xl" />
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 w-32 bg-[#1a1a1a] rounded" />
-                  <div className="h-3 w-48 bg-[#1a1a1a] rounded" />
-                </div>
-              </div>
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-20 bg-[#1a1a1a] rounded-lg animate-pulse" />
             ))}
           </div>
         </div>

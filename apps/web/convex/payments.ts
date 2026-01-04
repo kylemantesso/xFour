@@ -9,6 +9,7 @@ import { getCurrentWorkspaceContext, requireRole, ALL_ROLES } from "./lib/auth";
 export const getActivityTimeline = query({
   args: {
     windowSeconds: v.optional(v.number()), // default 60
+    network: v.optional(v.union(v.literal("sandbox"), v.literal("mainnet"))), // filter by network
   },
   handler: async (ctx, args) => {
     const { workspaceId, role } = await getCurrentWorkspaceContext(ctx);
@@ -25,15 +26,15 @@ export const getActivityTimeline = query({
       .order("desc")
       .take(100);
 
-    // Filter to only payments in the window and map to timeline events
+    // Filter to only payments in the window, by network, and map to timeline events
     const events = payments
       .filter((p) => p.createdAt >= windowStart)
+      .filter((p) => !args.network || p.network === args.network)
       .map((p) => ({
         id: p._id,
         timestamp: p.createdAt,
         status: p.status,
-        amount: p.treasuryAmount,
-        // Normalize amount for height (we'll calculate max on frontend)
+        amount: p.amount,
       }));
 
     // Count by status for stats
@@ -60,7 +61,7 @@ export const getActivityTimeline = query({
 });
 
 /**
- * List payments for the current workspace
+ * List payments for the current workspace (MNEE-only)
  */
 export const listPayments = query({
   args: {
@@ -95,7 +96,7 @@ export const listPayments = query({
       ? payments.filter((p) => p.status === args.status)
       : payments;
 
-    // Get API key names and token details for each payment
+    // Get API key names for each payment
     const paymentsWithDetails = await Promise.all(
       filteredPayments.map(async (payment) => {
         const apiKey = await ctx.db.get(payment.apiKeyId);
@@ -103,35 +104,10 @@ export const listPayments = query({
           ? await ctx.db.get(payment.providerId)
           : null;
 
-        // Look up token symbols
-        let treasuryTokenSymbol: string | null = null;
-        let paidTokenSymbol: string | null = null;
-
-        if (payment.paymentToken) {
-          const treasuryToken = await ctx.db
-            .query("supportedTokens")
-            .withIndex("by_address", (q) => q.eq("address", payment.paymentToken!))
-            .first();
-          treasuryTokenSymbol = treasuryToken?.symbol ?? null;
-        }
-
-        if (payment.swapBuyToken) {
-          const paidToken = await ctx.db
-            .query("supportedTokens")
-            .withIndex("by_address", (q) => q.eq("address", payment.swapBuyToken!))
-            .first();
-          paidTokenSymbol = paidToken?.symbol ?? null;
-        }
-
         return {
           ...payment,
           apiKeyName: apiKey?.name ?? "Unknown",
           providerName: provider?.name ?? payment.providerHost,
-          // Token info
-          treasuryTokenSymbol: treasuryTokenSymbol ?? payment.originalCurrency,
-          paidTokenSymbol: paidTokenSymbol ?? payment.originalCurrency,
-          // Was there a swap?
-          hadSwap: !!payment.swapTxHash,
         };
       })
     );
@@ -141,7 +117,7 @@ export const listPayments = query({
 });
 
 /**
- * Get payment statistics for the current workspace
+ * Get payment statistics for the current workspace (MNEE-only)
  */
 export const getPaymentStats = query({
   args: {},
@@ -155,97 +131,42 @@ export const getPaymentStats = query({
       .collect();
 
     const totalPayments = payments.length;
-    const settledPayments = payments.filter((p) => p.status === "settled");
+    const settledPayments = payments.filter(
+      (p) => p.status === "settled" || p.status === "completed"
+    );
     const deniedPayments = payments.filter((p) => p.status === "denied");
-    const totalSpent = settledPayments.reduce((sum, p) => sum + p.treasuryAmount, 0);
+    const totalSpent = settledPayments.reduce((sum, p) => sum + p.amount, 0);
 
     // Get payments from last 24 hours
     const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
     const recentPayments = payments.filter((p) => p.createdAt > oneDayAgo);
     const recentSpent = recentPayments
-      .filter((p) => p.status === "settled")
-      .reduce((sum, p) => sum + p.treasuryAmount, 0);
+      .filter((p) => p.status === "settled" || p.status === "completed")
+      .reduce((sum, p) => sum + p.amount, 0);
 
-    // Calculate spend per token (from treasury)
-    const spendByToken: Record<string, { amount: number; count: number }> = {};
+    // Network breakdown
+    const spendByNetwork: Record<string, { amount: number; count: number }> = {};
     for (const payment of settledPayments) {
-      const tokenAddress = payment.paymentToken ?? "unknown";
-      if (!spendByToken[tokenAddress]) {
-        spendByToken[tokenAddress] = { amount: 0, count: 0 };
+      const network = payment.network;
+      if (!spendByNetwork[network]) {
+        spendByNetwork[network] = { amount: 0, count: 0 };
       }
-      // For swaps, use the sell amount (what left the treasury)
-      const spentAmount = payment.swapSellAmount ?? payment.treasuryAmount;
-      spendByToken[tokenAddress].amount += spentAmount;
-      spendByToken[tokenAddress].count += 1;
+      spendByNetwork[network].amount += payment.amount;
+      spendByNetwork[network].count += 1;
     }
-
-    // Look up token symbols
-    const spendByTokenWithSymbols = await Promise.all(
-      Object.entries(spendByToken).map(async ([address, data]) => {
-        let symbol = "UNKNOWN";
-        if (address !== "unknown") {
-          const token = await ctx.db
-            .query("supportedTokens")
-            .withIndex("by_address", (q) => q.eq("address", address))
-            .first();
-          symbol = token?.symbol ?? "UNKNOWN";
-        }
-        return {
-          address,
-          symbol,
-          amount: Math.round(data.amount * 1000000) / 1000000,
-          count: data.count,
-        };
-      })
-    );
-
-    // Calculate paid tokens (what providers received)
-    const paidByToken: Record<string, { amount: number; count: number }> = {};
-    for (const payment of settledPayments) {
-      // If there was a swap, use the buy token; otherwise use payment token
-      const tokenAddress = payment.swapBuyToken ?? payment.paymentToken ?? "unknown";
-      if (!paidByToken[tokenAddress]) {
-        paidByToken[tokenAddress] = { amount: 0, count: 0 };
-      }
-      // For swaps, use the buy amount (what was paid out)
-      const paidAmount = payment.swapBuyAmount ?? payment.treasuryAmount;
-      paidByToken[tokenAddress].amount += paidAmount;
-      paidByToken[tokenAddress].count += 1;
-    }
-
-    const paidByTokenWithSymbols = await Promise.all(
-      Object.entries(paidByToken).map(async ([address, data]) => {
-        let symbol = "UNKNOWN";
-        if (address !== "unknown") {
-          const token = await ctx.db
-            .query("supportedTokens")
-            .withIndex("by_address", (q) => q.eq("address", address))
-            .first();
-          symbol = token?.symbol ?? "UNKNOWN";
-        }
-        return {
-          address,
-          symbol,
-          amount: Math.round(data.amount * 1000000) / 1000000,
-          count: data.count,
-        };
-      })
-    );
-
-    // Count swaps
-    const swapCount = settledPayments.filter((p) => !!p.swapTxHash).length;
 
     return {
       totalPayments,
       settledCount: settledPayments.length,
       deniedCount: deniedPayments.length,
-      totalSpent: Math.round(totalSpent * 1000000) / 1000000,
+      totalSpent: Math.round(totalSpent * 100000) / 100000, // 5 decimal places for MNEE
       recentPayments: recentPayments.length,
-      recentSpent: Math.round(recentSpent * 1000000) / 1000000,
-      // Token breakdowns
-      spendByToken: spendByTokenWithSymbols,
-      paidByToken: paidByTokenWithSymbols,
-      swapCount,
+      recentSpent: Math.round(recentSpent * 100000) / 100000,
+      spendByNetwork: Object.entries(spendByNetwork).map(([network, data]) => ({
+        network,
+        amount: Math.round(data.amount * 100000) / 100000,
+        count: data.count,
+      })),
     };
   },
 });
@@ -256,7 +177,7 @@ export const getPaymentStats = query({
 // ============================================
 
 /**
- * Get platform-wide public statistics
+ * Get platform-wide public statistics (MNEE-only)
  * No authentication required - for landing page
  */
 export const getPublicStats = query({
@@ -280,7 +201,7 @@ export const getPublicStats = query({
     );
     const settledCount = settledPayments.length;
     const totalVolume = settledPayments.reduce(
-      (sum, p) => sum + p.treasuryAmount,
+      (sum, p) => sum + p.amount,
       0
     );
 
@@ -308,30 +229,31 @@ export const getPublicStats = query({
       (p) => p.status === "settled" || p.status === "completed"
     );
     const last24hVolume = recentSettled.reduce(
-      (sum, p) => sum + p.treasuryAmount,
+      (sum, p) => sum + p.amount,
       0
     );
 
     return {
       totalPayments,
       settledPayments: settledCount,
-      totalVolume: Math.round(totalVolume * 10000) / 10000,
+      totalVolume: Math.round(totalVolume * 100000) / 100000,
       activeWorkspaces,
       successRate: Math.round(successRate * 10) / 10,
       last24hPayments: recentPayments.length,
-      last24hVolume: Math.round(last24hVolume * 10000) / 10000,
+      last24hVolume: Math.round(last24hVolume * 100000) / 100000,
     };
   },
 });
 
 /**
- * Get public real-time activity timeline
+ * Get public real-time activity timeline (MNEE-only)
  * No authentication required - for landing page
  * Returns anonymized data (no workspace/user info)
  */
 export const getPublicActivityTimeline = query({
   args: {
     windowSeconds: v.optional(v.number()), // default 60
+    network: v.optional(v.union(v.literal("sandbox"), v.literal("mainnet"))), // filter by network
   },
   returns: v.object({
     events: v.array(
@@ -363,14 +285,15 @@ export const getPublicActivityTimeline = query({
       .order("desc")
       .take(200);
 
-    // Filter to only payments in the window and map to anonymized timeline events
+    // Filter to only payments in the window, by network, and map to anonymized timeline events
     const events = payments
       .filter((p) => p.createdAt >= windowStart)
+      .filter((p) => !args.network || p.network === args.network)
       .map((p) => ({
         id: p._id,
         timestamp: p.createdAt,
         status: p.status,
-        amount: p.treasuryAmount,
+        amount: p.amount,
       }));
 
     // Count by status for stats

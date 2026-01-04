@@ -1,7 +1,10 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { Id } from "../../convex/_generated/dataModel";
 import { useToast } from "../../components/Toast";
 
 // Types for our demo
@@ -19,34 +22,42 @@ interface Step {
 
 interface LogEntry {
   id: string;
-  type: "info" | "request" | "response" | "error" | "success" | "swap";
+  type: "info" | "request" | "response" | "error" | "success";
   message: string;
   data?: Record<string, unknown> | null;
   timestamp: number;
 }
 
-// Common test tokens
-const PRESET_TOKENS = [
-  { symbol: "USDC", name: "USD Coin", description: "Request USDC - triggers swap if treasury has different token" },
-  { symbol: "MNEE", name: "MNEE", description: "Request MNEE - no swap if treasury has MNEE" },
-];
-
+// MNEE-only networks
 const PRESET_NETWORKS = [
-  { key: "localhost", name: "Localhost (31337)", description: "Local Hardhat node" },
-  { key: "base-sepolia", name: "Base Sepolia", description: "Base testnet" },
-  { key: "base", name: "Base Mainnet", description: "Production" },
+  { key: "mnee-sandbox", name: "MNEE Sandbox", description: "MNEE testnet" },
+  { key: "mnee-mainnet", name: "MNEE Mainnet", description: "MNEE production" },
 ];
 
 export default function SDKDemoPage() {
   const [apiKey, setApiKey] = useState("");
-  const [providerCurrency, setProviderCurrency] = useState("USDC");
+  const [selectedApiKeyId, setSelectedApiKeyId] = useState<Id<"apiKeys"> | "">("");
   const [providerAmount, setProviderAmount] = useState("0.50");
-  const [providerNetwork, setProviderNetwork] = useState("localhost");
+  const [providerNetwork, setProviderNetwork] = useState("mnee-sandbox");
   const [isRunning, setIsRunning] = useState(false);
   const [steps, setSteps] = useState<Step[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [finalResponse, setFinalResponse] = useState<Record<string, unknown> | null>(null);
-  const [swapOccurred, setSwapOccurred] = useState(false);
+
+  // Fetch user's API keys
+  const apiKeys = useQuery(api.apiKeys.listApiKeys);
+  // Fetch the full API key when one is selected
+  const fullApiKeyData = useQuery(
+    api.apiKeys.getApiKey,
+    selectedApiKeyId && selectedApiKeyId !== "" ? { apiKeyId: selectedApiKeyId } : "skip"
+  );
+
+  // Update apiKey when a full key is fetched
+  useEffect(() => {
+    if (fullApiKeyData?.apiKey) {
+      setApiKey(fullApiKeyData.apiKey);
+    }
+  }, [fullApiKeyData]);
 
   const addLog = useCallback((type: LogEntry["type"], message: string, data?: Record<string, unknown> | null) => {
     setLogs((prev) => [
@@ -77,7 +88,6 @@ export default function SDKDemoPage() {
 
     setIsRunning(true);
     setFinalResponse(null);
-    setSwapOccurred(false);
     setLogs([]);
 
     // Initialize steps
@@ -91,7 +101,7 @@ export default function SDKDemoPage() {
       {
         id: "receive-402",
         title: "2. Receive 402 Response",
-        description: `API returns Payment Required (${providerAmount} ${providerCurrency})`,
+        description: `API returns Payment Required (${providerAmount} MNEE)`,
         status: "pending",
       },
       {
@@ -109,7 +119,7 @@ export default function SDKDemoPage() {
       {
         id: "call-pay",
         title: "5. Call Gateway /pay",
-        description: "SDK executes the payment (may include swap)",
+        description: "SDK executes the MNEE payment",
         status: "pending",
       },
       {
@@ -133,7 +143,7 @@ export default function SDKDemoPage() {
     
     // Build mock provider URL with config params
     const mockProviderParams = new URLSearchParams({
-      currency: providerCurrency,
+      currency: "MNEE",
       amount: providerAmount,
       network: providerNetwork,
     });
@@ -146,7 +156,7 @@ export default function SDKDemoPage() {
       const step1Start = Date.now();
       updateStep("initial-request", { status: "running", timestamp: step1Start });
       addLog("info", "Starting fetchWithX402...");
-      addLog("info", `Provider configured to request: ${providerAmount} ${providerCurrency} on ${providerNetwork}`);
+      addLog("info", `Provider configured to request: ${providerAmount} MNEE on ${providerNetwork}`);
       addLog("request", `POST ${mockProviderUrl}`, {
         headers: { "Content-Type": "application/json" },
         body: { message: "Hello from SDK demo!" },
@@ -178,7 +188,7 @@ export default function SDKDemoPage() {
         addLog("response", `Received 402 Payment Required`, {
           status: 402,
           requiredPayment: {
-            currency: providerCurrency,
+            currency: "MNEE",
             amount: providerAmount,
             network: providerNetwork,
           },
@@ -187,7 +197,7 @@ export default function SDKDemoPage() {
         updateStep("receive-402", {
           status: "success",
           duration: Date.now() - step2Start,
-          data: { status: 402, currency: providerCurrency, amount: providerAmount },
+          data: { status: 402, currency: "MNEE", amount: providerAmount },
         });
       } else {
         throw new Error(`Expected 402, got ${initialResponse.status}`);
@@ -283,20 +293,6 @@ export default function SDKDemoPage() {
       const payData = await payResponse.json();
       addLog("response", "Pay response", payData);
 
-      // Check if a swap occurred
-      if (payData.swapTxHash) {
-        setSwapOccurred(true);
-        addLog("swap", `Token swap executed!`, {
-          swapTxHash: payData.swapTxHash,
-          sold: payData.swapSellAmount 
-            ? `${payData.swapSellAmount} ${payData.originalCurrency === "USDC" ? "MNEE" : "treasury token"}`
-            : "unknown",
-          received: payData.swapBuyAmount 
-            ? `${payData.swapBuyAmount} ${payData.originalCurrency || "provider token"}`
-            : "unknown",
-        });
-      }
-
       if (payData.status !== "ok") {
         updateStep("call-pay", {
           status: "error",
@@ -375,7 +371,6 @@ export default function SDKDemoPage() {
     setSteps([]);
     setLogs([]);
     setFinalResponse(null);
-    setSwapOccurred(false);
   };
 
   return (
@@ -391,7 +386,7 @@ export default function SDKDemoPage() {
           </Link>
           <h1 className="text-3xl font-bold mt-4">xFour SDK Demo</h1>
           <p className="text-[#888] mt-2">
-            Watch the SDK handle an xFour payment flow step-by-step, including token swaps
+            Watch the SDK handle an xFour MNEE payment flow step-by-step
           </p>
         </div>
 
@@ -404,11 +399,40 @@ export default function SDKDemoPage() {
             <label className="block text-sm text-[#888] mb-2">
               API Key
             </label>
+            
+            {/* API Key Dropdown */}
+            {apiKeys && apiKeys.length > 0 && (
+              <div className="mb-3">
+                <select
+                  value={selectedApiKeyId}
+                  onChange={(e) => {
+                    const value = e.target.value as Id<"apiKeys"> | "";
+                    setSelectedApiKeyId(value);
+                    if (!value) {
+                      setApiKey("");
+                    }
+                  }}
+                  className="w-full px-4 py-3 bg-[#0a0a0a] border border-[#333] rounded-lg text-white focus:outline-none focus:border-[#555]"
+                >
+                  <option value="">Select an API key...</option>
+                  {apiKeys.map((key) => (
+                    <option key={key._id} value={key._id}>
+                      {key.name} ({key.apiKeyPrefix}••••) - {key.isActive ? "Active" : "Inactive"}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            
+            {/* Manual Input */}
             <input
               type="password"
               value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="Paste your API key here"
+              onChange={(e) => {
+                setApiKey(e.target.value);
+                setSelectedApiKeyId("");
+              }}
+              placeholder="Or paste your API key here"
               className="w-full px-4 py-3 bg-[#0a0a0a] border border-[#333] rounded-lg text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
             />
             <p className="text-xs text-[#666] mt-2">
@@ -421,18 +445,18 @@ export default function SDKDemoPage() {
 
           {/* Provider Configuration */}
           <div className="bg-[#0a0a0a] rounded-lg p-4 mb-6 border border-[#222]">
-            <h3 className="text-sm font-medium text-violet-400 mb-3 flex items-center gap-2">
+            <h3 className="text-sm font-medium text-amber-400 mb-3 flex items-center gap-2">
               <ProviderIcon className="w-4 h-4" />
               Mock Provider Settings
             </h3>
             <p className="text-xs text-[#666] mb-4">
-              Configure what the mock provider will request. If this differs from your treasury&apos;s token, a swap will occur.
+              Configure what the mock provider will request in MNEE.
             </p>
             
-            <div className="grid md:grid-cols-3 gap-4">
+            <div className="grid md:grid-cols-2 gap-4">
               {/* Network */}
               <div>
-                <label className="block text-xs text-[#888] mb-1">Network</label>
+                <label className="block text-xs text-[#888] mb-1">MNEE Network</label>
                 <select
                   value={providerNetwork}
                   onChange={(e) => setProviderNetwork(e.target.value)}
@@ -446,34 +470,9 @@ export default function SDKDemoPage() {
                 </select>
               </div>
 
-              {/* Currency */}
-              <div>
-                <label className="block text-xs text-[#888] mb-1">Currency Requested</label>
-                <select
-                  value={providerCurrency}
-                  onChange={(e) => setProviderCurrency(e.target.value)}
-                  className="w-full px-3 py-2 bg-[#111] border border-[#333] rounded-lg text-white text-sm focus:outline-none focus:border-[#555]"
-                >
-                  {PRESET_TOKENS.map((token) => (
-                    <option key={token.symbol} value={token.symbol}>
-                      {token.symbol} - {token.name}
-                    </option>
-                  ))}
-                  <option value="custom">Custom...</option>
-                </select>
-                {providerCurrency === "custom" && (
-                  <input
-                    type="text"
-                    placeholder="Enter token symbol"
-                    onChange={(e) => setProviderCurrency(e.target.value)}
-                    className="w-full mt-2 px-3 py-2 bg-[#111] border border-[#333] rounded-lg text-white text-sm"
-                  />
-                )}
-              </div>
-
               {/* Amount */}
               <div>
-                <label className="block text-xs text-[#888] mb-1">Amount</label>
+                <label className="block text-xs text-[#888] mb-1">Amount (MNEE)</label>
                 <input
                   type="text"
                   value={providerAmount}
@@ -483,11 +482,11 @@ export default function SDKDemoPage() {
               </div>
             </div>
 
-            {/* Swap hint */}
-            <div className="mt-4 p-3 rounded-lg bg-violet-900/20 border border-violet-900/50">
-              <p className="text-xs text-violet-300">
-                <strong>💡 Testing Swaps:</strong> If your workspace treasury holds <strong>MNEE</strong> but the provider requests <strong>USDC</strong>, 
-                the gateway will automatically swap MNEE → USDC to complete the payment.
+            {/* MNEE info */}
+            <div className="mt-4 p-3 rounded-lg bg-amber-900/20 border border-amber-900/50">
+              <p className="text-xs text-amber-300">
+                <strong>💡 MNEE Payments:</strong> All payments use the MNEE Bitcoin-based stablecoin. 
+                Make sure your workspace has an MNEE wallet with sufficient balance.
               </p>
             </div>
           </div>
@@ -541,26 +540,6 @@ export default function SDKDemoPage() {
           </div>
         </div>
 
-        {/* Swap Success Banner */}
-        {swapOccurred && (
-          <div className="mt-8 bg-violet-900/20 border border-violet-800 rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-violet-400 mb-2 flex items-center gap-2">
-              <SwapIcon className="w-5 h-5" />
-              Token Swap Executed!
-            </h2>
-            <p className="text-[#888]">
-              The gateway automatically swapped tokens from your treasury to match the provider&apos;s requested currency.
-              Check the Activity page to see the full swap details.
-            </p>
-            <Link
-              href="/workspace/activity"
-              className="inline-flex items-center gap-1 mt-3 text-sm text-violet-400 hover:text-violet-300"
-            >
-              View Activity →
-            </Link>
-          </div>
-        )}
-
         {/* Final Response */}
         {finalResponse && (
           <div className="mt-8 bg-emerald-900/20 border border-emerald-800 rounded-xl p-6">
@@ -605,8 +584,7 @@ const response = await client.fetchWithX402(
 // 1. Detects 402 Payment Required
 // 2. Extracts xFour invoice headers
 // 3. Calls /quote to get authorization
-// 4. Calls /pay to execute payment
-//    ↳ Includes automatic token swaps if needed!
+// 4. Calls /pay to execute MNEE payment
 // 5. Retries with proof header
 // 6. Returns the final response`}</code>
           </pre>
@@ -673,7 +651,6 @@ function LogEntryDisplay({ log }: { log: LogEntry }) {
     response: "text-violet-400",
     error: "text-red-400",
     success: "text-emerald-400",
-    swap: "text-amber-400",
   };
 
   const typeLabels = {
@@ -682,7 +659,6 @@ function LogEntryDisplay({ log }: { log: LogEntry }) {
     response: "RES ←",
     error: "ERR",
     success: "OK",
-    swap: "SWAP",
   };
 
   const time = new Date(log.timestamp).toLocaleTimeString("en-US", {
@@ -694,7 +670,7 @@ function LogEntryDisplay({ log }: { log: LogEntry }) {
   });
 
   return (
-    <div className={`mb-2 pb-2 border-b border-[#222] last:border-0 ${log.type === "swap" ? "bg-amber-900/10 -mx-2 px-2 py-1 rounded" : ""}`}>
+    <div className="mb-2 pb-2 border-b border-[#222] last:border-0">
       <div className="flex items-start gap-2">
         <span className="text-[#666] text-xs">{time}</span>
         <span className={`text-xs font-bold ${typeColors[log.type]}`}>
@@ -712,19 +688,6 @@ function LogEntryDisplay({ log }: { log: LogEntry }) {
 }
 
 // Icons
-function SwapIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-      />
-    </svg>
-  );
-}
-
 function ProviderIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">

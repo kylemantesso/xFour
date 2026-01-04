@@ -7,12 +7,15 @@
     "dev:web": "pnpm --filter @x402/web dev",
     "dev:blockchain": "pnpm --filter @x402-gateway/contracts node",
     "build": "pnpm --filter @x402/web build",
-    "build:sdk": "pnpm --filter @x402/sdk build",
+    "build:agent": "pnpm --filter @x402/agent build",
+    "build:server": "pnpm --filter @x402/server build",
+    "build:sdks": "pnpm run build:agent && pnpm run build:server",
     "lint": "pnpm -r lint",
     "lint:fix": "pnpm -r lint:fix",
-    "typecheck": "pnpm --filter @x402/web exec tsc --noEmit && pnpm --filter @x402/sdk exec tsc --noEmit",
+    "typecheck": "pnpm --filter @x402/web exec tsc --noEmit && pnpm --filter @x402/agent exec tsc --noEmit && pnpm --filter @x402/server exec tsc --noEmit",
     "clean": "pnpm -r clean",
-    "prepare": "husky"
+    "prepare": "husky",
+    "encrypt-wif": "pnpm --filter @x402/web encrypt-wif"
   },
   "devDependencies": {
     "husky": "^9.1.7",

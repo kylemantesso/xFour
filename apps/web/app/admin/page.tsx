@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { useToast } from "../../components/Toast";
@@ -949,6 +949,7 @@ function AdminTools() {
   const [isDecrypting, setIsDecrypting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
+  const decryptWifAction = useAction(api.mneeActions.decryptWifForAdmin);
 
   const handleDecrypt = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -959,21 +960,13 @@ function AdminTools() {
     setDecryptedWif(null);
 
     try {
-      const response = await fetch("/api/admin/decrypt-wif", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ encryptedWif: encryptedWif.trim() }),
-      });
+      const result = await decryptWifAction({ encryptedWif: encryptedWif.trim() });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.details || data.error || "Failed to decrypt WIF");
+      if (!result.success) {
+        throw new Error(result.error || "Failed to decrypt WIF");
       }
 
-      setDecryptedWif(data.decryptedWif);
+      setDecryptedWif(result.decryptedWif || null);
       toast.success("WIF decrypted successfully");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Decryption failed");

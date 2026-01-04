@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
+import { query, mutation, internalQuery } from "./_generated/server";
 import {
   getClerkUserId,
   requireAuth,
@@ -216,11 +216,36 @@ export const updateProfile = mutation({
  */
 export const checkIsAdmin = query({
   args: {},
+  returns: v.boolean(),
   handler: async (ctx) => {
     const clerkUserId = await getClerkUserId(ctx);
     if (!clerkUserId) return false;
 
     const user = await getUser(ctx, clerkUserId);
+    return user?.isAdmin === true;
+  },
+});
+
+/**
+ * Internal: Check if a user is a platform admin by token identifier
+ * Used by actions that need to verify admin status
+ */
+export const checkIsAdminInternal = internalQuery({
+  args: {
+    tokenIdentifier: v.string(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    // Token identifier format is typically "https://domain|userId"
+    // Extract the clerk user ID from it
+    const parts = args.tokenIdentifier.split("|");
+    const clerkUserId = parts.length > 1 ? parts[1] : args.tokenIdentifier;
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", clerkUserId))
+      .unique();
+
     return user?.isAdmin === true;
   },
 });

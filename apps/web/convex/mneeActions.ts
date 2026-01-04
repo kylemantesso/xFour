@@ -39,6 +39,41 @@ function encryptWif(wif: string): string {
   return `${iv.toString("base64")}:${authTag.toString("base64")}:${salt.toString("base64")}:${encrypted}`;
 }
 
+function decryptWif(encryptedWif: string): string {
+  const encryptionKey = process.env.MNEE_ENCRYPTION_KEY;
+  if (!encryptionKey) {
+    throw new Error("MNEE_ENCRYPTION_KEY environment variable not set");
+  }
+
+  const masterKey = Buffer.from(encryptionKey, "base64");
+
+  // Split the combined string
+  const parts = encryptedWif.split(":");
+  if (parts.length !== 4) {
+    throw new Error("Invalid encrypted WIF format");
+  }
+
+  const [ivBase64, authTagBase64, saltBase64, encryptedData] = parts;
+
+  // Convert from base64
+  const iv = Buffer.from(ivBase64, "base64");
+  const authTag = Buffer.from(authTagBase64, "base64");
+  const salt = Buffer.from(saltBase64, "base64");
+
+  // Derive key from master key and salt
+  const derivedKey = crypto.pbkdf2Sync(masterKey, salt, 100000, 32, "sha256");
+
+  // Create decipher
+  const decipher = crypto.createDecipheriv(ALGORITHM, derivedKey, iv);
+  decipher.setAuthTag(authTag);
+
+  // Decrypt
+  let decrypted = decipher.update(encryptedData, "hex", "utf8");
+  decrypted += decipher.final("utf8");
+
+  return decrypted;
+}
+
 /**
  * Internal action to generate and store a MNEE wallet for a workspace
  * Called automatically during workspace creation
@@ -229,6 +264,56 @@ export const getWalletBalance = action({
     } catch (error) {
       console.error(`Error fetching MNEE balance for ${args.address}:`, error);
       return 0;
+    }
+  },
+});
+
+/**
+ * Decrypt an encrypted WIF (Admin only)
+ * Used for debugging/recovery purposes by platform admins
+ */
+export const decryptWifForAdmin = action({
+  args: {
+    encryptedWif: v.string(),
+  },
+  returns: v.object({
+    success: v.boolean(),
+    decryptedWif: v.optional(v.string()),
+    error: v.optional(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    // Check if user is a platform admin
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return {
+        success: false,
+        error: "Authentication required",
+      };
+    }
+
+    // Verify admin status by querying the database
+    const isAdmin = await ctx.runQuery(internal.users.checkIsAdminInternal, {
+      tokenIdentifier: identity.tokenIdentifier,
+    });
+
+    if (!isAdmin) {
+      return {
+        success: false,
+        error: "Platform admin access required",
+      };
+    }
+
+    try {
+      const decrypted = decryptWif(args.encryptedWif);
+      return {
+        success: true,
+        decryptedWif: decrypted,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Decryption failed",
+      };
     }
   },
 });

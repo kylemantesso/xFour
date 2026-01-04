@@ -21,7 +21,7 @@ export const listApiKeys = query({
     const { workspaceId, role } = await getCurrentWorkspaceContext(ctx);
     requireRole(role, ALL_ROLES, "view API keys");
 
-    let query = ctx.db
+    const query = ctx.db
       .query("apiKeys")
       .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId));
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
+import Image from "next/image";
 import { api } from "../../../convex/_generated/api";
 import { WorkspaceGuard } from "../../../components/WorkspaceGuard";
 import { BackToDashboard } from "../../../components/BackToDashboard";
@@ -68,10 +69,12 @@ function RefreshIcon({ className }: { className?: string }) {
 
 function MneeIcon({ className }: { className?: string }) {
   return (
-    <img 
+    <Image 
       src="/mnee-logo.png" 
       alt="MNEE" 
       className={className}
+      width={24}
+      height={24}
     />
   );
 }

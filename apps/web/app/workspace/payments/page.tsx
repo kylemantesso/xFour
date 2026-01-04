@@ -138,7 +138,7 @@ function PaymentsContent() {
                 <CurrencyIcon className="w-5 h-5 text-violet-400" />
               </div>
               <p className="text-2xl font-bold text-white">
-                {formatMnee(activeTab === "sent" ? (stats as any).totalSpent : (stats as any).totalEarned)} MNEE
+                {formatMnee(activeTab === "sent" ? (stats as { totalSpent: number }).totalSpent : (stats as { totalEarned: number }).totalEarned)} MNEE
               </p>
               <p className="text-xs text-[#666] mt-1">{stats.settledCount} payments</p>
             </div>
@@ -149,10 +149,10 @@ function PaymentsContent() {
                 <CheckCircleIcon className="w-5 h-5 text-emerald-400" />
               </div>
               <p className="text-2xl font-bold text-white">
-                {formatMnee(activeTab === "sent" ? (stats as any).monthSpent : (stats as any).monthEarned)} MNEE
+                {formatMnee(activeTab === "sent" ? (stats as { monthSpent: number }).monthSpent : (stats as { monthEarned: number }).monthEarned)} MNEE
               </p>
               <p className="text-xs text-[#666] mt-1">
-                {activeTab === "sent" ? (stats as any).monthPayments : (stats as any).monthPayments} payments
+                {(stats as { monthPayments: number }).monthPayments} payments
               </p>
             </div>
 
@@ -162,10 +162,10 @@ function PaymentsContent() {
                 <ClockIcon className="w-5 h-5 text-amber-400" />
               </div>
               <p className="text-2xl font-bold text-white">
-                {formatMnee(activeTab === "sent" ? (stats as any).todaySpent : (stats as any).todayEarned)} MNEE
+                {formatMnee(activeTab === "sent" ? (stats as { todaySpent: number }).todaySpent : (stats as { todayEarned: number }).todayEarned)} MNEE
               </p>
               <p className="text-xs text-[#666] mt-1">
-                {activeTab === "sent" ? (stats as any).todayPayments : (stats as any).todayPayments} payments
+                {(stats as { todayPayments: number }).todayPayments} payments
               </p>
             </div>
 
@@ -323,7 +323,7 @@ function PaymentsContent() {
                         <div className="text-sm text-white">
                           {activeTab === "sent"
                             ? (payment.apiKeyName || "Unknown")
-                            : ((payment as any).payerWorkspaceName || "Unknown")}
+                            : ((payment as { payerWorkspaceName?: string }).payerWorkspaceName || "Unknown")}
                         </div>
                       </td>
                       <td className="py-3 px-2">

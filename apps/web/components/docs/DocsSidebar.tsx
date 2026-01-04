@@ -72,14 +72,6 @@ export function DocsSidebar({ onNavigate }: { onNavigate?: () => void }) {
     });
   };
 
-  const isActive = (href: string) => {
-    const [path, hash] = href.split("#");
-    if (hash) {
-      return pathname === path;
-    }
-    return pathname === href;
-  };
-
   const isExactActive = (href: string) => {
     return pathname === href.split("#")[0];
   };

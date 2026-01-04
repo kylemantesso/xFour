@@ -6,7 +6,6 @@
 
 import { v } from "convex/values";
 import { internalQuery, internalMutation, query } from "../_generated/server";
-import { Id } from "../_generated/dataModel";
 import { getCurrentWorkspaceContext } from "./auth";
 
 // ============================================

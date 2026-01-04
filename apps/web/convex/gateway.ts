@@ -337,12 +337,12 @@ export const listWorkspacePayments = query({
     const limit = args.limit || 100;
 
     // Get payments for this workspace
-    let query = ctx.db
+    const paymentsQuery = ctx.db
       .query("payments")
       .withIndex("by_workspace_created", (q) => q.eq("workspaceId", workspaceId))
       .order("desc");
 
-    const payments = await query.take(limit);
+    const payments = await paymentsQuery.take(limit);
 
     // Get related data
     const paymentsWithDetails = await Promise.all(
@@ -652,9 +652,9 @@ export const listAllPaymentsForAdmin = query({
     const limit = args.limit || 100;
 
     // Build query
-    let query = ctx.db.query("payments").order("desc");
+    const paymentsQuery = ctx.db.query("payments").order("desc");
 
-    const payments = await query.take(limit);
+    const payments = await paymentsQuery.take(limit);
 
     // Get related data
     const paymentsWithDetails = await Promise.all(

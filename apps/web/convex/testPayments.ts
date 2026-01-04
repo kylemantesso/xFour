@@ -20,7 +20,7 @@ export const runTestPayment = internalAction({
     error: v.optional(v.string()),
     duration: v.number(),
   }),
-  handler: async (ctx) => {
+  handler: async () => {
     const startTime = Date.now();
 
     // Get config from env

@@ -635,8 +635,6 @@ interface VerifyResponseFailed {
   code: string;
 }
 
-type VerifyResponse = VerifyResponseSuccess | VerifyResponseFailed;
-
 /**
  * POST /gateway/verify
  * 

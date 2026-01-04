@@ -1,4 +1,4 @@
-export default {
+const authConfig = {
   providers: [
     {
       domain: process.env.CLERK_JWT_ISSUER_DOMAIN,
@@ -6,5 +6,7 @@ export default {
     },
   ],
 };
+
+export default authConfig;
 
 

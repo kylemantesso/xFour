@@ -531,7 +531,7 @@ function SDKExamplesSection() {
                   {'  '}<span className="text-violet-400">apiKey</span>: <span className="text-white">process</span>.<span className="text-white">env</span>.<span className="text-white">X402_AGENT_KEY</span>,<br />
                   {'}'});<br />
                   <br />
-                  <span className="text-[#666]">// Automatic payment handling - just use like fetch!</span><br />
+                  <span className="text-[#666]">{/* // Automatic payment handling - just use like fetch! */}{'// Automatic payment handling - just use like fetch!'}</span><br />
                   <span className="text-blue-400">const</span> <span className="text-white">response</span> = <span className="text-pink-400">await</span> <span className="text-white">client</span>.<span className="text-yellow-400">fetchWithX402</span>(<br />
                   {'  '}<span className="text-emerald-400">&apos;https://api.example.com/ai/complete&apos;</span>,<br />
                   {'  '}{'{'}<br />
@@ -540,7 +540,7 @@ function SDKExamplesSection() {
                   {'  '}{'}'}<br />
                   );<br />
                   <br />
-                  <span className="text-[#666]">// If 402 returned, payment happens automatically</span><br />
+                  <span className="text-[#666]">{'// If 402 returned, payment happens automatically'}</span><br />
                   <span className="text-blue-400">const</span> <span className="text-white">result</span> = <span className="text-pink-400">await</span> <span className="text-white">response</span>.<span className="text-yellow-400">json</span>();
                 </code>
               </pre>
@@ -585,16 +585,16 @@ function SDKExamplesSection() {
                   <br />
                   {'  '}<span className="text-violet-400">gatewayUrl</span>: <span className="text-emerald-400">&apos;https://gateway.x402.com&apos;</span>,<br />
                   {'  '}<span className="text-violet-400">apiKey</span>: <span className="text-white">process</span>.<span className="text-white">env</span>.<span className="text-white">X402_SERVER_KEY</span>,<br />
-                  {'  '}<span className="text-violet-400">payToAddress</span>: <span className="text-emerald-400">&apos;1ABC...&apos;</span>, <span className="text-[#666]">// Your MNEE address</span><br />
+                  {'  '}<span className="text-violet-400">payToAddress</span>: <span className="text-emerald-400">&apos;1ABC...&apos;</span>, <span className="text-[#666]">{'// Your MNEE address'}</span><br />
                   {'  '}<span className="text-violet-400">network</span>: <span className="text-emerald-400">&apos;mainnet&apos;</span>,<br />
                   {'}'});<br />
                   <br />
-                  <span className="text-[#666]">// Protect routes with payment requirement</span><br />
+                  <span className="text-[#666]">{'// Protect routes with payment requirement'}</span><br />
                   <span className="text-white">app</span>.<span className="text-yellow-400">post</span>(<br />
                   {'  '}<span className="text-emerald-400">&apos;/api/ai/complete&apos;</span>,<br />
-                  {'  '}<span className="text-white">x402</span>.<span className="text-yellow-400">requirePayment</span>(<span className="text-orange-400">0.05</span>), <span className="text-[#666]">// 0.05 MNEE per request</span><br />
+                  {'  '}<span className="text-white">x402</span>.<span className="text-yellow-400">requirePayment</span>(<span className="text-orange-400">0.05</span>), <span className="text-[#666]">{'// 0.05 MNEE per request'}</span><br />
                   {'  '}<span className="text-pink-400">async</span> (<span className="text-white">req</span>, <span className="text-white">res</span>) <span className="text-pink-400">=&gt;</span> {'{'}<br />
-                  {'    '}<span className="text-[#666]">// Only executes if payment verified!</span><br />
+                  {'    '}<span className="text-[#666]">{'// Only executes if payment verified!'}</span><br />
                   {'    '}<span className="text-blue-400">const</span> <span className="text-white">result</span> = <span className="text-pink-400">await</span> <span className="text-yellow-400">aiComplete</span>(<span className="text-white">req</span>.<span className="text-white">body</span>);<br />
                   {'    '}<span className="text-white">res</span>.<span className="text-yellow-400">json</span>(<span className="text-white">result</span>);<br />
                   {'  '}{'}'}<br />

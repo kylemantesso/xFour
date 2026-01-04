@@ -370,7 +370,7 @@ function CreateProviderKeyButton({
                     </button>
                   </div>
                   <p className="text-xs text-[#666] mt-1">
-                    Payments will be sent to this wallet's address.
+                    Payments will be sent to this wallet&apos;s address.
                   </p>
                 </div>
 

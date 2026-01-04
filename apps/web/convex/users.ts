@@ -244,7 +244,7 @@ export const bootstrapAdmin = mutation({
     }
 
     // Get or create user
-    let user = await getUser(ctx, clerkUserId);
+    const user = await getUser(ctx, clerkUserId);
     if (!user) {
       throw new Error("User not found");
     }

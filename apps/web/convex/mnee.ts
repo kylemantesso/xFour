@@ -52,7 +52,7 @@ export const getWorkspaceMneeWallet = query({
         isActive: wallet.isActive,
         createdAt: wallet.createdAt,
       };
-    } catch (error) {
+    } catch {
       // User not authenticated or no workspace
       return null;
     }
@@ -90,7 +90,7 @@ export const listWorkspaceMneeWallets = query({
         isActive: w.isActive,
         createdAt: w.createdAt,
       }));
-    } catch (error) {
+    } catch {
       return [];
     }
   },

@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query, mutation, internalMutation } from "./_generated/server";
+import { query, mutation, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 import {
   getCurrentWorkspaceContext,
@@ -276,6 +276,25 @@ export const getWalletApiKeys = query({
       apiKeyPrefix: key.apiKeyPrefix,
       isActive: key.isActive,
     }));
+  },
+});
+
+/**
+ * Internal query to check if a wallet exists in a workspace
+ */
+export const checkWalletExistsInternal = internalQuery({
+  args: {
+    workspaceId: v.id("workspaces"),
+    address: v.string(),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const existingWallet = await ctx.db
+      .query("wallets")
+      .withIndex("by_address", (q) => q.eq("address", args.address))
+      .first();
+    
+    return existingWallet !== null && existingWallet.workspaceId === args.workspaceId;
   },
 });
 

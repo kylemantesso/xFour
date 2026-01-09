@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import Image from "next/image";
 import { api } from "../../../convex/_generated/api";
 import { Id } from "../../../convex/_generated/dataModel";
@@ -712,6 +712,7 @@ function ImportWalletDialog({
   const [isImporting, setIsImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
+  const importWallet = useAction(api.mneeActions.importWallet);
 
   // Set default network when availableNetworks loads
   useEffect(() => {
@@ -733,26 +734,18 @@ function ImportWalletDialog({
     setError(null);
 
     try {
-      const response = await fetch("/api/wallets/import", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: name.trim(),
-          address: address.trim(),
-          privateKey: privateKey.trim(),
-          network,
-        }),
+      const result = await importWallet({
+        name: name.trim(),
+        address: address.trim(),
+        privateKey: privateKey.trim(),
+        network,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to import wallet");
+      if (!result.success) {
+        throw new Error(result.error || "Failed to import wallet");
       }
 
-      toast.success(data.message || "Wallet imported successfully");
+      toast.success("Wallet imported successfully");
       onClose();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to import wallet";

@@ -262,6 +262,62 @@ export const exampleAction = action({
 });
 ```
 
+## Convex Actions vs Next.js API Routes
+**IMPORTANT: Prefer Convex actions over Next.js API routes for backend operations.**
+
+### When to use Convex actions (preferred):
+- External API calls (e.g., MNEE SDK, OpenAI, Stripe)
+- Encryption/decryption operations
+- Any operation requiring environment variables
+- Background processing or async workflows
+- Operations that need direct database access via `ctx.runQuery`/`ctx.runMutation`
+
+### Benefits of Convex actions:
+1. **Centralized environment variables** - Set in Convex Dashboard only, no need to sync `.env.local`
+2. **Direct database access** - Use `ctx.runQuery`/`ctx.runMutation` instead of HTTP calls
+3. **Atomic operations** - Chain queries and mutations without race conditions
+4. **Consistent error handling** - Standard Convex error propagation
+5. **Better observability** - Convex dashboard shows all function calls and logs
+
+### When Next.js API routes are acceptable (exceptions):
+- Webhook receivers that require specific Next.js middleware
+- OAuth callbacks
+- Thin proxy routes for CORS or unified gateway URLs (should only proxy, no business logic)
+- Operations requiring Vercel Edge runtime
+- Streaming responses that need Next.js streaming APIs
+
+### Example: Converting an API route to a Convex action
+Before (Next.js API route with duplicated env vars):
+```typescript
+// app/api/wallets/import/route.ts
+export async function POST(request: NextRequest) {
+  const wif = request.body.privateKey;
+  const encryptedWif = encryptWif(wif); // Uses process.env.MNEE_ENCRYPTION_KEY
+  await fetchMutation(api.wallets.createWallet, { encryptedWif });
+}
+```
+
+After (Convex action with centralized env vars):
+```typescript
+// convex/mneeActions.ts
+"use node";
+export const importWallet = action({
+  args: { name: v.string(), address: v.string(), privateKey: v.string(), network: v.union(v.literal("sandbox"), v.literal("mainnet")) },
+  returns: v.object({ success: v.boolean(), walletId: v.optional(v.id("wallets")), error: v.optional(v.string()) }),
+  handler: async (ctx, args) => {
+    const encryptedWif = encryptWif(args.privateKey); // Uses Convex env vars
+    const walletId = await ctx.runMutation(internal.wallets.internalCreateWallet, { ... });
+    return { success: true, walletId };
+  },
+});
+```
+
+Frontend usage with `useAction`:
+```typescript
+const importWallet = useAction(api.mneeActions.importWallet);
+const result = await importWallet({ name, address, privateKey, network });
+```
+
 ## Scheduling guidelines
 ### Cron guidelines
 - Only use the `crons.interval` or `crons.cron` methods to schedule cron jobs. Do NOT use the `crons.hourly`, `crons.daily`, or `crons.weekly` helpers.

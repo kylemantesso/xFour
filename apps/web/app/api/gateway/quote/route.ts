@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 
 /**
  * Proxy to Convex gateway /quote endpoint
+ * 
+ * NOTE: This is a thin proxy route that exists to provide a unified
+ * gateway URL for clients. The actual business logic is in the Convex
+ * HTTP endpoint at /gateway/quote.
+ * 
+ * This route:
+ * - Adds CORS headers for browser clients
+ * - Proxies to the Convex HTTP endpoint
+ * 
+ * This should remain a simple proxy with no business logic.
  */
 export async function POST(request: NextRequest) {
   const convexSiteUrl = process.env.NEXT_PUBLIC_CONVEX_URL?.replace(
@@ -31,11 +41,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(data, {
       status: response.status,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
-      },
+      headers: corsHeaders(),
     });
   } catch (err) {
     console.error("Gateway proxy error:", err);
@@ -49,12 +55,14 @@ export async function POST(request: NextRequest) {
 export async function OPTIONS() {
   return new NextResponse(null, {
     status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type",
-    },
+    headers: corsHeaders(),
   });
 }
 
-
+function corsHeaders() {
+  return {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+  };
+}

@@ -3,10 +3,27 @@ import { NextRequest, NextResponse } from "next/server";
 /**
  * Gateway /pay endpoint for MNEE payments
  * 
+ * NOTE: This route exists because MNEE payment execution requires:
+ * - External API calls (MNEE SDK)
+ * - Polling for transaction status
+ * - Environment variables (MNEE_API_KEY, MNEE_ENCRYPTION_KEY)
+ * 
+ * These operations currently happen here to avoid the limitation that
+ * Convex httpActions cannot call actions directly (they can only schedule them).
+ * If the flow was fully async, this could be moved to Convex, but that would
+ * require clients to poll for payment completion.
+ * 
+ * The Convex action `mneeActions.executeMneePaymentAction` contains the
+ * payment execution logic and can be used for async flows in the future.
+ * 
+ * IMPORTANT: All environment variables used here (MNEE_ENCRYPTION_KEY, etc.)
+ * must also be set in Convex Dashboard for other features to work.
+ * 
  * Flow:
- * 1. Call Convex /gateway/pay to validate and settle payment in DB
- * 2. Execute MNEE payment if required
- * 3. Return result with txHash
+ * 1. Call Convex /gateway/pay to validate and get wallet info
+ * 2. Execute MNEE payment via SDK
+ * 3. Mark payment as settled/failed in Convex
+ * 4. Return result with txHash
  */
 
 interface ConvexPayResponse {

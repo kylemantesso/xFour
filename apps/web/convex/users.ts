@@ -251,6 +251,48 @@ export const checkIsAdminInternal = internalQuery({
 });
 
 /**
+ * Internal: Get user by token identifier
+ * Used by actions that need to look up the current user
+ */
+export const getUserByTokenIdentifierInternal = internalQuery({
+  args: {
+    tokenIdentifier: v.string(),
+  },
+  returns: v.union(
+    v.object({
+      _id: v.id("users"),
+      clerkUserId: v.string(),
+      email: v.string(),
+      name: v.optional(v.string()),
+      currentWorkspaceId: v.optional(v.id("workspaces")),
+      isAdmin: v.optional(v.boolean()),
+    }),
+    v.null()
+  ),
+  handler: async (ctx, args) => {
+    // Token identifier format is typically "https://domain|userId"
+    const parts = args.tokenIdentifier.split("|");
+    const clerkUserId = parts.length > 1 ? parts[1] : args.tokenIdentifier;
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerkUserId", (q) => q.eq("clerkUserId", clerkUserId))
+      .unique();
+
+    if (!user) return null;
+
+    return {
+      _id: user._id,
+      clerkUserId: user.clerkUserId,
+      email: user.email,
+      name: user.name,
+      currentWorkspaceId: user.currentWorkspaceId,
+      isAdmin: user.isAdmin,
+    };
+  },
+});
+
+/**
  * Bootstrap the first admin (only works if no admins exist)
  */
 export const bootstrapAdmin = mutation({

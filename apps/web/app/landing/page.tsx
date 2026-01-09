@@ -6,3 +6,4 @@ export default function LandingPageRoute() {
   return <LandingPage />;
 }
 
+

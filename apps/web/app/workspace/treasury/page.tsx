@@ -55,6 +55,39 @@ function PlusIcon({ className }: { className?: string }) {
   );
 }
 
+function UploadIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+    </svg>
+  );
+}
+
+function KeyIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+    </svg>
+  );
+}
+
+function EyeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+    </svg>
+  );
+}
+
+function EyeOffIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+    </svg>
+  );
+}
+
 function RefreshIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -430,6 +463,7 @@ function EmptyWalletsState({
   networks: Array<{ _id: string; network: MneeNetwork; name: string }> | undefined;
 }) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
 
   return (
     <>
@@ -439,17 +473,26 @@ function EmptyWalletsState({
         </div>
         <h3 className="text-lg font-medium text-white mb-2">No Wallets</h3>
         <p className="text-sm text-[#888] max-w-sm mx-auto mb-6">
-          Create a wallet to manage funds for your agents and providers. You can link multiple API keys to each wallet.
+          Create a new wallet or import an existing one using your private key.
         </p>
 
         {canManage && (
-          <button
-            onClick={() => setShowCreateDialog(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors mx-auto"
-          >
-            <PlusIcon className="w-4 h-4" />
-            Create Wallet
-          </button>
+          <div className="flex items-center justify-center gap-3">
+            <button
+              onClick={() => setShowCreateDialog(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              <PlusIcon className="w-4 h-4" />
+              Create Wallet
+            </button>
+            <button
+              onClick={() => setShowImportDialog(true)}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white border border-[#555] hover:bg-[#1a1a1a] rounded-lg transition-colors"
+            >
+              <UploadIcon className="w-4 h-4" />
+              Import Wallet
+            </button>
+          </div>
         )}
       </div>
 
@@ -459,12 +502,19 @@ function EmptyWalletsState({
           availableNetworks={networks}
         />
       )}
+      
+      {showImportDialog && (
+        <ImportWalletDialog 
+          onClose={() => setShowImportDialog(false)}
+          availableNetworks={networks}
+        />
+      )}
     </>
   );
 }
 
 // ============================================
-// CREATE WALLET BUTTON
+// WALLET ACTION BUTTONS
 // ============================================
 
 function CreateWalletButton({ 
@@ -473,20 +523,37 @@ function CreateWalletButton({
   availableNetworks: Array<{ _id: string; network: MneeNetwork; name: string }> | undefined;
 }) {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
 
   return (
     <>
-      <button
-        onClick={() => setShowCreateDialog(true)}
-        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#888] hover:text-white border border-[#333] hover:border-[#555] rounded-lg transition-colors w-full"
-      >
-        <PlusIcon className="w-4 h-4" />
-        Create New Wallet
-      </button>
+      <div className="flex gap-2">
+        <button
+          onClick={() => setShowCreateDialog(true)}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#888] hover:text-white border border-[#333] hover:border-[#555] rounded-lg transition-colors flex-1"
+        >
+          <PlusIcon className="w-4 h-4" />
+          Create New Wallet
+        </button>
+        <button
+          onClick={() => setShowImportDialog(true)}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#888] hover:text-white border border-[#333] hover:border-[#555] rounded-lg transition-colors flex-1"
+        >
+          <UploadIcon className="w-4 h-4" />
+          Import Wallet
+        </button>
+      </div>
 
       {showCreateDialog && (
         <CreateWalletDialog 
           onClose={() => setShowCreateDialog(false)}
+          availableNetworks={availableNetworks}
+        />
+      )}
+      
+      {showImportDialog && (
+        <ImportWalletDialog 
+          onClose={() => setShowImportDialog(false)}
           availableNetworks={availableNetworks}
         />
       )}
@@ -615,6 +682,218 @@ function CreateWalletDialog({
               type="button"
               onClick={onClose}
               disabled={isCreating}
+              className="flex-1 px-4 py-2.5 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// IMPORT WALLET DIALOG
+// ============================================
+
+function ImportWalletDialog({
+  onClose,
+  availableNetworks,
+}: {
+  onClose: () => void;
+  availableNetworks: Array<{ _id: string; network: MneeNetwork; name: string }> | undefined;
+}) {
+  const [name, setName] = useState("");
+  const [address, setAddress] = useState("");
+  const [privateKey, setPrivateKey] = useState("");
+  const [showPrivateKey, setShowPrivateKey] = useState(false);
+  const [network, setNetwork] = useState<MneeNetwork>("sandbox");
+  const [isImporting, setIsImporting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const toast = useToast();
+
+  // Set default network when availableNetworks loads
+  useEffect(() => {
+    if (availableNetworks && availableNetworks.length > 0) {
+      const sandbox = availableNetworks.find(n => n.network === "sandbox");
+      if (sandbox) {
+        setNetwork(sandbox.network);
+      } else {
+        setNetwork(availableNetworks[0].network);
+      }
+    }
+  }, [availableNetworks]);
+
+  const handleImport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim() || !address.trim() || !privateKey.trim()) return;
+
+    setIsImporting(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/wallets/import", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: name.trim(),
+          address: address.trim(),
+          privateKey: privateKey.trim(),
+          network,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to import wallet");
+      }
+
+      toast.success(data.message || "Wallet imported successfully");
+      onClose();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to import wallet";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+      <div className="bg-[#111] border border-[#333] rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <form onSubmit={handleImport} className="space-y-4">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+              <KeyIcon className="w-5 h-5 text-white" />
+            </div>
+            <h3 className="text-lg font-semibold text-white">
+              Import Wallet
+            </h3>
+          </div>
+
+          <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-3">
+            <p className="text-sm text-amber-200">
+              <strong>Security Notice:</strong> Your private key will be encrypted and stored securely. Never share your private key with anyone.
+            </p>
+          </div>
+
+          {error && (
+            <div className="bg-red-900/20 border border-red-700/50 rounded-lg p-3">
+              <p className="text-sm text-red-300">{error}</p>
+            </div>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-[#888] mb-1">
+              Wallet Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g., My MNEE Wallet"
+              className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
+              required
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-[#888] mb-1">
+              Wallet Address <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="e.g., 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
+              className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555] font-mono text-sm"
+              required
+              autoComplete="off"
+              spellCheck="false"
+            />
+            <p className="text-xs text-[#666] mt-1">
+              The Bitcoin address for this wallet
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-[#888] mb-1">
+              Private Key (WIF) <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <input
+                type={showPrivateKey ? "text" : "password"}
+                value={privateKey}
+                onChange={(e) => setPrivateKey(e.target.value)}
+                placeholder="Enter your WIF private key"
+                className="w-full px-3 py-2 pr-10 border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555] font-mono text-sm"
+                required
+                autoComplete="off"
+                spellCheck="false"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPrivateKey(!showPrivateKey)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[#666] hover:text-white transition-colors"
+                title={showPrivateKey ? "Hide private key" : "Show private key"}
+              >
+                {showPrivateKey ? (
+                  <EyeOffIcon className="w-5 h-5" />
+                ) : (
+                  <EyeIcon className="w-5 h-5" />
+                )}
+              </button>
+            </div>
+            <p className="text-xs text-[#666] mt-1">
+              WIF format starts with 5, K, L, or c (e.g., 5HueCGU8rMjx...)
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-[#888] mb-1">
+              Network <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={network}
+              onChange={(e) => setNetwork(e.target.value as MneeNetwork)}
+              className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white focus:outline-none focus:border-[#555]"
+            >
+              {availableNetworks && availableNetworks.length > 0 ? (
+                availableNetworks.map((n) => (
+                  <option key={n._id} value={n.network}>
+                    {n.name}
+                  </option>
+                ))
+              ) : (
+                <>
+                  <option value="sandbox">MNEE Sandbox</option>
+                  <option value="mainnet">MNEE Mainnet</option>
+                </>
+              )}
+            </select>
+            <p className="text-xs text-[#666] mt-1">
+              Make sure the network matches your wallet&apos;s network
+            </p>
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button
+              type="submit"
+              disabled={isImporting || !name.trim() || !address.trim() || !privateKey.trim()}
+              className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isImporting ? "Importing..." : "Import Wallet"}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isImporting}
               className="flex-1 px-4 py-2.5 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors disabled:opacity-50"
             >
               Cancel

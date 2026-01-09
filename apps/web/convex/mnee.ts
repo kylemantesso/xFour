@@ -2,6 +2,7 @@
  * MNEE Public Queries and Mutations
  * 
  * Public-facing Convex queries and mutations for MNEE wallet information
+ * NOTE: These are deprecated - use wallets.ts queries instead
  */
 
 import { v } from "convex/values";
@@ -12,6 +13,7 @@ import { getCurrentWorkspaceContext, requireRole, ADMIN_ROLES } from "./lib/auth
 /**
  * Get MNEE wallet info for the current workspace (public)
  * Returns address and network only (no private keys)
+ * @deprecated Use wallets.listWallets instead
  */
 export const getWorkspaceMneeWallet = query({
   args: {
@@ -19,7 +21,7 @@ export const getWorkspaceMneeWallet = query({
   },
   returns: v.union(
     v.object({
-      _id: v.id("mneeWallets"),
+      _id: v.id("wallets"),
       address: v.string(),
       network: v.union(v.literal("sandbox"), v.literal("mainnet")),
       isActive: v.boolean(),
@@ -34,7 +36,7 @@ export const getWorkspaceMneeWallet = query({
       const network = args.network || "sandbox";
 
       const wallet = await ctx.db
-        .query("mneeWallets")
+        .query("wallets")
         .withIndex("by_workspace_network", (q) =>
           q.eq("workspaceId", workspace._id).eq("network", network)
         )
@@ -61,12 +63,13 @@ export const getWorkspaceMneeWallet = query({
 
 /**
  * Get all MNEE wallets for the current workspace
+ * @deprecated Use wallets.listWallets instead
  */
 export const listWorkspaceMneeWallets = query({
   args: {},
   returns: v.array(
     v.object({
-      _id: v.id("mneeWallets"),
+      _id: v.id("wallets"),
       address: v.string(),
       network: v.union(v.literal("sandbox"), v.literal("mainnet")),
       isActive: v.boolean(),
@@ -78,7 +81,7 @@ export const listWorkspaceMneeWallets = query({
       const { workspace } = await getCurrentWorkspaceContext(ctx);
 
       const wallets = await ctx.db
-        .query("mneeWallets")
+        .query("wallets")
         .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspace._id))
         .collect();
 
@@ -99,6 +102,7 @@ export const listWorkspaceMneeWallets = query({
 /**
  * Create a new MNEE wallet for the current workspace
  * Triggers wallet generation through internal action
+ * @deprecated Use wallets.generateWallet instead
  */
 export const createMneeWallet = mutation({
   args: {
@@ -115,7 +119,7 @@ export const createMneeWallet = mutation({
 
     // Check if wallet already exists for this workspace/network
     const existing = await ctx.db
-      .query("mneeWallets")
+      .query("wallets")
       .withIndex("by_workspace_network", (q) =>
         q.eq("workspaceId", workspaceId).eq("network", args.network)
       )

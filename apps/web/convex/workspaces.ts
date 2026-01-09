@@ -202,12 +202,12 @@ export const deleteWorkspace = mutation({
       await ctx.db.delete(policy._id);
     }
 
-    // MNEE Wallets
-    const mneeWallets = await ctx.db
-      .query("mneeWallets")
+    // Wallets
+    const wallets = await ctx.db
+      .query("wallets")
       .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
       .collect();
-    for (const wallet of mneeWallets) {
+    for (const wallet of wallets) {
       await ctx.db.delete(wallet._id);
     }
 

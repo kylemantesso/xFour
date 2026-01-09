@@ -30,7 +30,7 @@ export const listAllWorkspaces = query({
 });
 
 /**
- * Check if workspace has MNEE wallet
+ * Check if workspace has wallet
  */
 export const checkMneeWallet = query({
   args: {
@@ -46,7 +46,7 @@ export const checkMneeWallet = query({
   ),
   handler: async (ctx, args) => {
     const wallet = await ctx.db
-      .query("mneeWallets")
+      .query("wallets")
       .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
       .first();
 
@@ -61,7 +61,7 @@ export const checkMneeWallet = query({
 });
 
 /**
- * Manually trigger MNEE wallet creation for a workspace
+ * Manually trigger wallet creation for a workspace
  */
 export const createWalletManually = mutation({
   args: {
@@ -77,7 +77,7 @@ export const createWalletManually = mutation({
 
     // Check if wallet already exists
     const existing = await ctx.db
-      .query("mneeWallets")
+      .query("wallets")
       .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
       .filter((q) => q.eq(q.field("network"), network))
       .first();

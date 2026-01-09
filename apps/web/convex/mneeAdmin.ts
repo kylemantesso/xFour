@@ -2,6 +2,7 @@
  * MNEE Admin Functions
  * 
  * Admin-level operations for managing MNEE wallets for workspaces
+ * NOTE: These functions are deprecated - use wallets.ts instead
  */
 
 import { v } from "convex/values";
@@ -13,12 +14,13 @@ import { getCurrentWorkspaceContext, requireRole, ADMIN_ROLES } from "./lib/auth
 // ============================================
 
 /**
- * Internal: Update MNEE wallet encrypted WIF (no auth required)
+ * Internal: Update wallet encrypted WIF (no auth required)
  * Used for re-encrypting wallets with a new key
+ * @deprecated Use wallets.ts instead
  */
 export const internalUpdateEncryptedWif = internalMutation({
   args: {
-    walletId: v.id("mneeWallets"),
+    walletId: v.id("wallets"),
     encryptedWif: v.string(),
   },
   returns: v.object({
@@ -34,6 +36,7 @@ export const internalUpdateEncryptedWif = internalMutation({
 
     await ctx.db.patch(args.walletId, {
       encryptedWif: args.encryptedWif,
+      updatedAt: Date.now(),
     });
 
     return { success: true };
@@ -46,12 +49,13 @@ export const internalUpdateEncryptedWif = internalMutation({
 
 /**
  * Get MNEE wallets for current workspace
+ * @deprecated Use wallets.listWallets instead
  */
 export const getWorkspaceMneeWallets = query({
   args: {},
   returns: v.array(
     v.object({
-      _id: v.id("mneeWallets"),
+      _id: v.id("wallets"),
       address: v.string(),
       network: v.union(v.literal("sandbox"), v.literal("mainnet")),
       isActive: v.boolean(),
@@ -63,7 +67,7 @@ export const getWorkspaceMneeWallets = query({
     requireRole(role, ADMIN_ROLES, "view MNEE wallets");
 
     const wallets = await ctx.db
-      .query("mneeWallets")
+      .query("wallets")
       .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspaceId))
       .collect();
 
@@ -80,6 +84,7 @@ export const getWorkspaceMneeWallets = query({
 
 /**
  * Get a specific MNEE wallet by address
+ * @deprecated Use wallets.ts instead
  */
 export const getMneeWalletByAddress = query({
   args: {
@@ -87,7 +92,7 @@ export const getMneeWalletByAddress = query({
   },
   returns: v.union(
     v.object({
-      _id: v.id("mneeWallets"),
+      _id: v.id("wallets"),
       workspaceId: v.id("workspaces"),
       address: v.string(),
       network: v.union(v.literal("sandbox"), v.literal("mainnet")),
@@ -101,7 +106,7 @@ export const getMneeWalletByAddress = query({
     requireRole(role, ADMIN_ROLES, "view MNEE wallets");
 
     const wallet = await ctx.db
-      .query("mneeWallets")
+      .query("wallets")
       .withIndex("by_address", (q) => q.eq("address", args.address))
       .filter((q) => q.eq(q.field("workspaceId"), workspaceId))
       .first();
@@ -128,6 +133,7 @@ export const getMneeWalletByAddress = query({
 
 /**
  * Add a MNEE wallet to the workspace
+ * @deprecated Use wallets.createWallet instead
  * 
  * NOTE: This mutation expects the WIF to already be encrypted.
  * The encryption should happen in the Next.js API route before calling this.
@@ -147,7 +153,7 @@ export const addMneeWalletToWorkspace = mutation({
   },
   returns: v.object({
     success: v.boolean(),
-    walletId: v.optional(v.id("mneeWallets")),
+    walletId: v.optional(v.id("wallets")),
     error: v.optional(v.string()),
   }),
   handler: async (ctx, args) => {
@@ -156,7 +162,7 @@ export const addMneeWalletToWorkspace = mutation({
 
     // Check if wallet already exists for this workspace/network
     const existing = await ctx.db
-      .query("mneeWallets")
+      .query("wallets")
       .withIndex("by_workspace_network", (q) =>
         q.eq("workspaceId", workspaceId).eq("network", args.network)
       )
@@ -171,7 +177,7 @@ export const addMneeWalletToWorkspace = mutation({
 
     // Check if this address is already used by another workspace
     const addressInUse = await ctx.db
-      .query("mneeWallets")
+      .query("wallets")
       .withIndex("by_address", (q) => q.eq("address", args.address))
       .first();
 
@@ -192,13 +198,16 @@ export const addMneeWalletToWorkspace = mutation({
     }
 
     // Insert the wallet
-    const walletId = await ctx.db.insert("mneeWallets", {
+    const now = Date.now();
+    const walletId = await ctx.db.insert("wallets", {
       workspaceId,
+      name: `Imported ${args.network} Wallet`,
       address: args.address,
       encryptedWif: args.encryptedWif,
       network: args.network,
       isActive: true,
-      createdAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
     });
 
     return {
@@ -209,12 +218,13 @@ export const addMneeWalletToWorkspace = mutation({
 });
 
 /**
- * Update MNEE wallet encrypted WIF
+ * Update wallet encrypted WIF
  * Used when re-encrypting with a new key
+ * @deprecated Use wallets.ts instead
  */
 export const updateMneeWalletEncryptedWif = mutation({
   args: {
-    walletId: v.id("mneeWallets"),
+    walletId: v.id("wallets"),
     encryptedWif: v.string(),
   },
   returns: v.object({
@@ -243,6 +253,7 @@ export const updateMneeWalletEncryptedWif = mutation({
 
     await ctx.db.patch(args.walletId, {
       encryptedWif: args.encryptedWif,
+      updatedAt: Date.now(),
     });
 
     return {
@@ -252,11 +263,12 @@ export const updateMneeWalletEncryptedWif = mutation({
 });
 
 /**
- * Remove/deactivate a MNEE wallet from the workspace
+ * Remove/deactivate a wallet from the workspace
+ * @deprecated Use wallets.deleteWallet instead
  */
 export const removeMneeWallet = mutation({
   args: {
-    walletId: v.id("mneeWallets"),
+    walletId: v.id("wallets"),
   },
   returns: v.object({
     success: v.boolean(),
@@ -285,6 +297,7 @@ export const removeMneeWallet = mutation({
     // Soft delete - deactivate instead of deleting
     await ctx.db.patch(args.walletId, {
       isActive: false,
+      updatedAt: Date.now(),
     });
 
     return {

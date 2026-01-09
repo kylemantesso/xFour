@@ -2,6 +2,7 @@
  * MNEE Utilities
  * 
  * Helper functions for MNEE wallet management, encryption, and SDK integration
+ * NOTE: These are deprecated - use wallets.ts for wallet operations
  */
 
 import { v } from "convex/values";
@@ -29,6 +30,7 @@ export interface MneeBalance {
 
 /**
  * Get MNEE wallet for a workspace (internal)
+ * @deprecated Use wallets table directly
  */
 export const getMneeWallet = internalQuery({
   args: {
@@ -37,20 +39,22 @@ export const getMneeWallet = internalQuery({
   },
   returns: v.union(
     v.object({
-      _id: v.id("mneeWallets"),
+      _id: v.id("wallets"),
       _creationTime: v.number(),
       workspaceId: v.id("workspaces"),
+      name: v.string(),
       address: v.string(),
       encryptedWif: v.string(),
       network: v.union(v.literal("sandbox"), v.literal("mainnet")),
       isActive: v.boolean(),
       createdAt: v.number(),
+      updatedAt: v.number(),
     }),
     v.null()
   ),
   handler: async (ctx, args) => {
     const wallet = await ctx.db
-      .query("mneeWallets")
+      .query("wallets")
       .withIndex("by_workspace_network", (q) =>
         q.eq("workspaceId", args.workspaceId).eq("network", args.network)
       )
@@ -67,6 +71,7 @@ export const getMneeWallet = internalQuery({
 /**
  * Store a new MNEE wallet for a workspace
  * Called during workspace creation or when adding MNEE support
+ * @deprecated Use wallets.internalCreateWallet instead
  */
 export const storeMneeWallet = internalMutation({
   args: {
@@ -75,11 +80,11 @@ export const storeMneeWallet = internalMutation({
     encryptedWif: v.string(),
     network: v.union(v.literal("sandbox"), v.literal("mainnet")),
   },
-  returns: v.id("mneeWallets"),
+  returns: v.id("wallets"),
   handler: async (ctx, args) => {
     // Check if wallet already exists for this workspace/network
     const existing = await ctx.db
-      .query("mneeWallets")
+      .query("wallets")
       .withIndex("by_workspace_network", (q) =>
         q.eq("workspaceId", args.workspaceId).eq("network", args.network)
       )
@@ -89,13 +94,16 @@ export const storeMneeWallet = internalMutation({
       throw new Error(`MNEE wallet already exists for this workspace on ${args.network}`);
     }
 
-    const walletId = await ctx.db.insert("mneeWallets", {
+    const now = Date.now();
+    const walletId = await ctx.db.insert("wallets", {
       workspaceId: args.workspaceId,
+      name: `Default ${args.network} Wallet`,
       address: args.address,
       encryptedWif: args.encryptedWif,
       network: args.network,
       isActive: true,
-      createdAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
     });
 
     return walletId;
@@ -104,15 +112,17 @@ export const storeMneeWallet = internalMutation({
 
 /**
  * Deactivate a MNEE wallet (soft delete)
+ * @deprecated Use wallets.updateWallet instead
  */
 export const deactivateMneeWallet = internalMutation({
   args: {
-    walletId: v.id("mneeWallets"),
+    walletId: v.id("wallets"),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     await ctx.db.patch(args.walletId, {
       isActive: false,
+      updatedAt: Date.now(),
     });
     return null;
   },
@@ -124,6 +134,7 @@ export const deactivateMneeWallet = internalMutation({
 
 /**
  * Get the current workspace's MNEE wallet for a specific network
+ * @deprecated Use wallets.listWallets instead
  */
 export const getWorkspaceMneeWallet = query({
   args: {
@@ -136,7 +147,7 @@ export const getWorkspaceMneeWallet = query({
     }
 
     const wallet = await ctx.db
-      .query("mneeWallets")
+      .query("wallets")
       .withIndex("by_workspace_network", (q) =>
         q.eq("workspaceId", workspace._id).eq("network", args.network)
       )
@@ -148,6 +159,7 @@ export const getWorkspaceMneeWallet = query({
 
 /**
  * List all MNEE wallets for the current workspace
+ * @deprecated Use wallets.listWallets instead
  */
 export const listWorkspaceMneeWallets = query({
   args: {},
@@ -158,7 +170,7 @@ export const listWorkspaceMneeWallets = query({
     }
 
     const wallets = await ctx.db
-      .query("mneeWallets")
+      .query("wallets")
       .withIndex("by_workspaceId", (q) => q.eq("workspaceId", workspace._id))
       .collect();
 

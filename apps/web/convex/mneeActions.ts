@@ -131,13 +131,17 @@ export const createWalletForWorkspace = internalAction({
       // Encrypt the WIF (private key)
       const encryptedWif = encryptWif(addressInfo.privateKey);
 
-      // Store in Convex database
+      // Store in wallets table
       console.log(`💾 Storing wallet in database...`);
-      await ctx.runMutation(internal.lib.mnee.storeMneeWallet, {
+      const now = Date.now();
+      await ctx.runMutation(internal.wallets.internalCreateWallet, {
         workspaceId: args.workspaceId,
+        name: `Default ${args.network} Wallet`,
         address: addressInfo.address,
         encryptedWif: encryptedWif,
         network: args.network,
+        createdAt: now,
+        updatedAt: now,
       });
 
       console.log(`🎉 MNEE wallet successfully created for workspace`);

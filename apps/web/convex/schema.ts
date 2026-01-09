@@ -228,17 +228,5 @@ export default defineSchema(
     .index("by_workspaceId", ["workspaceId"])
     .index("by_providerId", ["providerId"]),
 
-  // MNEE wallets (one per workspace per network)
-  mneeWallets: defineTable({
-    workspaceId: v.id("workspaces"),
-    address: v.string(), // MNEE Bitcoin address (public)
-    encryptedWif: v.string(), // Wallet Import Format encrypted with master key
-    network: v.union(v.literal("sandbox"), v.literal("mainnet")),
-    isActive: v.boolean(),
-    createdAt: v.number(),
-  })
-    .index("by_workspaceId", ["workspaceId"])
-    .index("by_workspace_network", ["workspaceId", "network"])
-    .index("by_address", ["address"]),
   }
 );

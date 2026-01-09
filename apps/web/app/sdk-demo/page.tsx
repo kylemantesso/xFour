@@ -37,7 +37,7 @@ const PRESET_NETWORKS = [
 export default function SDKDemoPage() {
   const [apiKey, setApiKey] = useState("");
   const [selectedApiKeyId, setSelectedApiKeyId] = useState<Id<"apiKeys"> | "">("");
-  const [providerAmount, setProviderAmount] = useState("0.50");
+  const [providerAmount, setProviderAmount] = useState("0.01");
   const [providerNetwork, setProviderNetwork] = useState("mnee-sandbox");
   const [isRunning, setIsRunning] = useState(false);
   const [steps, setSteps] = useState<Step[]>([]);

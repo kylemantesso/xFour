@@ -12,17 +12,14 @@ export function LandingPage() {
       {/* Hackathon Top Banner - Fixed at very top */}
       <HackathonTopBanner />
 
-      {/* Hero Section with reactive background */}
+      {/* Hero Section with heartbeat visualization */}
       <HeroSection />
 
-      {/* Live Stats Section - Immediately after hero */}
+      {/* Live Stats + Recent Transactions Combined */}
       <LiveStatsSection />
 
       {/* What is x402 Section */}
       <WhatIsX402Section />
-
-      {/* Recent Transactions */}
-      <RecentTransactionsSection />
 
       {/* Problem / Solution */}
       <ProblemSolutionSection />
@@ -45,74 +42,154 @@ function HeroSection() {
   const isLoading = stats === undefined;
   const displayValue = stats?.totalPayments ?? 0;
   
-  // Track payment events for background animation
-  const [pulseEvents, setPulseEvents] = useState<Array<{ id: string; x: number; y: number; size: number; color: string }>>([]);
-  const prevEventsRef = useRef<Set<string>>(new Set());
+  // Current time for scrolling animation
+  const [currentTime, setCurrentTime] = useState(Date.now());
   
-  // When new payments come in, create pulse effects
-  useEffect(() => {
-    if (!timeline?.events) return;
-    
-    const currentIds = new Set(timeline.events.map(e => e.id));
-    const newEvents: typeof pulseEvents = [];
-    
-    timeline.events.forEach(event => {
-      if (!prevEventsRef.current.has(event.id)) {
-        // New payment! Create a pulse at a random position
-        const colors = event.status === "settled" || event.status === "completed"
-          ? ["from-emerald-500/40", "from-green-500/40", "from-teal-500/40"]
-          : event.status === "denied" || event.status === "failed"
-          ? ["from-red-500/30"]
-          : ["from-blue-500/30", "from-violet-500/30"];
-        
-        newEvents.push({
-          id: event.id,
-          x: Math.random() * 100,
-          y: Math.random() * 100,
-          size: Math.min(400, 100 + event.amount * 50),
-          color: colors[Math.floor(Math.random() * colors.length)],
-        });
-      }
-    });
-    
-    if (newEvents.length > 0) {
-      setPulseEvents(prev => [...prev, ...newEvents].slice(-10)); // Keep last 10
-    }
-    
-    prevEventsRef.current = currentIds;
-  }, [timeline]);
-  
-  // Clean up old pulses
   useEffect(() => {
     const interval = setInterval(() => {
-      setPulseEvents(prev => prev.slice(-5));
-    }, 5000);
+      setCurrentTime(Date.now());
+    }, 50);
     return () => clearInterval(interval);
   }, []);
+  
+  const windowMs = 60 * 1000;
+  const events = timeline?.events ?? [];
+  const maxAmount = timeline?.maxAmount ?? 0.02;
 
   return (
     <section className="relative min-h-[85vh] flex items-center justify-center">
-      {/* Animated Background - Reactive to payments */}
+      {/* Animated Background with Heartbeat Visualization */}
       <div className="absolute inset-0 overflow-hidden">
-        {/* Base Gradient Orbs */}
+        {/* Large gradient blurs that react to payments */}
         <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-gradient-to-br from-pink-500/20 to-violet-600/20 rounded-full blur-3xl animate-hero-float" />
         <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-gradient-to-br from-blue-500/15 to-cyan-500/15 rounded-full blur-3xl animate-hero-float-delayed" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-full blur-3xl animate-hero-pulse" />
         
-        {/* Payment Pulse Effects - Appear when payments come in */}
-        {pulseEvents.map((pulse) => (
-          <div
-            key={pulse.id}
-            className={`absolute rounded-full blur-2xl bg-gradient-to-br ${pulse.color} to-transparent animate-payment-pulse pointer-events-none`}
-            style={{
-              left: `${pulse.x}%`,
-              top: `${pulse.y}%`,
-              width: `${pulse.size}px`,
-              height: `${pulse.size}px`,
-              transform: "translate(-50%, -50%)",
-            }}
-          />
-        ))}
+        {/* HEARTBEAT LINE GRAPH - Full width scrolling visualization */}
+        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[400px] pointer-events-none">
+          {/* Gradient glow behind the line */}
+          <div className="absolute inset-0 bg-gradient-to-t from-transparent via-emerald-500/5 to-transparent" />
+          
+          {/* SVG Heartbeat Line */}
+          <svg 
+            className="absolute inset-0 w-full h-full" 
+            preserveAspectRatio="none"
+            viewBox="0 0 1000 400"
+          >
+            {/* Gradient definitions */}
+            <defs>
+              <linearGradient id="heartbeatGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="rgb(16, 185, 129)" stopOpacity="0" />
+                <stop offset="20%" stopColor="rgb(16, 185, 129)" stopOpacity="0.3" />
+                <stop offset="80%" stopColor="rgb(16, 185, 129)" stopOpacity="0.6" />
+                <stop offset="100%" stopColor="rgb(16, 185, 129)" stopOpacity="0.8" />
+              </linearGradient>
+              <linearGradient id="heartbeatFill" x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="rgb(16, 185, 129)" stopOpacity="0.3" />
+                <stop offset="100%" stopColor="rgb(16, 185, 129)" stopOpacity="0" />
+              </linearGradient>
+              <filter id="glow">
+                <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+                <feMerge>
+                  <feMergeNode in="coloredBlur"/>
+                  <feMergeNode in="SourceGraphic"/>
+                </feMerge>
+              </filter>
+            </defs>
+            
+            {/* Generate path from events */}
+            {events.length > 0 && (() => {
+              // Build points for the heartbeat line
+              const points: Array<{x: number; y: number}> = [];
+              const sortedEvents = [...events].sort((a, b) => a.timestamp - b.timestamp);
+              
+              // Start from left edge
+              points.push({ x: 0, y: 200 });
+              
+              sortedEvents.forEach(event => {
+                const age = currentTime - event.timestamp;
+                const x = 1000 - (age / windowMs) * 1000;
+                if (x >= 0 && x <= 1000) {
+                  const intensity = Math.min(1, event.amount / maxAmount);
+                  const spike = intensity * 150;
+                  // Create heartbeat spike pattern
+                  points.push({ x: x - 15, y: 200 });
+                  points.push({ x: x - 5, y: 200 + spike * 0.3 });
+                  points.push({ x: x, y: 200 - spike });
+                  points.push({ x: x + 5, y: 200 + spike * 0.5 });
+                  points.push({ x: x + 10, y: 200 });
+                }
+              });
+              
+              // End at right edge
+              points.push({ x: 1000, y: 200 });
+              
+              // Sort by x position
+              points.sort((a, b) => a.x - b.x);
+              
+              const pathD = points.map((p, i) => 
+                i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`
+              ).join(' ');
+              
+              const fillPathD = pathD + ` L 1000 400 L 0 400 Z`;
+              
+              return (
+                <>
+                  {/* Fill area under the line */}
+                  <path d={fillPathD} fill="url(#heartbeatFill)" />
+                  {/* Main heartbeat line */}
+                  <path 
+                    d={pathD} 
+                    fill="none" 
+                    stroke="url(#heartbeatGradient)" 
+                    strokeWidth="3"
+                    filter="url(#glow)"
+                  />
+                </>
+              );
+            })()}
+            
+            {/* Baseline if no events */}
+            {events.length === 0 && (
+              <path 
+                d="M 0 200 L 1000 200" 
+                fill="none" 
+                stroke="rgba(16, 185, 129, 0.2)" 
+                strokeWidth="2"
+                strokeDasharray="10 10"
+              />
+            )}
+            
+            {/* "Now" indicator on right edge */}
+            <circle cx="990" cy="200" r="6" fill="rgb(16, 185, 129)" className="animate-pulse" />
+            <circle cx="990" cy="200" r="12" fill="rgb(16, 185, 129)" opacity="0.3" className="animate-ping" />
+          </svg>
+          
+          {/* Payment amount labels that float up */}
+          {events.slice(-5).map(event => {
+            const age = currentTime - event.timestamp;
+            const x = 100 - (age / windowMs) * 100;
+            if (x < 0 || x > 100) return null;
+            const isNew = age < 2000;
+            return (
+              <div
+                key={event.id}
+                className={`absolute text-xs font-mono transition-all duration-500 ${
+                  isNew ? "opacity-100 -translate-y-2" : "opacity-0"
+                }`}
+                style={{
+                  left: `${x}%`,
+                  top: "30%",
+                  transform: "translateX(-50%)",
+                }}
+              >
+                <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded backdrop-blur-sm">
+                  +{event.amount.toFixed(3)} MNEE
+                </span>
+              </div>
+            );
+          })}
+        </div>
         
         {/* Grid Pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_70%)]" />
@@ -199,7 +276,26 @@ function HeroSection() {
 
 function LiveStatsSection() {
   const stats = useQuery(api.payments.getPublicStats);
+  const transactions = useQuery(api.payments.getPublicRecentTransactions, { limit: 20 });
   const [selectedNetwork, setSelectedNetwork] = useState<"sandbox" | "mainnet">("sandbox");
+
+  const getExplorerUrl = (txHash: string, network: string) => {
+    if (network === "mainnet") {
+      return `https://whatsonchain.com/tx/${txHash}`;
+    }
+    // Sandbox/testnet transactions use test.whatsonchain.com
+    return `https://test.whatsonchain.com/tx/${txHash}`;
+  };
+
+  const formatTime = (timestamp: number) => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    if (seconds < 60) return `${seconds}s ago`;
+    if (minutes < 60) return `${minutes}m ago`;
+    return `${Math.floor(minutes / 60)}h ago`;
+  };
 
   return (
     <section className="relative py-20 border-t border-b border-[#222]">
@@ -265,6 +361,67 @@ function LiveStatsSection() {
 
         {/* Activity Chart */}
         <PublicActivityChart network={selectedNetwork} />
+
+        {/* Scrolling Transactions Ticker */}
+        <div className="mt-8 overflow-hidden">
+          <div className="flex items-center gap-2 mb-4">
+            <ReceiptIcon className="w-4 h-4 text-violet-400" />
+            <span className="text-sm font-medium text-[#888]">Recent On-Chain Transactions</span>
+            <span className="text-xs text-[#666]">(click to verify)</span>
+          </div>
+          
+          <div className="relative">
+            {/* Fade edges */}
+            <div className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-[#0a0a0a] to-transparent z-10 pointer-events-none" />
+            <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-[#0a0a0a] to-transparent z-10 pointer-events-none" />
+            
+            {/* Scrolling container */}
+            <div className="flex animate-scroll-left">
+              {transactions && transactions.length > 0 ? (
+                <>
+                  {/* Duplicate the list for seamless loop */}
+                  {[...transactions, ...transactions].map((tx, idx) => (
+                    <a
+                      key={`${tx.id}-${idx}`}
+                      href={tx.txHash ? getExplorerUrl(tx.txHash, tx.network) : "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex-shrink-0 mx-2 px-4 py-3 bg-[#111] hover:bg-[#1a1a1a] border border-[#333] hover:border-violet-500/50 rounded-xl transition-all group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                          <CheckCircleIcon className="w-4 h-4 text-emerald-400" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-white font-medium text-sm">{tx.amount.toFixed(4)} MNEE</span>
+                            <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
+                              tx.network === "mainnet" 
+                                ? "bg-emerald-500/20 text-emerald-400" 
+                                : "bg-amber-500/20 text-amber-400"
+                            }`}>
+                              {tx.network}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-[#666]">
+                            <span className="font-mono">
+                              {tx.txHash ? `${tx.txHash.slice(0, 6)}...${tx.txHash.slice(-4)}` : "..."}
+                            </span>
+                            <span>•</span>
+                            <span>{formatTime(tx.timestamp)}</span>
+                          </div>
+                        </div>
+                        <ExternalLinkIcon className="w-3 h-3 text-[#444] group-hover:text-violet-400 transition-colors ml-2" />
+                      </div>
+                    </a>
+                  ))}
+                </>
+              ) : (
+                <div className="px-4 py-3 text-[#666]">Loading transactions...</div>
+              )}
+            </div>
+          </div>
+        </div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
@@ -1039,132 +1196,6 @@ function WhatIsX402Section() {
               </tbody>
             </table>
           </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function RecentTransactionsSection() {
-  const transactions = useQuery(api.payments.getPublicRecentTransactions, { limit: 8 });
-  const isLoading = transactions === undefined;
-
-  const getExplorerUrl = (txHash: string, network: string) => {
-    if (network === "mainnet") {
-      return `https://whatsonchain.com/tx/${txHash}`;
-    }
-    // Sandbox uses test explorer or no explorer
-    return `https://test.whatsonchain.com/tx/${txHash}`;
-  };
-
-  const formatTime = (timestamp: number) => {
-    const now = Date.now();
-    const diff = now - timestamp;
-    const seconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-
-    if (seconds < 60) return `${seconds}s ago`;
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    return new Date(timestamp).toLocaleDateString();
-  };
-
-  return (
-    <section className="py-16 border-b border-[#222]">
-      <div className="max-w-6xl mx-auto px-4">
-        <div className="text-center mb-10">
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-violet-500/10 border border-violet-500/30 rounded-full mb-4">
-            <div className="relative">
-              <span className="w-2 h-2 bg-violet-500 rounded-full block" />
-              <span className="absolute inset-0 w-2 h-2 bg-violet-500 rounded-full animate-ping" />
-            </div>
-            <span className="text-sm font-medium text-violet-400">On-Chain Proof</span>
-          </div>
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-            Recent Transactions
-          </h2>
-          <p className="text-lg text-[#888] max-w-2xl mx-auto">
-            Every payment is recorded on the Bitcoin blockchain. Click any transaction to verify on-chain.
-          </p>
-        </div>
-
-        <div className="bg-[#111] border border-[#333] rounded-2xl overflow-hidden">
-          {/* Header */}
-          <div className="px-6 py-4 border-b border-[#333] flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ReceiptIcon className="w-5 h-5 text-violet-400" />
-              <span className="text-white font-medium">Latest Settled Payments</span>
-            </div>
-            <span className="text-xs text-[#666]">Verified on Bitcoin (BSV)</span>
-          </div>
-
-          {/* Transactions list */}
-          <div className="divide-y divide-[#222]">
-            {isLoading ? (
-              // Loading skeleton
-              Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="px-6 py-4 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-lg bg-[#1a1a1a] animate-pulse" />
-                    <div className="space-y-2">
-                      <div className="h-4 w-32 bg-[#1a1a1a] rounded animate-pulse" />
-                      <div className="h-3 w-20 bg-[#1a1a1a] rounded animate-pulse" />
-                    </div>
-                  </div>
-                  <div className="h-4 w-24 bg-[#1a1a1a] rounded animate-pulse" />
-                </div>
-              ))
-            ) : transactions && transactions.length > 0 ? (
-              transactions.map((tx) => (
-                <a
-                  key={tx.id}
-                  href={tx.txHash ? getExplorerUrl(tx.txHash, tx.network) : "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-6 py-4 flex items-center justify-between hover:bg-[#1a1a1a] transition-colors group"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                      <CheckCircleIcon className="w-5 h-5 text-emerald-400" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-white font-medium">{tx.amount.toFixed(5)} MNEE</span>
-                        <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                          tx.network === "mainnet" 
-                            ? "bg-emerald-500/20 text-emerald-400" 
-                            : "bg-amber-500/20 text-amber-400"
-                        }`}>
-                          {tx.network}
-                        </span>
-                      </div>
-                      <div className="text-xs text-[#666] font-mono">
-                        {tx.txHash ? `${tx.txHash.slice(0, 8)}...${tx.txHash.slice(-8)}` : "Pending..."}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm text-[#888]">{formatTime(tx.timestamp)}</span>
-                    <ExternalLinkIcon className="w-4 h-4 text-[#444] group-hover:text-violet-400 transition-colors" />
-                  </div>
-                </a>
-              ))
-            ) : (
-              <div className="px-6 py-12 text-center">
-                <p className="text-[#666]">No transactions yet. Be the first to test!</p>
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          {transactions && transactions.length > 0 && (
-            <div className="px-6 py-4 border-t border-[#333] bg-[#0d0d0d]">
-              <p className="text-xs text-[#666] text-center">
-                All transactions are publicly verifiable on the Bitcoin (BSV) blockchain via WhatsOnChain
-              </p>
-            </div>
-          )}
         </div>
       </div>
     </section>

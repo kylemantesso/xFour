@@ -27,7 +27,13 @@ export const runTestPayment = internalAction({
     const apiKey = process.env.TEST_PAYMENT_API_KEY;
     const gatewayBaseUrl = process.env.TEST_GATEWAY_URL || "https://your-app.vercel.app/api/gateway";
     const mockProviderUrl = process.env.TEST_PROVIDER_URL || "https://your-app.vercel.app/api/mock-provider";
-    const paymentAmount = process.env.TEST_PAYMENT_AMOUNT || "0.001";
+    
+    // Randomize payment amount between 0.001 and 0.02 MNEE
+    const minAmount = 0.001;
+    const maxAmount = 0.02;
+    const randomAmount = minAmount + Math.random() * (maxAmount - minAmount);
+    const paymentAmount = randomAmount.toFixed(5); // 5 decimal places for MNEE
+    
     const paymentNetwork = process.env.TEST_PAYMENT_NETWORK || "mnee-sandbox";
 
     if (!apiKey) {
@@ -172,8 +178,8 @@ export const paymentLoop = internalAction({
   returns: v.null(),
   handler: async (ctx) => {
     const isEnabled = process.env.TEST_PAYMENTS_ENABLED === "true";
-    const baseIntervalMs = parseInt(process.env.TEST_PAYMENT_INTERVAL_MS || "1000", 10);
-    const randomDelayMaxMs = parseInt(process.env.TEST_PAYMENT_RANDOM_DELAY_MS || "3000", 10);
+    const baseIntervalMs = parseInt(process.env.TEST_PAYMENT_INTERVAL_MS || "500", 10); // Faster default
+    const randomDelayMaxMs = parseInt(process.env.TEST_PAYMENT_RANDOM_DELAY_MS || "1500", 10); // Shorter random delay
 
     if (!isEnabled) {
       console.log("[TestPayment] Disabled - not rescheduling");

@@ -250,6 +250,54 @@ export const getPublicStats = query({
  * No authentication required - for landing page
  * Returns anonymized data (no workspace/user info)
  */
+/**
+ * Get recent settled transactions with tx hashes for public display
+ * No authentication required - for landing page
+ */
+export const getPublicRecentTransactions = query({
+  args: {
+    limit: v.optional(v.number()),
+  },
+  returns: v.array(
+    v.object({
+      id: v.string(),
+      amount: v.number(),
+      network: v.string(),
+      txHash: v.union(v.string(), v.null()),
+      timestamp: v.number(),
+      status: v.string(),
+    })
+  ),
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 10;
+
+    // Get recent settled/completed payments with tx hashes
+    const payments = await ctx.db
+      .query("payments")
+      .order("desc")
+      .take(100);
+
+    // Filter to only settled payments with tx hashes
+    const settledWithTx = payments
+      .filter(
+        (p) =>
+          (p.status === "settled" || p.status === "completed") &&
+          p.txHash
+      )
+      .slice(0, limit)
+      .map((p) => ({
+        id: p._id,
+        amount: p.amount,
+        network: p.network,
+        txHash: p.txHash ?? null,
+        timestamp: p.createdAt,
+        status: p.status,
+      }));
+
+    return settledWithTx;
+  },
+});
+
 export const getPublicActivityTimeline = query({
   args: {
     windowSeconds: v.optional(v.number()), // default 60

@@ -61,11 +61,21 @@ export const runTestPayment = internalAction({
         };
       }
 
-      // Step 2: Extract invoice headers
+      // Step 2: Extract and normalize invoice headers
+      // Headers come back lowercase from fetch, but the quote endpoint expects canonical format
       const invoiceHeaders: Record<string, string> = {};
       providerResponse.headers.forEach((value, key) => {
-        if (key.toLowerCase().startsWith("x-402-")) {
-          invoiceHeaders[key] = value;
+        const lower = key.toLowerCase();
+        if (lower.startsWith("x-402-")) {
+          // Convert to canonical format: x-402-invoice-id -> X-402-Invoice-Id
+          const suffix = lower.slice("x-402-".length);
+          const canonical =
+            "X-402-" +
+            suffix
+              .split("-")
+              .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+              .join("-");
+          invoiceHeaders[canonical] = value;
         }
       });
 

@@ -241,11 +241,34 @@ function WalletCard({ wallet, canManage }: { wallet: WalletData; canManage: bool
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(wallet.name);
+  const [balance, setBalance] = useState<number | null>(null);
+  const [isLoadingBalance, setIsLoadingBalance] = useState(true);
   const toast = useToast();
   const updateWallet = useMutation(api.wallets.updateWallet);
   const deleteWallet = useMutation(api.wallets.deleteWallet);
+  const getWalletBalance = useAction(api.mneeActions.getWalletBalance);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Fetch balance on mount
+  useEffect(() => {
+    const fetchBalance = async () => {
+      setIsLoadingBalance(true);
+      try {
+        const bal = await getWalletBalance({
+          address: wallet.address,
+          network: wallet.network,
+        });
+        setBalance(bal);
+      } catch (error) {
+        console.error("Failed to fetch balance:", error);
+        setBalance(null);
+      } finally {
+        setIsLoadingBalance(false);
+      }
+    };
+    fetchBalance();
+  }, [wallet.address, wallet.network, getWalletBalance]);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(wallet.address);
@@ -255,9 +278,19 @@ function WalletCard({ wallet, canManage }: { wallet: WalletData; canManage: bool
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    // Simulate refresh - in a real app, you'd query the MNEE API for balance
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setIsRefreshing(false);
+    try {
+      const bal = await getWalletBalance({
+        address: wallet.address,
+        network: wallet.network,
+      });
+      setBalance(bal);
+      toast.success("Balance updated");
+    } catch (error) {
+      console.error("Failed to refresh balance:", error);
+      toast.error("Failed to refresh balance");
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const handleSave = async () => {
@@ -426,17 +459,25 @@ function WalletCard({ wallet, canManage }: { wallet: WalletData; canManage: bool
                 </div>
               </div>
 
-      {/* Balance placeholder - would need MNEE API integration */}
+      {/* Balance */}
       <div className="mt-4 grid grid-cols-2 gap-4">
         <div className="p-3 bg-[#0a0a0a] rounded-lg">
           <p className="text-xs text-[#666] mb-1">Balance</p>
           <p className="text-lg font-semibold text-white">
-            -- MNEE
+            {isLoadingBalance ? (
+              <span className="text-[#666]">Loading...</span>
+            ) : balance !== null ? (
+              `${balance.toFixed(5)} MNEE`
+            ) : (
+              <span className="text-[#666]">-- MNEE</span>
+            )}
           </p>
-          <p className="text-xs text-[#666] mt-1">
-            Connect MNEE API for live balance
-                    </p>
-                  </div>
+          {balance === null && !isLoadingBalance && (
+            <p className="text-xs text-amber-400 mt-1">
+              Unable to fetch balance
+            </p>
+          )}
+        </div>
         <div className="p-3 bg-[#0a0a0a] rounded-lg">
           <p className="text-xs text-[#666] mb-1">Network</p>
           <p className={`text-lg font-semibold ${isMainnet ? "text-emerald-400" : "text-amber-400"}`}>

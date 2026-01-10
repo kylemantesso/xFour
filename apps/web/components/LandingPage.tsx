@@ -1,10 +1,75 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { SignUpButton } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import Link from "next/link";
+
+// ============================================
+// COUNT UP HOOK
+// ============================================
+
+function useCountUp(
+  endValue: number,
+  duration: number = 1500,
+  startOnMount: boolean = true
+): { value: number; isAnimating: boolean; start: () => void } {
+  const [value, setValue] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
+  const animationRef = useRef<number | null>(null);
+
+  const start = useCallback(() => {
+    if (hasStarted || endValue === 0) return;
+    setHasStarted(true);
+    setIsAnimating(true);
+    
+    const startTime = performance.now();
+    const startValue = 0;
+    
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      
+      // Ease out cubic for smooth deceleration
+      const easeOut = 1 - Math.pow(1 - progress, 3);
+      const currentValue = Math.floor(startValue + (endValue - startValue) * easeOut);
+      
+      setValue(currentValue);
+      
+      if (progress < 1) {
+        animationRef.current = requestAnimationFrame(animate);
+      } else {
+        setValue(endValue);
+        setIsAnimating(false);
+      }
+    };
+    
+    animationRef.current = requestAnimationFrame(animate);
+  }, [endValue, duration, hasStarted]);
+
+  useEffect(() => {
+    if (startOnMount && endValue > 0 && !hasStarted) {
+      start();
+    }
+    
+    return () => {
+      if (animationRef.current) {
+        cancelAnimationFrame(animationRef.current);
+      }
+    };
+  }, [endValue, startOnMount, hasStarted, start]);
+
+  // Reset when endValue changes significantly (new data loaded)
+  useEffect(() => {
+    if (hasStarted && endValue > value * 1.1) {
+      setHasStarted(false);
+    }
+  }, [endValue, hasStarted, value]);
+
+  return { value, isAnimating, start };
+}
 
 export function LandingPage() {
   return (
@@ -35,6 +100,8 @@ export function LandingPage() {
 
 function HeroSection() {
   const stats = useQuery(api.payments.getPublicStats);
+  const { value: animatedPayments } = useCountUp(stats?.totalPayments ?? 0, 2000);
+  const isLoading = stats === undefined;
 
   return (
     <section className="relative min-h-[90vh] flex items-center justify-center">
@@ -60,9 +127,16 @@ function HeroSection() {
             Powered by MNEE
           </span>
           <span className="h-4 w-px bg-[#333]" />
-          <span className="text-sm font-medium text-emerald-400">
-            {stats?.totalPayments ?? "..."} payments processed
-          </span>
+          {isLoading ? (
+            <div className="flex items-center gap-2">
+              <div className="h-4 w-16 bg-[#1a1a1a] rounded animate-pulse" />
+              <span className="text-sm font-medium text-[#666]">payments processed</span>
+            </div>
+          ) : (
+            <span className="text-sm font-medium text-emerald-400">
+              {animatedPayments.toLocaleString()} payments processed
+            </span>
+          )}
         </div>
 
         {/* Main Headline */}
@@ -108,8 +182,8 @@ function HeroSection() {
             <span>BSV Chain</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-[#666]">
-            <ShieldIcon className="w-5 h-5" />
-            <span>Non-Custodial</span>
+            <CurrencyIcon className="w-5 h-5" />
+            <span>Sub-cent Fees</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-[#666]">
             <BoltIcon className="w-5 h-5" />
@@ -408,6 +482,7 @@ function StatCard({
   icon,
   loading,
   accent,
+  decimals = 0,
 }: {
   label: string;
   value: number;
@@ -415,7 +490,10 @@ function StatCard({
   icon: React.ReactNode;
   loading?: boolean;
   accent?: "emerald" | "violet" | "blue";
+  decimals?: number;
 }) {
+  const { value: animatedValue } = useCountUp(value, 1500);
+  
   const accentColors = {
     emerald: "from-emerald-500/20 to-emerald-500/5 border-emerald-500/30",
     violet: "from-violet-500/20 to-violet-500/5 border-violet-500/30",
@@ -428,6 +506,11 @@ function StatCard({
     blue: "text-blue-400",
   };
 
+  // Format the display value
+  const displayValue = decimals > 0 
+    ? (animatedValue * value / (animatedValue || 1)).toFixed(decimals)
+    : animatedValue.toLocaleString();
+
   return (
     <div className={`bg-gradient-to-br ${accent ? accentColors[accent] : "from-[#1a1a1a] to-[#111] border-[#333]"} border rounded-xl p-5`}>
       <div className={`mb-3 ${accent ? iconColors[accent] : "text-[#666]"}`}>
@@ -435,12 +518,14 @@ function StatCard({
       </div>
       <p className="text-xs text-[#666] uppercase tracking-wider mb-1">{label}</p>
       {loading ? (
-        <div className="h-8 w-24 bg-[#1a1a1a] rounded animate-pulse" />
+        <div className="space-y-2">
+          <div className="h-8 w-20 bg-[#1a1a1a] rounded animate-pulse" />
+        </div>
       ) : (
-        <p className="text-2xl font-bold text-white">
+        <p className="text-2xl font-bold text-white tabular-nums">
           {typeof value === "number" && value % 1 !== 0
             ? value.toFixed(2)
-            : value.toLocaleString()}
+            : displayValue}
           {suffix && <span className="text-base text-[#888]">{suffix}</span>}
         </p>
       )}
@@ -885,14 +970,6 @@ function BSVIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
       <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 21.6c-5.302 0-9.6-4.298-9.6-9.6S6.698 2.4 12 2.4s9.6 4.298 9.6 9.6-4.298 9.6-9.6 9.6zm1.2-14.4H9.6v2.4h3.6c.662 0 1.2.538 1.2 1.2s-.538 1.2-1.2 1.2H9.6v2.4h3.6c.662 0 1.2.538 1.2 1.2s-.538 1.2-1.2 1.2H9.6v2.4h3.6c1.988 0 3.6-1.612 3.6-3.6 0-1.092-.49-2.07-1.26-2.73.77-.66 1.26-1.638 1.26-2.73 0-1.988-1.612-3.6-3.6-3.6z" />
-    </svg>
-  );
-}
-
-function ShieldIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
     </svg>
   );
 }

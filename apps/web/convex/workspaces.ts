@@ -1,6 +1,5 @@
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
-import { internal } from "./_generated/api";
 import {
   requireAuth,
   getUser,
@@ -97,12 +96,6 @@ export const createWorkspace = mutation({
         currentWorkspaceId: workspaceId,
       });
     }
-
-    // Auto-generate MNEE wallet for the workspace (scheduled to run immediately)
-    await ctx.scheduler.runAfter(0, internal.mneeActions.createWalletForWorkspace, {
-      workspaceId,
-      network: "sandbox",
-    });
 
     return { workspaceId };
   },
@@ -202,14 +195,24 @@ export const deleteWorkspace = mutation({
       await ctx.db.delete(policy._id);
     }
 
-    // Wallets
-    const wallets = await ctx.db
-      .query("wallets")
+    // Treasuries
+    const treasuries = await ctx.db
+      .query("treasuries")
       .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
       .collect();
-    for (const wallet of wallets) {
-      await ctx.db.delete(wallet._id);
+    for (const treasury of treasuries) {
+      await ctx.db.delete(treasury._id);
     }
+
+    // Connected Wallets
+    const connectedWallets = await ctx.db
+      .query("connectedWallets")
+      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
+      .collect();
+    for (const connectedWallet of connectedWallets) {
+      await ctx.db.delete(connectedWallet._id);
+    }
+
 
     // Payments (keep for audit trail, but you could also delete)
     // Skipping payment deletion to preserve history
@@ -431,7 +434,7 @@ export const leaveWorkspace = mutation({
 export const addReceivingAddress = mutation({
   args: {
     address: v.string(),
-    network: v.union(v.literal("sandbox"), v.literal("mainnet")),
+    network: v.union(v.literal("sepolia"), v.literal("mainnet")),
     label: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -472,7 +475,7 @@ export const addReceivingAddress = mutation({
 export const removeReceivingAddress = mutation({
   args: {
     address: v.string(),
-    network: v.union(v.literal("sandbox"), v.literal("mainnet")),
+    network: v.union(v.literal("sepolia"), v.literal("mainnet")),
   },
   handler: async (ctx, args) => {
     const { workspaceId, workspace, role } = await getCurrentWorkspaceContext(ctx);
@@ -505,3 +508,29 @@ export const listReceivingAddresses = query({
   },
 });
 
+// ============================================
+// TREASURY HELPERS
+// ============================================
+
+/**
+ * Get all treasuries for a workspace
+ */
+export const getWorkspaceTreasuries = query({
+  args: {
+    workspaceId: v.id("workspaces"),
+  },
+  handler: async (ctx, args) => {
+    // Verify access
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Unauthorized");
+    }
+
+    const treasuries = await ctx.db
+      .query("treasuries")
+      .withIndex("by_workspaceId", (q) => q.eq("workspaceId", args.workspaceId))
+      .collect();
+
+    return treasuries;
+  },
+});

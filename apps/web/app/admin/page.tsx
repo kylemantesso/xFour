@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation, useAction } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Id } from "../../convex/_generated/dataModel";
 import { useToast } from "../../components/Toast";
@@ -71,11 +71,11 @@ function ClockIcon({ className }: { className?: string }) {
   );
 }
 
-type MneeNetwork = {
-  _id: Id<"mneeNetworks">;
-  network: "sandbox" | "mainnet";
+type EthereumNetwork = {
+  _id: Id<"networks">;
+  network: "sepolia" | "mainnet";
   name: string;
-  apiUrl: string;
+  rpcUrl: string;
   explorerUrl?: string;
   decimals: number;
   isActive: boolean;
@@ -162,25 +162,8 @@ function BootstrapAdmin() {
   );
 }
 
-function WrenchIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-  );
-}
-
-function LockOpenIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
-    </svg>
-  );
-}
-
 function AdminDashboard() {
-  const [activeTab, setActiveTab] = useState<"payments" | "networks" | "admins" | "tools">("payments");
+  const [activeTab, setActiveTab] = useState<"payments" | "networks" | "admins">("payments");
 
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
@@ -241,60 +224,46 @@ function AdminDashboard() {
               Admins
             </span>
           </button>
-          <button
-            onClick={() => setActiveTab("tools")}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              activeTab === "tools"
-                ? "bg-white text-black"
-                : "text-[#888] hover:text-white hover:bg-[#1a1a1a]"
-            }`}
-          >
-            <span className="flex items-center gap-2">
-              <WrenchIcon className="w-4 h-4" />
-              Tools
-            </span>
-          </button>
         </div>
 
         {/* Content */}
         {activeTab === "payments" && <PaymentsManagement />}
-        {activeTab === "networks" && <MneeNetworksManagement />}
+        {activeTab === "networks" && <EthereumNetworksManagement />}
         {activeTab === "admins" && <AdminsManagement />}
-        {activeTab === "tools" && <AdminTools />}
       </div>
     </div>
   );
 }
 
-function MneeNetworksManagement() {
-  const networks = useQuery(api.mneeNetworks.listNetworks, { includeSandbox: true });
-  const seedNetworksMutation = useMutation(api.mneeNetworks.seedNetworks);
-  const updateNetworkMutation = useMutation(api.mneeNetworks.updateNetwork);
+function EthereumNetworksManagement() {
+  const networks = useQuery(api.networks.listNetworks, { includeSepolia: true });
+  const seedNetworksMutation = useMutation(api.networks.seedNetworks);
+  const updateNetworkMutation = useMutation(api.networks.updateNetwork);
   const toast = useToast();
 
-  const [editingNetwork, setEditingNetwork] = useState<MneeNetwork | null>(null);
+  const [editingNetwork, setEditingNetwork] = useState<EthereumNetwork | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [togglingNetwork, setTogglingNetwork] = useState<"sandbox" | "mainnet" | null>(null);
+  const [togglingNetwork, setTogglingNetwork] = useState<"sepolia" | "mainnet" | null>(null);
   const [isSeeding, setIsSeeding] = useState(false);
 
   // Form state
   const [name, setName] = useState("");
-  const [apiUrl, setApiUrl] = useState("");
+  const [rpcUrl, setRpcUrl] = useState("");
   const [explorerUrl, setExplorerUrl] = useState("");
 
   const resetForm = () => {
     setName("");
-    setApiUrl("");
+    setRpcUrl("");
     setExplorerUrl("");
     setEditingNetwork(null);
     setError(null);
   };
 
-  const startEditing = (network: MneeNetwork) => {
+  const startEditing = (network: EthereumNetwork) => {
     setEditingNetwork(network);
     setName(network.name);
-    setApiUrl(network.apiUrl);
+    setRpcUrl(network.rpcUrl);
     setExplorerUrl(network.explorerUrl || "");
   };
 
@@ -316,7 +285,7 @@ function MneeNetworksManagement() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingNetwork || !name || !apiUrl) return;
+    if (!editingNetwork || !name || !rpcUrl) return;
 
     setIsSubmitting(true);
     setError(null);
@@ -325,7 +294,7 @@ function MneeNetworksManagement() {
       await updateNetworkMutation({
         network: editingNetwork.network,
         name,
-        apiUrl,
+        rpcUrl,
         explorerUrl: explorerUrl || undefined,
       });
       resetForm();
@@ -337,7 +306,7 @@ function MneeNetworksManagement() {
     }
   };
 
-  const handleToggleActive = async (network: MneeNetwork) => {
+  const handleToggleActive = async (network: EthereumNetwork) => {
     setTogglingNetwork(network.network);
     try {
       await updateNetworkMutation({
@@ -420,9 +389,9 @@ function MneeNetworksManagement() {
                   </label>
                   <input
                     type="url"
-                    value={apiUrl}
-                    onChange={(e) => setApiUrl(e.target.value)}
-                    placeholder="https://api.mnee.io"
+                    value={rpcUrl}
+                    onChange={(e) => setRpcUrl(e.target.value)}
+                    placeholder="https://eth.llamarpc.com"
                     className="w-full px-4 py-3 border border-[#333] rounded-lg bg-[#111] text-white placeholder-[#666] focus:outline-none focus:border-[#555] font-mono text-sm"
                     required
                   />
@@ -444,7 +413,7 @@ function MneeNetworksManagement() {
               <div className="flex gap-2 pt-2">
                 <button
                   type="submit"
-                  disabled={isSubmitting || !name || !apiUrl}
+                  disabled={isSubmitting || !name || !rpcUrl}
                   className="px-4 py-2 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSubmitting ? "Saving..." : "Update Network"}
@@ -515,9 +484,9 @@ function MneeNetworksManagement() {
                     <div className="space-y-1">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-semibold text-white">{network.name}</p>
-                        {network.network === "sandbox" && (
+                        {network.network === "sepolia" && (
                           <span className="px-2 py-0.5 text-xs font-medium bg-amber-900/50 text-amber-400 rounded-full">
-                            Sandbox
+                            Testnet
                           </span>
                         )}
                         <span
@@ -535,7 +504,7 @@ function MneeNetworksManagement() {
                       </p>
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
                         <span className="text-[#888]">
-                          API: <span className="font-mono text-[#666]">{network.apiUrl}</span>
+                          RPC: <span className="font-mono text-[#666]">{network.rpcUrl}</span>
                         </span>
                         {network.explorerUrl && (
                           <span className="text-[#888]">
@@ -547,14 +516,14 @@ function MneeNetworksManagement() {
                   </div>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => startEditing(network as MneeNetwork)}
+                      onClick={() => startEditing(network as EthereumNetwork)}
                       className="p-2 text-[#666] hover:text-white rounded-lg hover:bg-[#1a1a1a] transition-colors"
                       title="Edit network"
                     >
                       <EditIcon className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => handleToggleActive(network as MneeNetwork)}
+                      onClick={() => handleToggleActive(network as EthereumNetwork)}
                       disabled={togglingNetwork === network.network}
                       className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors disabled:opacity-50 ${
                         network.isActive
@@ -938,148 +907,6 @@ function PaymentsManagement() {
             </table>
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-function AdminTools() {
-  const [encryptedWif, setEncryptedWif] = useState("");
-  const [decryptedWif, setDecryptedWif] = useState<string | null>(null);
-  const [isDecrypting, setIsDecrypting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const toast = useToast();
-  const decryptWifAction = useAction(api.mneeActions.decryptWifForAdmin);
-
-  const handleDecrypt = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!encryptedWif.trim()) return;
-
-    setIsDecrypting(true);
-    setError(null);
-    setDecryptedWif(null);
-
-    try {
-      const result = await decryptWifAction({ encryptedWif: encryptedWif.trim() });
-
-      if (!result.success) {
-        throw new Error(result.error || "Failed to decrypt WIF");
-      }
-
-      setDecryptedWif(result.decryptedWif || null);
-      toast.success("WIF decrypted successfully");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Decryption failed");
-    } finally {
-      setIsDecrypting(false);
-    }
-  };
-
-  const handleCopy = () => {
-    if (decryptedWif) {
-      navigator.clipboard.writeText(decryptedWif);
-      toast.success("Copied to clipboard");
-    }
-  };
-
-  const handleClear = () => {
-    setEncryptedWif("");
-    setDecryptedWif(null);
-    setError(null);
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Decrypt WIF Tool */}
-      <div className="bg-[#111] rounded-xl border border-[#333] p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-violet-500/20 to-purple-600/20 border border-violet-500/30 flex items-center justify-center">
-            <LockOpenIcon className="w-5 h-5 text-violet-400" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-white">Decrypt WIF</h2>
-            <p className="text-sm text-[#888]">
-              Paste an encrypted WIF to decrypt it using your MNEE_ENCRYPTION_KEY
-            </p>
-          </div>
-        </div>
-
-        <form onSubmit={handleDecrypt} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-[#888] mb-2">
-              Encrypted WIF
-            </label>
-            <textarea
-              value={encryptedWif}
-              onChange={(e) => setEncryptedWif(e.target.value)}
-              placeholder="Paste encrypted WIF here (format: iv:authTag:salt:encryptedData)"
-              rows={3}
-              className="w-full px-4 py-3 border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555] font-mono text-sm resize-none"
-            />
-          </div>
-
-          {error && (
-            <div className="bg-red-900/20 border border-red-800 rounded-lg p-3">
-              <p className="text-sm text-red-200">{error}</p>
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              disabled={isDecrypting || !encryptedWif.trim()}
-              className="px-4 py-2 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isDecrypting ? "Decrypting..." : "Decrypt WIF"}
-            </button>
-            <button
-              type="button"
-              onClick={handleClear}
-              className="px-4 py-2 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors"
-            >
-              Clear
-            </button>
-          </div>
-        </form>
-
-        {/* Decrypted Result */}
-        {decryptedWif && (
-          <div className="mt-6 bg-emerald-900/10 border border-emerald-800/50 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-medium text-emerald-400">Decrypted WIF</p>
-              <button
-                onClick={handleCopy}
-                className="px-3 py-1 text-xs font-medium text-emerald-400 hover:bg-emerald-900/30 rounded transition-colors"
-              >
-                Copy
-              </button>
-            </div>
-            <p className="font-mono text-sm text-white break-all bg-[#0a0a0a] rounded p-3">
-              {decryptedWif}
-            </p>
-            <p className="text-xs text-[#666] mt-2">
-              ⚠️ Keep this private key secure. Never share it with anyone.
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Additional Info */}
-      <div className="bg-[#111] rounded-xl border border-[#333] p-6">
-        <h3 className="text-sm font-semibold text-white mb-3">About WIF Encryption</h3>
-        <div className="text-sm text-[#888] space-y-2">
-          <p>
-            WIF (Wallet Import Format) keys are encrypted using AES-256-GCM with a master key
-            from the <code className="text-violet-400 bg-violet-900/20 px-1 rounded">MNEE_ENCRYPTION_KEY</code> environment variable.
-          </p>
-          <p>
-            Encrypted format: <code className="text-[#666] font-mono">iv:authTag:salt:encryptedData</code>
-          </p>
-          <p>
-            The decryption will only work if the encrypted WIF was created with the same
-            encryption key that is currently set in your environment.
-          </p>
-        </div>
       </div>
     </div>
   );

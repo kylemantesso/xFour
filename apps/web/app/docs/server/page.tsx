@@ -40,7 +40,7 @@ app.use(express.json());
 const x402 = createX402Middleware({
   gatewayUrl: 'https://xfour.xyz/api/gateway',
   apiKey: process.env.X402_SERVER_KEY!,
-  payToAddress: process.env.MNEE_ADDRESS!, // Your MNEE wallet
+  payToAddress: process.env.ETHEREUM_ADDRESS!, // Your Ethereum wallet
   network: 'mainnet',
 });
 
@@ -115,7 +115,7 @@ app.listen(3000);`}</CodeBlock>
                 </td>
                 <td className="py-3 px-4 text-emerald-400">Yes</td>
                 <td className="py-3 px-4 text-[#888]">
-                  Your MNEE wallet address
+                  Your Ethereum wallet address (0x...)
                 </td>
               </tr>
               <tr className="border-b border-[#222]">
@@ -123,11 +123,11 @@ app.listen(3000);`}</CodeBlock>
                   network
                 </td>
                 <td className="py-3 px-4 text-violet-400 font-mono text-xs">
-                  &apos;sandbox&apos; | &apos;mainnet&apos;
+                  &apos;sepolia&apos; | &apos;mainnet&apos;
                 </td>
                 <td className="py-3 px-4 text-[#666]">No</td>
                 <td className="py-3 px-4 text-[#888]">
-                  MNEE network (default: mainnet)
+                  Ethereum network (default: mainnet)
                 </td>
               </tr>
               <tr className="border-b border-[#222]">
@@ -416,13 +416,13 @@ if (result.verified) {
       <section className="not-prose">
         <h2 className="text-2xl font-bold text-white mb-4">Testing</h2>
         <p className="text-[#888] mb-4">
-          For testing, use the sandbox network:
+          For testing, use the Sepolia testnet:
         </p>
         <CodeBlock language="typescript">{`const x402 = createX402Middleware({
   gatewayUrl: 'http://localhost:3000/api/gateway',
   apiKey: process.env.X402_SERVER_KEY_TEST!,
   payToAddress: 'test-address',
-  network: 'sandbox', // Use sandbox for testing
+  network: 'sepolia', // Use Sepolia testnet for testing
 });`}</CodeBlock>
 
         <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">

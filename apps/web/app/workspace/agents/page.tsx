@@ -9,7 +9,7 @@ import { useToast } from "../../../components/Toast";
 import { Id } from "../../../convex/_generated/dataModel";
 
 // Types
-type MneeNetwork = "sandbox" | "mainnet";
+type EthereumNetwork = "sepolia" | "mainnet";
 
 // Icons
 function KeyIcon({ className }: { className?: string }) {
@@ -71,8 +71,10 @@ export default function AgentsPage() {
 function AgentsContent() {
   const workspaceData = useQuery(api.workspaces.getCurrentWorkspace);
   const apiKeys = useQuery(api.apiKeys.listApiKeys, {});
-  const wallets = useQuery(api.wallets.listWallets, {});
-  const mneeWallets = useQuery(api.mnee.listWorkspaceMneeWallets, {});
+  const treasuries = useQuery(
+    api.treasuries.listTreasuries,
+    workspaceData?.workspace?._id ? { workspaceId: workspaceData.workspace._id } : "skip"
+  );
 
   if (!workspaceData) {
     return <LoadingSkeleton />;
@@ -81,8 +83,9 @@ function AgentsContent() {
   const { role } = workspaceData;
   const isAdmin = role === "owner" || role === "admin";
   const canWrite = role === "owner" || role === "admin" || role === "member";
-  // Allow creation if they have either new wallets OR old mneeWallets (backward compatibility)
-  const hasWallets = (wallets && wallets.length > 0) || (mneeWallets && mneeWallets.length > 0);
+  // Allow creation if they have active treasuries
+  const activeTreasuries = treasuries?.filter(t => t.status === "active") ?? [];
+  const hasTreasuries = activeTreasuries.length > 0;
 
   // Filter to only show agent keys
   const agentKeys = apiKeys?.filter(key => key.type === "agent" || !key.type) ?? [];
@@ -108,7 +111,7 @@ function AgentsContent() {
               </p>
             </div>
           </div>
-          {canWrite && <CreateApiKeyButton hasWallets={hasWallets ?? false} wallets={wallets} />}
+          {canWrite && <CreateApiKeyButton hasTreasuries={hasTreasuries} treasuries={activeTreasuries} />}
         </div>
 
         {/* Info Card */}
@@ -153,66 +156,105 @@ function AgentsContent() {
 // CREATE API KEY BUTTON
 // ============================================
 
-type WalletData = {
-  _id: string;
-  name: string;
-  address: string;
-  network: MneeNetwork;
-  isActive: boolean;
+type TreasuryData = {
+  _id: Id<"treasuries">;
+  network: EthereumNetwork;
+  contractAddress: string;
+  adminAddresses: string[];
+  status: "pending" | "active" | "paused" | "disabled";
+  cachedBalance?: number;
   createdAt: number;
-  updatedAt: number;
 };
 
 function CreateApiKeyButton({ 
-  hasWallets, 
-  wallets 
+  hasTreasuries, 
+  treasuries 
 }: { 
-  hasWallets: boolean; 
-  wallets: WalletData[] | undefined;
+  hasTreasuries: boolean; 
+  treasuries: TreasuryData[];
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [selectedWalletId, setSelectedWalletId] = useState<string>("");
-  const [showCreateWallet, setShowCreateWallet] = useState(false);
+  const [selectedTreasuryId, setSelectedTreasuryId] = useState<string>("");
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  // Usage limits
+  // Spending limits (synced to treasury contract)
+  const [maxPerTransaction, setMaxPerTransaction] = useState("");
   const [dailyLimit, setDailyLimit] = useState("");
   const [monthlyLimit, setMonthlyLimit] = useState("");
-  const [maxRequest, setMaxRequest] = useState("");
   const [showLimits, setShowLimits] = useState(false);
   const createApiKey = useMutation(api.apiKeys.createApiKey);
+  const toast = useToast();
 
-  // Set default wallet when wallets load
+  // Set default treasury when treasuries load
   useEffect(() => {
-    if (wallets && wallets.length > 0 && !selectedWalletId) {
-      setSelectedWalletId(wallets[0]._id);
+    if (treasuries && treasuries.length > 0 && !selectedTreasuryId) {
+      setSelectedTreasuryId(treasuries[0]._id);
     }
-  }, [wallets, selectedWalletId]);
+  }, [treasuries, selectedTreasuryId]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !selectedWalletId) return;
+    if (!name.trim() || !selectedTreasuryId) return;
 
     setIsCreating(true);
     try {
+      const spendingLimits = (maxPerTransaction || dailyLimit || monthlyLimit) ? {
+        maxPerTransaction: maxPerTransaction ? parseFloat(maxPerTransaction) : 0,
+        dailyLimit: dailyLimit ? parseFloat(dailyLimit) : 0,
+        monthlyLimit: monthlyLimit ? parseFloat(monthlyLimit) : 0,
+      } : undefined;
+
+      // Get the selected treasury details
+      const selectedTreasury = treasuries?.find(t => t._id === selectedTreasuryId);
+
       const result = await createApiKey({
         name: name.trim(),
         description: description.trim() || undefined,
         type: "agent",
-        walletId: selectedWalletId as Id<"wallets">,
-        dailyLimit: dailyLimit ? parseFloat(dailyLimit) : undefined,
-        monthlyLimit: monthlyLimit ? parseFloat(monthlyLimit) : undefined,
-        maxRequest: maxRequest ? parseFloat(maxRequest) : undefined,
+        treasuryId: selectedTreasuryId as Id<"treasuries">,
+        spendingLimits,
       });
+
+      // Auto-configure API key on-chain
+      if (selectedTreasury) {
+        try {
+          console.log("Auto-configuring API key on Treasury contract...");
+          const configResponse = await fetch("/api/treasury/configure-api-key", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              apiKey: result.apiKey,
+              treasuryAddress: selectedTreasury.contractAddress,
+              network: selectedTreasury.network,
+              spendingLimits: spendingLimits || {
+                maxPerTransaction: 100,  // Default: 100 MNEE
+                dailyLimit: 1000,        // Default: 1000 MNEE/day
+                monthlyLimit: 10000,     // Default: 10000 MNEE/month
+              },
+            }),
+          });
+          const configResult = await configResponse.json();
+          if (configResult.status === "ok") {
+            console.log("✅ API key configured on-chain:", configResult.txHash || "already configured");
+          } else {
+            console.warn("⚠️ Failed to configure on-chain:", configResult.error);
+            toast.warning("API key created but on-chain sync failed. You may need to sync manually.");
+          }
+        } catch (syncError) {
+          console.error("Failed to sync API key on-chain:", syncError);
+          toast.warning("API key created but on-chain sync failed. You may need to sync manually.");
+        }
+      }
+
       setNewApiKey(result.apiKey);
       setName("");
       setDescription("");
+      setMaxPerTransaction("");
       setDailyLimit("");
       setMonthlyLimit("");
-      setMaxRequest("");
       setShowLimits(false);
     } finally {
       setIsCreating(false);
@@ -233,9 +275,9 @@ function CreateApiKeyButton({
     setCopied(false);
     setName("");
     setDescription("");
+    setMaxPerTransaction("");
     setDailyLimit("");
     setMonthlyLimit("");
-    setMaxRequest("");
     setShowLimits(false);
   };
 
@@ -243,9 +285,9 @@ function CreateApiKeyButton({
     <>
       <button
         onClick={() => setIsOpen(true)}
-        disabled={!hasWallets}
+        disabled={!hasTreasuries}
         className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        title={!hasWallets ? "Create a wallet in the Treasury page first" : undefined}
+        title={!hasTreasuries ? "Deploy a treasury first in the Treasury page" : undefined}
       >
         <PlusIcon className="w-4 h-4" />
         Create API Key
@@ -344,33 +386,26 @@ function CreateApiKeyButton({
 
                 <div>
                   <label className="block text-sm font-medium text-[#888] mb-1">
-                    Wallet <span className="text-red-500">*</span>
+                    Treasury <span className="text-red-500">*</span>
                   </label>
-                  <div className="flex gap-2">
-                    <select
-                      value={selectedWalletId}
-                      onChange={(e) => setSelectedWalletId(e.target.value)}
-                      className="flex-1 px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white focus:outline-none focus:border-[#555]"
-                      required
-                    >
-                      <option value="">Select a wallet</option>
-                      {wallets?.map((wallet) => (
-                        <option key={wallet._id} value={wallet._id}>
-                          {wallet.name} ({wallet.network})
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => setShowCreateWallet(true)}
-                      className="px-3 py-2 text-sm font-medium text-[#888] hover:text-white border border-[#333] hover:border-[#555] rounded-lg transition-colors"
-                      title="Create new wallet"
-                    >
-                      <PlusIcon className="w-4 h-4" />
-                    </button>
-                  </div>
+                  <select
+                    value={selectedTreasuryId}
+                    onChange={(e) => setSelectedTreasuryId(e.target.value)}
+                    className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white focus:outline-none focus:border-[#555]"
+                    required
+                  >
+                    <option value="">Select a treasury</option>
+                    {treasuries?.map((treasury) => (
+                      <option key={treasury._id} value={treasury._id}>
+                        {treasury.contractAddress.slice(0, 6)}...{treasury.contractAddress.slice(-4)} ({treasury.network})
+                      </option>
+                    ))}
+                  </select>
                   <p className="text-xs text-[#666] mt-1">
-                    This wallet will be used for all payments with this API key.
+                    Payments with this API key will be funded from this treasury contract.{" "}
+                    <a href="/workspace/treasury" className="text-emerald-400 hover:underline">
+                      Manage treasuries →
+                    </a>
                   </p>
                 </div>
 
@@ -397,6 +432,16 @@ function CreateApiKeyButton({
                     <div className="mt-3 p-3 bg-[#1a1a1a] rounded-lg border border-[#333] space-y-3">
                       <div className="grid grid-cols-3 gap-3">
                         <div>
+                          <label className="block text-xs text-[#666] mb-1">Max Per TX</label>
+                          <input
+                            type="number"
+                            value={maxPerTransaction}
+                            onChange={(e) => setMaxPerTransaction(e.target.value)}
+                            placeholder="No limit"
+                            className="w-full px-2 py-1.5 text-sm border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
+                          />
+                        </div>
+                        <div>
                           <label className="block text-xs text-[#666] mb-1">Daily Limit</label>
                           <input
                             type="number"
@@ -416,19 +461,9 @@ function CreateApiKeyButton({
                             className="w-full px-2 py-1.5 text-sm border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
                           />
                         </div>
-                        <div>
-                          <label className="block text-xs text-[#666] mb-1">Max Request</label>
-                          <input
-                            type="number"
-                            value={maxRequest}
-                            onChange={(e) => setMaxRequest(e.target.value)}
-                            placeholder="No limit"
-                            className="w-full px-2 py-1.5 text-sm border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
-                          />
-                        </div>
                       </div>
                       <p className="text-xs text-[#666]">
-                        Set MNEE spending limits for this API key. You can edit these later.
+                        Set MNEE spending limits for this API key. These will be enforced on-chain.
                       </p>
                     </div>
                   )}
@@ -437,7 +472,7 @@ function CreateApiKeyButton({
                 <div className="flex gap-2 pt-2">
                   <button
                     type="submit"
-                    disabled={isCreating || !name.trim() || !selectedWalletId}
+                    disabled={isCreating || !name.trim() || !selectedTreasuryId}
                     className="flex-1 px-4 py-2.5 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isCreating ? "Creating..." : "Create Key"}
@@ -455,165 +490,7 @@ function CreateApiKeyButton({
           </div>
         </div>
       )}
-
-      {showCreateWallet && (
-        <CreateWalletDialogForAgents 
-          onClose={() => setShowCreateWallet(false)}
-          onWalletCreated={(walletId) => {
-            setSelectedWalletId(walletId);
-            setShowCreateWallet(false);
-          }}
-        />
-      )}
     </>
-  );
-}
-
-// ============================================
-// CREATE WALLET DIALOG (FOR AGENTS PAGE)
-// ============================================
-
-function CreateWalletDialogForAgents({
-  onClose,
-  onWalletCreated,
-}: {
-  onClose: () => void;
-  onWalletCreated: (walletId: string) => void;
-}) {
-  const [name, setName] = useState("");
-  const [network, setNetwork] = useState<MneeNetwork>("sandbox");
-  const [isCreating, setIsCreating] = useState(false);
-  const toast = useToast();
-  const generateWallet = useMutation(api.wallets.generateWallet);
-  const mneeNetworks = useQuery(api.mneeNetworks.listNetworks, { includeSandbox: true });
-  const wallets = useQuery(api.wallets.listWallets, {});
-
-  // Set default network when mneeNetworks loads
-  useEffect(() => {
-    if (mneeNetworks && mneeNetworks.length > 0) {
-      const sandbox = mneeNetworks.find(n => n.network === "sandbox");
-      if (sandbox) {
-        setNetwork(sandbox.network);
-      } else {
-        setNetwork(mneeNetworks[0].network);
-      }
-    }
-  }, [mneeNetworks]);
-
-  // Poll for the new wallet after creation
-  useEffect(() => {
-    if (isCreating && wallets) {
-      const newWallet = wallets.find(w => w.name === name.trim() && w.network === network);
-      if (newWallet) {
-        onWalletCreated(newWallet._id);
-        setIsCreating(false);
-      }
-    }
-  }, [wallets, isCreating, name, network, onWalletCreated]);
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-
-    setIsCreating(true);
-    try {
-      const result = await generateWallet({
-        name: name.trim(),
-        network,
-      });
-      toast.success(result.message);
-      // The useEffect will handle selecting the wallet once it appears
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to create wallet");
-      setIsCreating(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-      <div className="bg-[#111] border border-[#333] rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
-        <form onSubmit={handleCreate} className="space-y-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-white">
-              Create Wallet
-            </h3>
-          </div>
-
-          <div className="bg-[#1a1a1a] border border-[#333] rounded-lg p-3">
-            <p className="text-sm text-[#888]">
-              A new MNEE wallet will be automatically generated with a secure address and encrypted private key.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-[#888] mb-1">
-              Wallet Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Main Wallet, Dev Wallet"
-              className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
-              required
-              autoFocus
-              disabled={isCreating}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-[#888] mb-1">
-              Network <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={network}
-              onChange={(e) => setNetwork(e.target.value as MneeNetwork)}
-              className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white focus:outline-none focus:border-[#555]"
-              disabled={isCreating}
-            >
-              {mneeNetworks && mneeNetworks.length > 0 ? (
-                mneeNetworks.map((n) => (
-                  <option key={n._id} value={n.network}>
-                    {n.name}
-                  </option>
-                ))
-              ) : (
-                <>
-                  <option value="sandbox">MNEE Sandbox</option>
-                  <option value="mainnet">MNEE Mainnet</option>
-                </>
-              )}
-            </select>
-            <p className="text-xs text-[#666] mt-1">
-              Choose sandbox for testing or mainnet for production
-            </p>
-          </div>
-
-          <div className="flex gap-2 pt-2">
-            <button
-              type="submit"
-              disabled={isCreating || !name.trim()}
-              className="flex-1 px-4 py-2.5 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isCreating ? "Generating..." : "Generate Wallet"}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isCreating}
-              className="flex-1 px-4 py-2.5 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors disabled:opacity-50"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
   );
 }
 
@@ -627,10 +504,16 @@ type ApiKeyData = {
   description?: string;
   apiKeyPrefix: string;
   type: "agent" | "provider";
-  walletId?: Id<"wallets">;
-  mneeNetwork?: MneeNetwork;
+  treasuryId?: Id<"treasuries">;
+  ethereumNetwork?: EthereumNetwork;
   receivingAddress?: string;
-  receivingNetwork?: MneeNetwork;
+  receivingNetwork?: EthereumNetwork;
+  spendingLimits?: {
+    maxPerTransaction: number;
+    dailyLimit: number;
+    monthlyLimit: number;
+    isSyncedOnChain?: boolean;
+  };
   createdByUserId: string;
   lastUsedAt?: number;
   expiresAt?: number;
@@ -754,13 +637,13 @@ function ApiKeysList({
                         Inactive
                       </span>
                     )}
-                    {(apiKey.mneeNetwork || apiKey.receivingNetwork) && (
+                    {(apiKey.ethereumNetwork || apiKey.receivingNetwork) && (
                       <span className={`px-2 py-0.5 text-xs font-medium rounded-full capitalize ${
-                        (apiKey.mneeNetwork || apiKey.receivingNetwork) === "mainnet"
+                        (apiKey.ethereumNetwork || apiKey.receivingNetwork) === "mainnet"
                           ? "bg-emerald-900/50 text-emerald-400"
                           : "bg-amber-900/50 text-amber-400"
                       }`}>
-                        {apiKey.mneeNetwork || apiKey.receivingNetwork}
+                        {apiKey.ethereumNetwork || apiKey.receivingNetwork}
                       </span>
                     )}
                   </div>
@@ -787,11 +670,11 @@ function ApiKeysList({
                   </div>
                 )}
 
-                {/* Show linked wallet info */}
-                {apiKey.walletId && (
+                {/* Show linked treasury info */}
+                {apiKey.treasuryId && (
                   <div className="pt-4">
-                    <p className="text-xs text-[#666] uppercase tracking-wider mb-1">Linked Wallet</p>
-                    <WalletInfo walletId={apiKey.walletId} />
+                    <p className="text-xs text-[#666] uppercase tracking-wider mb-1">Linked Treasury</p>
+                    <TreasuryInfo treasuryId={apiKey.treasuryId} />
                   </div>
                 )}
 
@@ -812,8 +695,8 @@ function ApiKeysList({
                 </div>
               </div>
 
-                {/* Policy Editor */}
-                <PolicyEditor apiKeyId={apiKey._id} canManage={canManage} />
+                {/* Spending Limits Editor */}
+                <PolicyEditor apiKeyId={apiKey._id} spendingLimits={apiKey.spendingLimits} canManage={canManage} />
 
                 {/* Actions */}
               {canManage && (
@@ -863,55 +746,54 @@ function ApiKeysList({
 
 function PolicyEditor({
   apiKeyId,
+  spendingLimits,
   canManage,
 }: {
   apiKeyId: Id<"apiKeys">;
+  spendingLimits?: {
+    maxPerTransaction: number;
+    dailyLimit: number;
+    monthlyLimit: number;
+    isSyncedOnChain?: boolean;
+  };
   canManage: boolean;
 }) {
-  const policy = useQuery(api.apiKeys.getAgentPolicy, { apiKeyId });
-  const upsertPolicy = useMutation(api.apiKeys.upsertAgentPolicy);
+  const updateApiKey = useMutation(api.apiKeys.updateApiKey);
   const toast = useToast();
 
   const [isEditing, setIsEditing] = useState(false);
+  const [maxPerTransaction, setMaxPerTransaction] = useState("");
   const [dailyLimit, setDailyLimit] = useState("");
   const [monthlyLimit, setMonthlyLimit] = useState("");
-  const [maxRequest, setMaxRequest] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    if (policy) {
-      setDailyLimit(policy.dailyLimit?.toString() ?? "");
-      setMonthlyLimit(policy.monthlyLimit?.toString() ?? "");
-      setMaxRequest(policy.maxRequest?.toString() ?? "");
+    if (spendingLimits) {
+      setMaxPerTransaction(spendingLimits.maxPerTransaction?.toString() ?? "");
+      setDailyLimit(spendingLimits.dailyLimit?.toString() ?? "");
+      setMonthlyLimit(spendingLimits.monthlyLimit?.toString() ?? "");
     }
-  }, [policy]);
+  }, [spendingLimits]);
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await upsertPolicy({
+      await updateApiKey({
         apiKeyId,
-        dailyLimit: dailyLimit ? parseFloat(dailyLimit) : undefined,
-        monthlyLimit: monthlyLimit ? parseFloat(monthlyLimit) : undefined,
-        maxRequest: maxRequest ? parseFloat(maxRequest) : undefined,
-        isActive: true,
+        spendingLimits: {
+          maxPerTransaction: maxPerTransaction ? parseFloat(maxPerTransaction) : 0,
+          dailyLimit: dailyLimit ? parseFloat(dailyLimit) : 0,
+          monthlyLimit: monthlyLimit ? parseFloat(monthlyLimit) : 0,
+        },
       });
-      toast.success("Policy saved successfully");
+      toast.success("Spending limits saved. Remember to sync on-chain!");
       setIsEditing(false);
     } catch {
-      toast.error("Failed to save policy");
+      toast.error("Failed to save spending limits");
     } finally {
       setIsSaving(false);
     }
   };
-
-  if (policy === undefined) {
-  return (
-      <div className="pt-4">
-        <div className="h-20 bg-[#1a1a1a] rounded-lg animate-pulse" />
-    </div>
-  );
-}
 
     return (
     <div className="pt-4 space-y-3">
@@ -925,13 +807,26 @@ function PolicyEditor({
             Edit
         </button>
         )}
+        {spendingLimits && !spendingLimits.isSyncedOnChain && (
+          <span className="text-xs text-amber-400">Not synced on-chain</span>
+        )}
       </div>
 
       {isEditing ? (
         <div className="space-y-3 bg-[#1a1a1a] rounded-lg p-4">
       <div className="grid grid-cols-3 gap-3">
         <div>
-              <label className="block text-xs text-[#666] mb-1">Daily Limit (MNEE)</label>
+              <label className="block text-xs text-[#666] mb-1">Max Per TX</label>
+          <input
+            type="number"
+            value={maxPerTransaction}
+            onChange={(e) => setMaxPerTransaction(e.target.value)}
+                placeholder="No limit"
+                className="w-full px-3 py-2 text-sm border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
+          />
+        </div>
+        <div>
+              <label className="block text-xs text-[#666] mb-1">Daily Limit</label>
           <input
             type="number"
             value={dailyLimit}
@@ -941,21 +836,11 @@ function PolicyEditor({
           />
         </div>
         <div>
-              <label className="block text-xs text-[#666] mb-1">Monthly Limit (MNEE)</label>
+              <label className="block text-xs text-[#666] mb-1">Monthly Limit</label>
           <input
             type="number"
             value={monthlyLimit}
             onChange={(e) => setMonthlyLimit(e.target.value)}
-                placeholder="No limit"
-                className="w-full px-3 py-2 text-sm border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
-          />
-        </div>
-        <div>
-              <label className="block text-xs text-[#666] mb-1">Max Request (MNEE)</label>
-          <input
-            type="number"
-            value={maxRequest}
-            onChange={(e) => setMaxRequest(e.target.value)}
                 placeholder="No limit"
                 className="w-full px-3 py-2 text-sm border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
           />
@@ -980,26 +865,26 @@ function PolicyEditor({
       ) : (
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-[#1a1a1a] rounded-lg p-3">
+            <p className="text-xs text-[#666] mb-1">Max Per TX</p>
+            <p className="text-sm text-white font-medium">
+              {spendingLimits?.maxPerTransaction
+                ? `$${(spendingLimits.maxPerTransaction / 100).toFixed(2)}`
+                : "No limit"}
+            </p>
+          </div>
+          <div className="bg-[#1a1a1a] rounded-lg p-3">
             <p className="text-xs text-[#666] mb-1">Daily</p>
             <p className="text-sm text-white font-medium">
-              {policy?.dailyLimit
-                ? `${policy.dailyLimit.toLocaleString()} MNEE`
+              {spendingLimits?.dailyLimit
+                ? `$${(spendingLimits.dailyLimit / 100).toFixed(2)}`
                 : "No limit"}
             </p>
           </div>
           <div className="bg-[#1a1a1a] rounded-lg p-3">
             <p className="text-xs text-[#666] mb-1">Monthly</p>
             <p className="text-sm text-white font-medium">
-              {policy?.monthlyLimit
-                ? `${policy.monthlyLimit.toLocaleString()} MNEE`
-                : "No limit"}
-            </p>
-          </div>
-          <div className="bg-[#1a1a1a] rounded-lg p-3">
-            <p className="text-xs text-[#666] mb-1">Per Request</p>
-            <p className="text-sm text-white font-medium">
-              {policy?.maxRequest
-                ? `${policy.maxRequest.toLocaleString()} MNEE`
+              {spendingLimits?.monthlyLimit
+                ? `$${(spendingLimits.monthlyLimit / 100).toFixed(2)}`
                 : "No limit"}
             </p>
           </div>
@@ -1013,10 +898,10 @@ function PolicyEditor({
 // WALLET INFO COMPONENT
 // ============================================
 
-function WalletInfo({ walletId }: { walletId: Id<"wallets"> }) {
-  const wallet = useQuery(api.wallets.getWallet, { walletId });
+function TreasuryInfo({ treasuryId }: { treasuryId: Id<"treasuries"> }) {
+  const treasury = useQuery(api.treasuries.getTreasuryById, { treasuryId });
 
-  if (!wallet) {
+  if (!treasury) {
     return (
       <div className="bg-[#1a1a1a] rounded-lg p-3 animate-pulse">
         <div className="h-4 bg-[#333] rounded w-32"></div>
@@ -1024,21 +909,25 @@ function WalletInfo({ walletId }: { walletId: Id<"wallets"> }) {
     );
   }
 
-  const isMainnet = wallet.network === "mainnet";
+  const isMainnet = treasury.network === "mainnet";
 
   return (
     <div className="bg-[#1a1a1a] rounded-lg p-3 border border-[#333]">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-medium text-white">{wallet.name}</p>
-          <p className="text-xs text-[#666] font-mono mt-1">{wallet.address}</p>
+          <p className="text-sm font-medium text-white font-mono">
+            {treasury.contractAddress.slice(0, 6)}...{treasury.contractAddress.slice(-4)}
+          </p>
+          <p className="text-xs text-[#666] mt-1">
+            Balance: {treasury.cachedBalance ? `$${(treasury.cachedBalance / 100).toFixed(2)}` : "—"}
+          </p>
         </div>
         <span className={`px-2 py-0.5 text-xs font-medium rounded-full capitalize ${
           isMainnet 
             ? "bg-emerald-900/50 text-emerald-400" 
             : "bg-amber-900/50 text-amber-400"
         }`}>
-          {wallet.network}
+          {treasury.network}
         </span>
       </div>
     </div>

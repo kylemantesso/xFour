@@ -51,7 +51,7 @@ export default function ConceptsPage() {
               <span className="text-emerald-400">0.05</span>
               {"\n"}
               <span className="text-violet-400">X-402-Pay-To:</span>{" "}
-              <span className="text-emerald-400">1ABC...xyz</span>
+              <span className="text-emerald-400">0xABC...xyz</span>
               {"\n"}
               <span className="text-violet-400">X-402-Network:</span>{" "}
               <span className="text-emerald-400">mainnet</span>
@@ -158,7 +158,7 @@ export default function ConceptsPage() {
       <section className="mb-12">
         <h2 className="text-2xl font-bold text-white mb-4">About MNEE</h2>
         <p className="text-[#888] leading-relaxed mb-4">
-          MNEE is a USD-backed stablecoin built on Bitcoin (BSV). It provides
+          MNEE is a USD-backed stablecoin (ERC20) on Ethereum. It provides
           the payment layer for x402 with several key advantages:
         </p>
 
@@ -166,15 +166,15 @@ export default function ConceptsPage() {
           <li className="flex items-start gap-3">
             <CheckIcon className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
             <span>
-              <strong className="text-white">Instant Settlement</strong> —
-              Payments settle in seconds, not minutes or days
+              <strong className="text-white">Fast Settlement</strong> —
+              Payments settle in ~12 seconds on Ethereum
             </span>
           </li>
           <li className="flex items-start gap-3">
             <CheckIcon className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
             <span>
-              <strong className="text-white">Near-Zero Fees</strong> —
-              Transaction costs are fractions of a cent
+              <strong className="text-white">Wide Ecosystem</strong> —
+              Built on the most widely adopted smart contract platform
             </span>
           </li>
           <li className="flex items-start gap-3">
@@ -292,10 +292,10 @@ export default function ConceptsPage() {
 
           {/* MNEE Layer */}
           <div className="mt-6 pt-6 border-t border-[#333] text-center">
-            <span className="inline-flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/30 rounded-full">
-              <span className="text-lg">💎</span>
-              <span className="text-sm font-medium text-amber-400">
-                MNEE Stablecoin Layer (BSV)
+            <span className="inline-flex items-center gap-2 px-4 py-2 bg-violet-500/10 border border-violet-500/30 rounded-full">
+              <span className="text-lg">⟠</span>
+              <span className="text-sm font-medium text-violet-400">
+                MNEE Stablecoin Layer (Ethereum)
               </span>
             </span>
           </div>

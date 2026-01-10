@@ -43,7 +43,7 @@ export const validateApiKeyInternal = internalQuery({
       apiKeyId: keyRecord._id,
       workspaceId: keyRecord.workspaceId,
       workspaceName: workspace.name,
-      mneeNetwork: keyRecord.mneeNetwork,
+      ethereumNetwork: keyRecord.ethereumNetwork,
     };
   },
 });
@@ -65,7 +65,8 @@ export const getApiKeyDetails = internalQuery({
       type: keyRecord.type,
       receivingAddress: keyRecord.receivingAddress,
       receivingNetwork: keyRecord.receivingNetwork,
-      mneeNetwork: keyRecord.mneeNetwork,
+      ethereumNetwork: keyRecord.ethereumNetwork,
+      treasuryId: keyRecord.treasuryId,
     };
   },
 });
@@ -137,23 +138,23 @@ export const getOrCreateProviderForHost = internalMutation({
 });
 
 // ============================================
-// PAYMENT RECORDS (MNEE-only)
+// PAYMENT RECORDS (MNEE ERC20 on Ethereum)
 // ============================================
 
 /**
  * Create an MNEE payment quote record
  * Records the quote attempt with status allowed/denied
  */
-export const createMneePaymentQuote = internalMutation({
+export const createPaymentQuote = internalMutation({
   args: {
     workspaceId: v.id("workspaces"),
     apiKeyId: v.id("apiKeys"),
     providerId: v.optional(v.id("providers")),
     providerHost: v.string(),
     invoiceId: v.string(),
-    amount: v.number(), // Amount in MNEE
-    payTo: v.string(), // MNEE payment address (Bitcoin address)
-    network: v.union(v.literal("sandbox"), v.literal("mainnet")),
+    amount: v.number(), // Amount in MNEE (18 decimals)
+    payTo: v.string(), // Ethereum address (0x...)
+    network: v.union(v.literal("sepolia"), v.literal("mainnet")),
     status: v.union(v.literal("allowed"), v.literal("denied")),
     denialReason: v.optional(v.string()),
   },
@@ -177,6 +178,9 @@ export const createMneePaymentQuote = internalMutation({
     return paymentId;
   },
 });
+
+// Keep old name as alias for backward compatibility
+export const createMneePaymentQuote = createPaymentQuote;
 
 /**
  * Update API key's last used timestamp
@@ -233,7 +237,6 @@ export const markPaymentSettled = internalMutation({
   args: {
     paymentId: v.id("payments"),
     txHash: v.optional(v.string()),
-    ticketId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const payment = await ctx.db.get(args.paymentId);
@@ -245,7 +248,6 @@ export const markPaymentSettled = internalMutation({
     await ctx.db.patch(args.paymentId, {
       status: "settled",
       txHash: args.txHash,
-      ticketId: args.ticketId,
       updatedAt: now,
       completedAt: now,
     });
@@ -359,7 +361,6 @@ export const listWorkspacePayments = query({
           status: payment.status,
           providerHost: payment.providerHost,
           txHash: payment.txHash,
-          ticketId: payment.ticketId,
           denialReason: payment.denialReason,
           createdAt: payment.createdAt,
           completedAt: payment.completedAt,
@@ -505,7 +506,6 @@ export const listReceivedPayments = query({
           status: payment.status,
           providerHost: payment.providerHost,
           txHash: payment.txHash,
-          ticketId: payment.ticketId,
           denialReason: payment.denialReason,
           createdAt: payment.createdAt,
           completedAt: payment.completedAt,
@@ -672,7 +672,6 @@ export const listAllPaymentsForAdmin = query({
           status: payment.status,
           providerHost: payment.providerHost,
           txHash: payment.txHash,
-          ticketId: payment.ticketId,
           denialReason: payment.denialReason,
           createdAt: payment.createdAt,
           completedAt: payment.completedAt,
@@ -748,10 +747,10 @@ export const getPaymentStatsForAdmin = query({
 });
 
 /**
- * Check agent policy against an MNEE payment request
+ * Check agent policy against a payment request
  * Returns whether the request is allowed and a reason if denied
  */
-export const checkAgentPolicyMnee = internalQuery({
+export const checkAgentPolicy = internalQuery({
   args: {
     apiKeyId: v.id("apiKeys"),
     providerId: v.optional(v.id("providers")),
@@ -831,3 +830,6 @@ export const checkAgentPolicyMnee = internalQuery({
     return { allowed: true, reason: null };
   },
 });
+
+// Keep old name as alias for backward compatibility
+export const checkAgentPolicyMnee = checkAgentPolicy;

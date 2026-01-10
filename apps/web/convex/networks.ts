@@ -3,24 +3,27 @@ import { query, mutation, internalQuery } from "./_generated/server";
 import { requirePlatformAdmin } from "./lib/auth";
 
 // ============================================
-// MNEE NETWORK QUERIES
+// NETWORK QUERIES (Ethereum-based)
 // ============================================
 
 /**
- * List all active MNEE networks
+ * List all active networks
  */
 export const listNetworks = query({
   args: {
-    includeSandbox: v.optional(v.boolean()),
+    includeTestnet: v.optional(v.boolean()),
+    includeSepolia: v.optional(v.boolean()), // Alias for includeTestnet
   },
   returns: v.array(
     v.object({
-      _id: v.id("mneeNetworks"),
+      _id: v.id("networks"),
       _creationTime: v.number(),
-      network: v.union(v.literal("sandbox"), v.literal("mainnet")),
+      network: v.union(v.literal("sepolia"), v.literal("mainnet")),
       name: v.string(),
-      apiUrl: v.string(),
+      rpcUrl: v.string(),
       explorerUrl: v.optional(v.string()),
+      contractAddress: v.string(),
+      chainId: v.number(),
       decimals: v.number(),
       isActive: v.boolean(),
       createdAt: v.number(),
@@ -28,13 +31,13 @@ export const listNetworks = query({
   ),
   handler: async (ctx, args) => {
     let networks = await ctx.db
-      .query("mneeNetworks")
+      .query("networks")
       .filter((q) => q.eq(q.field("isActive"), true))
       .collect();
 
-    // Filter out sandbox by default for production use
-    if (!args.includeSandbox) {
-      networks = networks.filter((n) => n.network !== "sandbox");
+    // Filter out testnet by default for production use
+    if (!args.includeTestnet && !args.includeSepolia) {
+      networks = networks.filter((n) => n.network !== "sepolia");
     }
 
     return networks;
@@ -42,20 +45,22 @@ export const listNetworks = query({
 });
 
 /**
- * Get a specific MNEE network
+ * Get a specific network
  */
 export const getNetwork = query({
   args: {
-    network: v.union(v.literal("sandbox"), v.literal("mainnet")),
+    network: v.union(v.literal("sepolia"), v.literal("mainnet")),
   },
   returns: v.union(
     v.object({
-      _id: v.id("mneeNetworks"),
+      _id: v.id("networks"),
       _creationTime: v.number(),
-      network: v.union(v.literal("sandbox"), v.literal("mainnet")),
+      network: v.union(v.literal("sepolia"), v.literal("mainnet")),
       name: v.string(),
-      apiUrl: v.string(),
+      rpcUrl: v.string(),
       explorerUrl: v.optional(v.string()),
+      contractAddress: v.string(),
+      chainId: v.number(),
       decimals: v.number(),
       isActive: v.boolean(),
       createdAt: v.number(),
@@ -64,27 +69,29 @@ export const getNetwork = query({
   ),
   handler: async (ctx, args) => {
     return await ctx.db
-      .query("mneeNetworks")
+      .query("networks")
       .withIndex("by_network", (q) => q.eq("network", args.network))
       .first();
   },
 });
 
 /**
- * Internal query to get MNEE network (for HTTP actions)
+ * Internal query to get network (for HTTP actions)
  */
 export const getNetworkInternal = internalQuery({
   args: {
-    network: v.union(v.literal("sandbox"), v.literal("mainnet")),
+    network: v.union(v.literal("sepolia"), v.literal("mainnet")),
   },
   returns: v.union(
     v.object({
-      _id: v.id("mneeNetworks"),
+      _id: v.id("networks"),
       _creationTime: v.number(),
-      network: v.union(v.literal("sandbox"), v.literal("mainnet")),
+      network: v.union(v.literal("sepolia"), v.literal("mainnet")),
       name: v.string(),
-      apiUrl: v.string(),
+      rpcUrl: v.string(),
       explorerUrl: v.optional(v.string()),
+      contractAddress: v.string(),
+      chainId: v.number(),
       decimals: v.number(),
       isActive: v.boolean(),
       createdAt: v.number(),
@@ -93,18 +100,18 @@ export const getNetworkInternal = internalQuery({
   ),
   handler: async (ctx, args) => {
     return await ctx.db
-      .query("mneeNetworks")
+      .query("networks")
       .withIndex("by_network", (q) => q.eq("network", args.network))
       .first();
   },
 });
 
 // ============================================
-// MNEE NETWORK MUTATIONS (Admin only)
+// NETWORK MUTATIONS (Admin only)
 // ============================================
 
 /**
- * Seed default MNEE networks
+ * Seed default Ethereum networks
  */
 export const seedNetworks = mutation({
   args: {},
@@ -116,18 +123,23 @@ export const seedNetworks = mutation({
     const defaultNetworks = [
       {
         network: "mainnet" as const,
-        name: "MNEE Mainnet",
-        apiUrl: "https://api.mnee.io",
-        explorerUrl: "https://whatsonchain.com",
-        decimals: 5, // MNEE has 5 decimal places
+        name: "Ethereum Mainnet",
+        rpcUrl: process.env.ETHEREUM_RPC_URL || "https://eth.llamarpc.com",
+        explorerUrl: "https://etherscan.io",
+        contractAddress: "0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF",
+        chainId: 1,
+        decimals: 18, // Standard ERC20 decimals
         isActive: true,
       },
       {
-        network: "sandbox" as const,
-        name: "MNEE Sandbox",
-        apiUrl: "https://api.mnee.io",
-        explorerUrl: "https://test.whatsonchain.com",
-        decimals: 5,
+        network: "sepolia" as const,
+        name: "Sepolia Testnet",
+        rpcUrl: process.env.SEPOLIA_RPC_URL || "https://rpc.sepolia.org",
+        explorerUrl: "https://sepolia.etherscan.io",
+        // TODO: Update with deployed TestMNEE contract address
+        contractAddress: "0x0000000000000000000000000000000000000000",
+        chainId: 11155111,
+        decimals: 18,
         isActive: true,
       },
     ];
@@ -136,12 +148,12 @@ export const seedNetworks = mutation({
 
     for (const network of defaultNetworks) {
       const existing = await ctx.db
-        .query("mneeNetworks")
+        .query("networks")
         .withIndex("by_network", (q) => q.eq("network", network.network))
         .first();
 
       if (!existing) {
-        await ctx.db.insert("mneeNetworks", {
+        await ctx.db.insert("networks", {
           ...network,
           createdAt: Date.now(),
         });
@@ -157,14 +169,15 @@ export const seedNetworks = mutation({
 });
 
 /**
- * Update MNEE network configuration (platform admin only)
+ * Update network configuration (platform admin only)
  */
 export const updateNetwork = mutation({
   args: {
-    network: v.union(v.literal("sandbox"), v.literal("mainnet")),
+    network: v.union(v.literal("sepolia"), v.literal("mainnet")),
     name: v.optional(v.string()),
-    apiUrl: v.optional(v.string()),
+    rpcUrl: v.optional(v.string()),
     explorerUrl: v.optional(v.string()),
+    contractAddress: v.optional(v.string()),
     isActive: v.optional(v.boolean()),
   },
   returns: v.object({
@@ -174,18 +187,19 @@ export const updateNetwork = mutation({
     await requirePlatformAdmin(ctx);
 
     const networkDoc = await ctx.db
-      .query("mneeNetworks")
+      .query("networks")
       .withIndex("by_network", (q) => q.eq("network", args.network))
       .first();
 
     if (!networkDoc) {
-      throw new Error(`MNEE network "${args.network}" not found`);
+      throw new Error(`Network "${args.network}" not found`);
     }
 
     const updates: Record<string, unknown> = {};
     if (args.name !== undefined) updates.name = args.name;
-    if (args.apiUrl !== undefined) updates.apiUrl = args.apiUrl;
+    if (args.rpcUrl !== undefined) updates.rpcUrl = args.rpcUrl;
     if (args.explorerUrl !== undefined) updates.explorerUrl = args.explorerUrl;
+    if (args.contractAddress !== undefined) updates.contractAddress = args.contractAddress;
     if (args.isActive !== undefined) updates.isActive = args.isActive;
 
     await ctx.db.patch(networkDoc._id, updates);
@@ -198,22 +212,37 @@ export const updateNetwork = mutation({
 // ============================================
 
 /**
- * Get MNEE explorer URL for a transaction
+ * Get Etherscan explorer URL for a transaction
  */
-export function getMneeExplorerUrl(txHash: string, network: "sandbox" | "mainnet"): string {
+export function getExplorerTxUrl(txHash: string, network: "sepolia" | "mainnet"): string {
   const baseUrl = network === "mainnet" 
-    ? "https://whatsonchain.com/tx" 
-    : "https://test.whatsonchain.com/tx";
+    ? "https://etherscan.io" 
+    : "https://sepolia.etherscan.io";
   
-  return `${baseUrl}/${txHash}`;
+  return `${baseUrl}/tx/${txHash}`;
 }
 
 /**
- * Format MNEE amount (ensures max 5 decimal places)
+ * Get Etherscan explorer URL for an address
  */
-export function formatMneeAmount(amount: number): number {
-  return Math.round(amount * 100000) / 100000;
+export function getExplorerAddressUrl(address: string, network: "sepolia" | "mainnet"): string {
+  const baseUrl = network === "mainnet" 
+    ? "https://etherscan.io" 
+    : "https://sepolia.etherscan.io";
+  
+  return `${baseUrl}/address/${address}`;
 }
 
+/**
+ * Get chain ID for a network
+ */
+export function getChainId(network: "sepolia" | "mainnet"): number {
+  return network === "mainnet" ? 1 : 11155111;
+}
 
-
+/**
+ * Format MNEE amount (18 decimals)
+ */
+export function formatMneeAmount(amount: number, decimals: number = 2): string {
+  return amount.toFixed(decimals);
+}

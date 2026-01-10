@@ -9,7 +9,7 @@ import { getCurrentWorkspaceContext, requireRole, ALL_ROLES } from "./lib/auth";
 export const getActivityTimeline = query({
   args: {
     windowSeconds: v.optional(v.number()), // default 60
-    network: v.optional(v.union(v.literal("sandbox"), v.literal("mainnet"))), // filter by network
+    network: v.optional(v.union(v.literal("sepolia"), v.literal("mainnet"))), // filter by network
   },
   handler: async (ctx, args) => {
     const { workspaceId, role } = await getCurrentWorkspaceContext(ctx);
@@ -301,7 +301,7 @@ export const getPublicRecentTransactions = query({
 export const getPublicActivityTimeline = query({
   args: {
     windowSeconds: v.optional(v.number()), // default 60
-    network: v.optional(v.union(v.literal("sandbox"), v.literal("mainnet"))), // filter by network
+    network: v.optional(v.union(v.literal("sepolia"), v.literal("mainnet"))), // filter by network
   },
   returns: v.object({
     events: v.array(

@@ -19,10 +19,10 @@ import { NextRequest, NextResponse } from "next/server";
  * verify the invoice ID against their payment records.
  */
 
-// Default test payment addresses
-const DEFAULT_EVM_PAY_TO = "0x742d35Cc6634C0532925a3b844Bc9e7595f8fE0E";
-const DEFAULT_MNEE_SANDBOX_PAY_TO = "1KPmRUMAWmddVk6xDwDZk6Lo9VFPB2YMPM";
-const DEFAULT_MNEE_MAINNET_PAY_TO = "1KPmRUMAWmddVk6xDwDZk6Lo9VFPB2YMPM"; // Same for now
+// Default test payment addresses (Ethereum)
+const DEFAULT_EVM_PAY_TO = "0xD795B7De0F5d068980318cf614ffcdF5591f2433";
+const DEFAULT_SEPOLIA_PAY_TO = "0xD795B7De0F5d068980318cf614ffcdF5591f2433"; // Ethereum address
+const DEFAULT_MAINNET_PAY_TO = "0xD795B7De0F5d068980318cf614ffcdF5591f2433"; // Ethereum address
 
 // Generate a random invoice ID
 function generateInvoiceId(): string {
@@ -34,12 +34,12 @@ function isValidInvoiceFormat(invoiceId: string): boolean {
   return invoiceId.startsWith("inv_") && invoiceId.length > 10;
 }
 
-// Get default payTo address based on network
+// Get default payTo address based on network (all Ethereum addresses now)
 function getDefaultPayToAddress(network: string): string {
-  if (network === "mnee-sandbox") {
-    return DEFAULT_MNEE_SANDBOX_PAY_TO;
-  } else if (network === "mnee-mainnet") {
-    return DEFAULT_MNEE_MAINNET_PAY_TO;
+  if (network === "sepolia") {
+    return DEFAULT_SEPOLIA_PAY_TO;
+  } else if (network === "mainnet") {
+    return DEFAULT_MAINNET_PAY_TO;
   }
   return DEFAULT_EVM_PAY_TO;
 }

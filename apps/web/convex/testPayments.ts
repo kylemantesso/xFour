@@ -28,13 +28,13 @@ export const runTestPayment = internalAction({
     const gatewayBaseUrl = process.env.TEST_GATEWAY_URL || "https://your-app.vercel.app/api/gateway";
     const mockProviderUrl = process.env.TEST_PROVIDER_URL || "https://your-app.vercel.app/api/mock-provider";
     
-    // Randomize payment amount between 0.001 and 0.02 MNEE
+    // Randomize payment amount between 0.001 and 0.02 MNEE (ERC20 token on Ethereum)
     const minAmount = 0.001;
     const maxAmount = 0.02;
     const randomAmount = minAmount + Math.random() * (maxAmount - minAmount);
-    const paymentAmount = randomAmount.toFixed(5); // 5 decimal places for MNEE
+    const paymentAmount = randomAmount.toFixed(18); // 18 decimal places for Ethereum tokens
     
-    const paymentNetwork = process.env.TEST_PAYMENT_NETWORK || "mnee-sandbox";
+    const paymentNetwork = process.env.TEST_PAYMENT_NETWORK || "sepolia";
 
     if (!apiKey) {
       return {
@@ -49,7 +49,7 @@ export const runTestPayment = internalAction({
       const providerUrl = new URL(mockProviderUrl);
       providerUrl.searchParams.set("amount", paymentAmount);
       providerUrl.searchParams.set("network", paymentNetwork);
-      providerUrl.searchParams.set("currency", "MNEE");
+      providerUrl.searchParams.set("currency", "MNEE"); // MNEE ERC20 token on Ethereum
 
       console.log(`[TestPayment] Requesting: ${providerUrl}`);
 

@@ -15,7 +15,7 @@
  *   AGENT_API_KEY - Your agent API key (required)
  *   INTERVAL_SECONDS - Seconds between payments (default: 5)
  *   PAYMENT_AMOUNT - MNEE amount per payment (default: 0.001)
- *   PAYMENT_NETWORK - Network: mnee-sandbox or mnee-mainnet (default: mnee-sandbox)
+ *   PAYMENT_NETWORK - Network: sepolia or mainnet (default: sepolia)
  */
 
 // ============================================
@@ -171,7 +171,7 @@ async function main() {
     apiKey: process.env.AGENT_API_KEY || "",
     intervalSeconds: parseInt(process.env.INTERVAL_SECONDS || "5", 10),
     paymentAmount: process.env.PAYMENT_AMOUNT || "0.001",
-    paymentNetwork: process.env.PAYMENT_NETWORK || "mnee-sandbox",
+    paymentNetwork: process.env.PAYMENT_NETWORK || "sepolia",
   };
 
   if (!config.apiKey) {

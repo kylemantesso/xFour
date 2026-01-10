@@ -1,968 +1,1018 @@
 "use client";
 
+/**
+ * Treasury Management Page
+ * 
+ * Non-custodial treasury system for workspaces:
+ * - Connect wallet via WalletConnect
+ * - Deploy treasury contract (one per network)
+ * - Deposit MNEE tokens
+ * - Configure API key spending limits
+ * - Withdraw funds
+ * - View balance and spending stats
+ */
+
 import { useState, useEffect } from "react";
-import { useQuery, useMutation, useAction } from "convex/react";
-import Image from "next/image";
-import { api } from "../../../convex/_generated/api";
-import { Id } from "../../../convex/_generated/dataModel";
-import { WorkspaceGuard } from "../../../components/WorkspaceGuard";
-import { BackToDashboard } from "../../../components/BackToDashboard";
-import { useToast } from "../../../components/Toast";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { useAuth } from "@clerk/nextjs";
+import { 
+  useAccount, 
+  useBalance, 
+  useWaitForTransactionReceipt,
+  useSwitchChain,
+  useWriteContract,
+  usePublicClient,
+} from "wagmi";
+import { parseUnits, formatUnits, type Address, decodeEventLog } from "viem";
+import { ConnectWallet } from "@/components/ConnectWallet";
+import { 
+  getContractAddresses, 
+  TREASURY_FACTORY_ABI,
+  TREASURY_ABI,
+  ERC20_ABI,
+} from "@/lib/ethereum/treasury";
+import { Id } from "@/convex/_generated/dataModel";
 
-// Types
-type MneeNetwork = "sandbox" | "mainnet";
+type EthereumNetwork = "mainnet" | "sepolia";
 
-// Icons
-function WalletIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
-      />
-    </svg>
-  );
-}
-
-function CopyIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-      />
-    </svg>
-  );
-}
-
-function CheckIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-    </svg>
-  );
-}
-
-function PlusIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-    </svg>
-  );
-}
-
-function UploadIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-    </svg>
-  );
-}
-
-function KeyIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-    </svg>
-  );
-}
-
-function EyeIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-    </svg>
-  );
-}
-
-function EyeOffIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-    </svg>
-  );
-}
-
-function RefreshIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-      />
-    </svg>
-  );
-}
-
-function MneeIcon({ className }: { className?: string }) {
-  return (
-    <Image 
-      src="/mnee-logo.png" 
-      alt="MNEE" 
-      className={className}
-      width={24}
-      height={24}
-    />
-  );
-}
+// Network chain IDs
+const CHAIN_IDS = {
+  mainnet: 1,
+  sepolia: 11155111,
+} as const;
 
 export default function TreasuryPage() {
-  return (
-    <WorkspaceGuard>
-      <TreasuryContent />
-    </WorkspaceGuard>
+  const { isSignedIn } = useAuth();
+  const userData = useQuery(api.users.getCurrentUser);
+  const workspace = userData?.currentWorkspace;
+  const workspaceId = workspace?._id;
+  
+  // Wallet connection state
+  const { address, isConnected, chain } = useAccount();
+  const { switchChain } = useSwitchChain();
+  
+  // Selected network
+  const [selectedNetwork, setSelectedNetwork] = useState<EthereumNetwork>("sepolia");
+  
+  // Treasury state (would come from Convex query)
+  const treasuries = useQuery(
+    api.treasuries.listTreasuries,
+    workspaceId ? { workspaceId } : "skip"
   );
-}
+  
+  // API keys for configuring limits
+  const apiKeys = useQuery(api.apiKeys.listApiKeys, {});
+  
+  // Check if wallet is on correct chain
+  const isCorrectChain = chain?.id === CHAIN_IDS[selectedNetwork];
+  
+  // Get current treasury for selected network
+  const currentTreasury = treasuries?.find(t => t.network === selectedNetwork);
 
-function TreasuryContent() {
-  const workspaceData = useQuery(api.workspaces.getCurrentWorkspace);
-  const wallets = useQuery(api.wallets.listWallets, {});
-  const mneeNetworks = useQuery(api.mneeNetworks.listNetworks, { includeSandbox: true });
-
-  if (!workspaceData) {
-    return <LoadingSkeleton />;
+  if (!isSignedIn) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <p className="text-gray-400">Please sign in to access treasury management</p>
+      </div>
+    );
   }
 
-  const { role } = workspaceData;
-  const canManage = role === "owner" || role === "admin";
+  if (!workspace) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-500" />
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Back link */}
-        <BackToDashboard />
-
+    <div className="min-h-screen bg-gray-950">
+      <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-start justify-between mb-8">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-white">Treasury</h1>
+            <p className="text-gray-400 mt-1">
+              Non-custodial treasury for your AI agents
+            </p>
+          </div>
+          
+          {/* Network Selector */}
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/25">
-              <WalletIcon className="w-7 h-7 text-white" />
-                </div>
-                <div>
-              <h1 className="text-2xl font-bold text-white">Treasury</h1>
-              <p className="text-sm text-[#888] mt-1">
-                Manage your MNEE wallets for agent payments
-              </p>
-                    </div>
-                </div>
-              </div>
-
-        {/* Info Card */}
-        <div className="bg-[#111] border border-[#333] rounded-xl p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <div className="w-8 h-8 rounded-lg bg-amber-900/50 flex items-center justify-center flex-shrink-0">
-              <MneeIcon className="w-4 h-4" />
-                </div>
-                <div>
-              <h3 className="text-sm font-medium text-white">
-                MNEE Wallets
-              </h3>
-              <p className="text-sm text-[#888] mt-1">
-                MNEE is a Bitcoin-based stablecoin. Each workspace has a non-custodial MNEE wallet for each network (sandbox and mainnet). 
-                Fund your wallet to enable agent payments. You maintain full control of your funds.
-                  </p>
-                </div>
-              </div>
+            <select
+              value={selectedNetwork}
+              onChange={(e) => setSelectedNetwork(e.target.value as EthereumNetwork)}
+              className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            >
+              <option value="sepolia">Sepolia Testnet</option>
+              <option value="mainnet">Ethereum Mainnet</option>
+            </select>
+            
+            <ConnectWallet variant="compact" />
+          </div>
         </div>
 
-        {/* Wallets Section */}
-        <div className="space-y-4">
-          {!wallets ? (
-            <div className="space-y-4">
-              {[1, 2].map((i) => (
-                <div key={i} className="h-32 bg-[#111] border border-[#333] rounded-xl animate-pulse" />
-              ))}
-            </div>
-          ) : wallets.length === 0 ? (
-            <EmptyWalletsState canManage={canManage} networks={mneeNetworks} />
-          ) : (
-            <>
-              {wallets.map((wallet) => (
-                <WalletCard key={wallet._id} wallet={wallet} canManage={canManage} />
-              ))}
-              
-              {/* Create wallet button always shown */}
-              {canManage && (
-                <CreateWalletButton availableNetworks={mneeNetworks} />
-              )}
-            </>
-          )}
-        </div>
+        {/* Main Content */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column - Treasury Status & Actions */}
+          <div className="lg:col-span-2 space-y-6">
+            {/* Connection Status */}
+            {!isConnected ? (
+              <WalletConnectionPrompt />
+            ) : !isCorrectChain ? (
+              <NetworkSwitchPrompt 
+                currentChain={chain?.name || "Unknown"} 
+                targetNetwork={selectedNetwork}
+                onSwitch={() => switchChain?.({ chainId: CHAIN_IDS[selectedNetwork] })}
+              />
+            ) : currentTreasury ? (
+              <>
+                <TreasuryOverview 
+                  treasury={currentTreasury} 
+                  network={selectedNetwork}
+                />
+                <DepositSection 
+                  treasuryAddress={currentTreasury.contractAddress as Address}
+                  network={selectedNetwork}
+                />
+                <ApiKeyLimitsSection 
+                  treasuryAddress={currentTreasury.contractAddress as Address}
+                  apiKeys={apiKeys || []}
+                  network={selectedNetwork}
+                />
+              </>
+            ) : (
+              <DeployOrSyncTreasurySection 
+                workspaceId={workspace._id as Id<"workspaces">}
+                network={selectedNetwork}
+                adminAddress={address as Address}
+              />
+            )}
+          </div>
 
-        {/* Funding Instructions */}
-        <div className="mt-8 bg-[#111] border border-[#333] rounded-xl p-6">
-          <h3 className="text-sm font-medium text-white mb-4">How to Fund Your Wallet</h3>
-          <ol className="space-y-3 text-sm text-[#888]">
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-[#1a1a1a] flex items-center justify-center text-xs text-white flex-shrink-0">1</span>
-              <span>Copy your MNEE wallet address from the card above</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-[#1a1a1a] flex items-center justify-center text-xs text-white flex-shrink-0">2</span>
-              <span>Send MNEE to this address from your external wallet or exchange</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-[#1a1a1a] flex items-center justify-center text-xs text-white flex-shrink-0">3</span>
-              <span>Your agents can now make payments using this wallet</span>
-            </li>
-          </ol>
-          <p className="mt-4 text-xs text-[#666]">
-            Note: Use sandbox network for testing. Sandbox MNEE can be obtained from the MNEE faucet.
-                    </p>
-                  </div>
-                </div>
-              </div>
+          {/* Right Column - Quick Stats & Info */}
+          <div className="space-y-6">
+            <QuickStats treasury={currentTreasury} network={selectedNetwork} />
+            <InfoPanel />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
 // ============================================
-// WALLET CARD
+// SUB-COMPONENTS
 // ============================================
 
-type WalletData = {
-  _id: string;
-  name: string;
-  address: string;
-  network: MneeNetwork;
-  isActive: boolean;
-  createdAt: number;
-  updatedAt: number;
-};
+function WalletConnectionPrompt() {
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center">
+        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+        </svg>
+      </div>
+      <h3 className="text-xl font-semibold text-white mb-2">Connect Your Wallet</h3>
+      <p className="text-gray-400 mb-6 max-w-md mx-auto">
+        Connect your Ethereum wallet to manage your treasury. You maintain full control of your funds at all times.
+      </p>
+      <ConnectWallet className="mx-auto" />
+    </div>
+  );
+}
 
-function WalletCard({ wallet, canManage }: { wallet: WalletData; canManage: boolean }) {
-  const [copied, setCopied] = useState(false);
+function NetworkSwitchPrompt({ 
+  currentChain, 
+  targetNetwork, 
+  onSwitch 
+}: { 
+  currentChain: string; 
+  targetNetwork: EthereumNetwork;
+  onSwitch: () => void;
+}) {
+  const targetName = targetNetwork === "mainnet" ? "Ethereum Mainnet" : "Sepolia Testnet";
+  
+  return (
+    <div className="bg-amber-900/20 border border-amber-700/50 rounded-xl p-6">
+      <div className="flex items-start gap-4">
+        <div className="p-2 rounded-lg bg-amber-500/20">
+          <svg className="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <div className="flex-1">
+          <h3 className="text-lg font-semibold text-amber-400">Wrong Network</h3>
+          <p className="text-gray-400 mt-1">
+            You&apos;re connected to {currentChain}. Please switch to {targetName} to manage this treasury.
+          </p>
+          <button
+            onClick={onSwitch}
+            className="mt-4 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-medium transition-colors"
+          >
+            Switch to {targetName}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TreasuryOverview({ 
+  treasury, 
+  network 
+}: { 
+  treasury: { contractAddress: string; cachedBalance?: number; status: string };
+  network: EthereumNetwork;
+}) {
+  const { chain } = useAccount();
+  const publicClient = usePublicClient({ chainId: CHAIN_IDS[network] });
+  const contracts = getContractAddresses(network);
+  const [liveBalance, setLiveBalance] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editName, setEditName] = useState(wallet.name);
-  const [balance, setBalance] = useState<number | null>(null);
-  const [isLoadingBalance, setIsLoadingBalance] = useState(true);
-  const toast = useToast();
-  const updateWallet = useMutation(api.wallets.updateWallet);
-  const deleteWallet = useMutation(api.wallets.deleteWallet);
-  const getWalletBalance = useAction(api.mneeActions.getWalletBalance);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string>("");
 
-  // Fetch balance on mount
-  useEffect(() => {
-    const fetchBalance = async () => {
-      setIsLoadingBalance(true);
-      try {
-        const bal = await getWalletBalance({
-          address: wallet.address,
-          network: wallet.network,
-        });
-        setBalance(bal);
-      } catch (error) {
-        console.error("Failed to fetch balance:", error);
-        setBalance(null);
-      } finally {
-        setIsLoadingBalance(false);
-      }
-    };
-    fetchBalance();
-  }, [wallet.address, wallet.network, getWalletBalance]);
-
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(wallet.address);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleRefresh = async () => {
+  const fetchBalance = async () => {
+    console.log("[TreasuryOverview] ======= FETCHING BALANCE =======");
+    console.log("[TreasuryOverview] Network:", network);
+    console.log("[TreasuryOverview] Chain ID expected:", CHAIN_IDS[network]);
+    console.log("[TreasuryOverview] Current wallet chain:", chain?.id, chain?.name);
+    console.log("[TreasuryOverview] Treasury address:", treasury.contractAddress);
+    console.log("[TreasuryOverview] MNEE token address:", contracts.mneeToken);
+    console.log("[TreasuryOverview] Public client:", publicClient ? "Available" : "NOT AVAILABLE");
+    
+    if (!publicClient) {
+      console.log("[TreasuryOverview] ERROR: No public client available");
+      setError("No blockchain connection");
+      setDebugInfo(`No client for chain ${CHAIN_IDS[network]}`);
+      return;
+    }
+    
     setIsRefreshing(true);
+    setError(null);
+    
     try {
-      const bal = await getWalletBalance({
-        address: wallet.address,
-        network: wallet.network,
-      });
-      setBalance(bal);
-      toast.success("Balance updated");
-    } catch (error) {
-      console.error("Failed to refresh balance:", error);
-      toast.error("Failed to refresh balance");
+      // Method 1: Call getBalance() on the Treasury contract directly
+      console.log("[TreasuryOverview] Method 1: Calling getBalance() on Treasury contract...");
+      const treasuryBalance = await publicClient.readContract({
+        address: treasury.contractAddress as Address,
+        abi: TREASURY_ABI,
+        functionName: "getBalance",
+        args: [],
+      }) as bigint;
+      console.log("[TreasuryOverview] Treasury.getBalance() result:", treasuryBalance.toString());
+      
+      // Method 2: Also check MNEE balanceOf for comparison
+      console.log("[TreasuryOverview] Method 2: Calling balanceOf() on MNEE token...");
+      const mneeBalance = await publicClient.readContract({
+        address: contracts.mneeToken as Address,
+        abi: ERC20_ABI,
+        functionName: "balanceOf",
+        args: [treasury.contractAddress as Address],
+      }) as bigint;
+      console.log("[TreasuryOverview] MNEE.balanceOf(treasury) result:", mneeBalance.toString());
+      
+      // They should match
+      const formattedTreasuryBalance = formatUnits(treasuryBalance, 18);
+      const formattedMneeBalance = formatUnits(mneeBalance, 18);
+      
+      console.log("[TreasuryOverview] Treasury balance formatted:", formattedTreasuryBalance);
+      console.log("[TreasuryOverview] MNEE balance formatted:", formattedMneeBalance);
+      console.log("[TreasuryOverview] ======= END FETCH =======");
+      
+      setLiveBalance(formattedTreasuryBalance);
+      setDebugInfo(`Treasury: ${formattedTreasuryBalance}, MNEE: ${formattedMneeBalance}`);
+    } catch (err) {
+      console.error("[TreasuryOverview] ERROR fetching balance:", err);
+      setError(err instanceof Error ? err.message : "Failed to fetch balance");
+      setDebugInfo(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setIsRefreshing(false);
     }
   };
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    try {
-      await updateWallet({
-        walletId: wallet._id as Id<"wallets">,
-        name: editName.trim(),
-      });
-      toast.success("Wallet updated successfully");
-      setIsEditing(false);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update wallet");
-    } finally {
-      setIsSaving(false);
-    }
-  };
+  // Fetch balance on mount and when treasury changes
+  useEffect(() => {
+    fetchBalance();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [treasury.contractAddress, publicClient, network]);
 
-  const handleDelete = async () => {
-    if (!confirm("Are you sure you want to delete this wallet? This action cannot be undone.")) {
-      return;
-    }
-
-    setIsDeleting(true);
-    try {
-      await deleteWallet({ walletId: wallet._id as Id<"wallets"> });
-      toast.success("Wallet deleted successfully");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to delete wallet");
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  const isMainnet = wallet.network === "mainnet";
+  const displayBalance = liveBalance !== null 
+    ? parseFloat(liveBalance).toFixed(4) 
+    : (treasury.cachedBalance || 0).toFixed(4);
 
   return (
-    <div className={`bg-[#111] border rounded-xl p-6 ${
-      isMainnet ? "border-emerald-900/50" : "border-amber-900/50"
-    }`}>
-      <div className="flex items-start justify-between">
-        <div className="flex items-center gap-4 min-w-0 flex-1">
-          <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${
-            isMainnet 
-              ? "bg-gradient-to-br from-emerald-500/20 to-teal-600/20 border border-emerald-500/30" 
-              : "bg-gradient-to-br from-amber-500/20 to-orange-600/20 border border-amber-500/30"
-          }`}>
-            <MneeIcon className="w-6 h-6" />
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-semibold text-white">Treasury Overview</h2>
+        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+          treasury.status === "active" 
+            ? "bg-green-500/20 text-green-400" 
+            : "bg-gray-700 text-gray-400"
+        }`}>
+          {treasury.status}
+        </span>
+      </div>
+      
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-gray-800 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-gray-400 text-sm">Balance</p>
+            <button 
+              onClick={fetchBalance}
+              disabled={isRefreshing}
+              className="text-xs text-indigo-400 hover:text-indigo-300 disabled:opacity-50"
+            >
+              {isRefreshing ? "..." : "↻ Refresh"}
+            </button>
           </div>
-          <div className="min-w-0 flex-1">
-            {isEditing ? (
-              <input
-                type="text"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                className="text-lg font-semibold text-white bg-[#0a0a0a] border border-[#333] rounded-lg px-3 py-1 mb-1 w-full"
-                autoFocus
-              />
-            ) : (
-              <div className="flex items-center gap-2">
-                <h3 className="text-lg font-semibold text-white truncate">
-                  {wallet.name}
-                </h3>
-                <span className={`flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded-full ${
-                  wallet.isActive 
-                    ? "bg-emerald-900/50 text-emerald-400" 
-                    : "bg-[#1a1a1a] text-[#666]"
-                }`}>
-                  {wallet.isActive ? "Active" : "Inactive"}
-                </span>
-                <span className={`flex-shrink-0 px-2 py-0.5 text-xs font-medium rounded-full capitalize ${
-                  isMainnet 
-                    ? "bg-emerald-900/50 text-emerald-400" 
-                    : "bg-amber-900/50 text-amber-400"
-                }`}>
-                  {wallet.network}
-                </span>
-              </div>
-            )}
-            <p className="text-sm text-[#888] mt-0.5">
-              {isMainnet ? "Production payments" : "Testing & development"}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {isEditing ? (
-            <>
-              <button
-                onClick={handleSave}
-                disabled={isSaving || !editName.trim()}
-                className="p-2 text-emerald-400 hover:bg-emerald-900/30 rounded-lg transition-colors disabled:opacity-50"
-                title="Save"
-              >
-                <CheckIcon className="w-5 h-5" />
-              </button>
-              <button
-                onClick={() => {
-                  setIsEditing(false);
-                  setEditName(wallet.name);
-                }}
-                className="p-2 text-[#666] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors"
-                title="Cancel"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                className="p-2 text-[#666] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors disabled:opacity-50"
-                title="Refresh balance"
-              >
-                <RefreshIcon className={`w-5 h-5 ${isRefreshing ? "animate-spin" : ""}`} />
-              </button>
-              {canManage && (
-                <>
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="p-2 text-[#666] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors"
-                    title="Edit wallet"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    disabled={isDeleting}
-                    className="p-2 text-red-400 hover:bg-red-900/30 rounded-lg transition-colors disabled:opacity-50"
-                    title="Delete wallet"
-                  >
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
-                </>
-              )}
-            </>
+          <p className="text-2xl font-bold text-white mt-1">
+            {displayBalance} <span className="text-lg text-gray-400">MNEE</span>
+          </p>
+          {liveBalance !== null && (
+            <p className="text-xs text-green-500 mt-1">Live from chain</p>
           )}
+          {error && (
+            <p className="text-xs text-red-400 mt-1">{error}</p>
+          )}
+          {debugInfo && (
+            <p className="text-xs text-gray-500 mt-1 font-mono">{debugInfo}</p>
+          )}
+        </div>
+        
+        <div className="bg-gray-800 rounded-lg p-4">
+          <p className="text-gray-400 text-sm">Contract</p>
+          <a 
+            href={`https://${network === "mainnet" ? "" : "sepolia."}etherscan.io/address/${treasury.contractAddress}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm font-mono text-indigo-400 hover:text-indigo-300 mt-1 block truncate"
+          >
+            {treasury.contractAddress}
+          </a>
         </div>
       </div>
-
-      {/* Address */}
-      <div className="mt-4 p-3 bg-[#0a0a0a] rounded-lg border border-[#333]">
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs text-[#666] mb-1">Wallet Address</p>
-            <p className="text-sm font-mono text-white truncate">{wallet.address}</p>
-                    </div>
-                    <button
-            onClick={handleCopy}
-            className="flex-shrink-0 p-2 text-[#666] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors"
-            title="Copy address"
-          >
-            {copied ? (
-              <CheckIcon className="w-5 h-5 text-emerald-500" />
-            ) : (
-              <CopyIcon className="w-5 h-5" />
-                      )}
-                    </button>
-                </div>
-              </div>
-
-      {/* Balance */}
-      <div className="mt-4 grid grid-cols-2 gap-4">
-        <div className="p-3 bg-[#0a0a0a] rounded-lg">
-          <p className="text-xs text-[#666] mb-1">Balance</p>
-          <p className="text-lg font-semibold text-white">
-            {isLoadingBalance ? (
-              <span className="text-[#666]">Loading...</span>
-            ) : balance !== null ? (
-              `${balance.toFixed(5)} MNEE`
-            ) : (
-              <span className="text-[#666]">-- MNEE</span>
-            )}
-          </p>
-          {balance === null && !isLoadingBalance && (
-            <p className="text-xs text-amber-400 mt-1">
-              Unable to fetch balance
-            </p>
-          )}
-        </div>
-        <div className="p-3 bg-[#0a0a0a] rounded-lg">
-          <p className="text-xs text-[#666] mb-1">Network</p>
-          <p className={`text-lg font-semibold ${isMainnet ? "text-emerald-400" : "text-amber-400"}`}>
-            {wallet.network}
-          </p>
-          <p className="text-xs text-[#666] mt-1">
-            Created {new Date(wallet.createdAt).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
+    </div>
   );
 }
 
-// ============================================
-// EMPTY STATE
-// ============================================
-
-function EmptyWalletsState({ 
-  canManage, 
-  networks 
+function DepositSection({ 
+  treasuryAddress, 
+  network 
 }: { 
-  canManage: boolean; 
-  networks: Array<{ _id: string; network: MneeNetwork; name: string }> | undefined;
+  treasuryAddress: Address;
+  network: EthereumNetwork;
 }) {
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [showImportDialog, setShowImportDialog] = useState(false);
+  const { address } = useAccount();
+  const [amount, setAmount] = useState("");
+  const [step, setStep] = useState<"idle" | "approving" | "depositing" | "success" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+  
+  const contracts = getContractAddresses(network);
+  
+  // Get MNEE balance - refetch after deposit
+  const { data: mneeBalance, refetch: refetchBalance } = useBalance({
+    address,
+    token: contracts.mneeToken as Address,
+  });
+  
+  // Approval transaction
+  const { 
+    writeContract: writeApprove, 
+    data: approveTxHash, 
+    isPending: isApprovePending,
+    reset: resetApprove 
+  } = useWriteContract();
+  
+  const { isSuccess: isApproveSuccess } = useWaitForTransactionReceipt({
+    hash: approveTxHash,
+  });
+  
+  // Deposit transaction
+  const { 
+    writeContract: writeDeposit, 
+    data: depositTxHash, 
+    isPending: isDepositPending,
+    reset: resetDeposit 
+  } = useWriteContract();
+  
+  const { isSuccess: isDepositSuccess } = useWaitForTransactionReceipt({
+    hash: depositTxHash,
+  });
+
+  // Log state changes
+  useEffect(() => {
+    console.log("[Deposit] State changed:", { step, approveTxHash, depositTxHash, isApproveSuccess, isDepositSuccess });
+  }, [step, approveTxHash, depositTxHash, isApproveSuccess, isDepositSuccess]);
+
+  // Chain the deposit after approval succeeds
+  useEffect(() => {
+    if (isApproveSuccess && step === "approving") {
+      console.log("[Deposit] Approval confirmed! TX:", approveTxHash);
+      console.log("[Deposit] Now calling deposit on treasury:", treasuryAddress);
+      console.log("[Deposit] Amount (raw):", parseUnits(amount, 18).toString());
+      
+      setStep("depositing");
+      writeDeposit({
+        address: treasuryAddress,
+        abi: TREASURY_ABI,
+        functionName: "deposit",
+        args: [parseUnits(amount, 18)],
+      });
+    }
+  }, [isApproveSuccess, step, writeDeposit, treasuryAddress, amount, approveTxHash]);
+
+  // Handle deposit success
+  useEffect(() => {
+    if (isDepositSuccess && step === "depositing") {
+      console.log("[Deposit] Deposit confirmed! TX:", depositTxHash);
+      console.log("[Deposit] Deposit successful, refreshing balance...");
+      
+      setStep("success");
+      setAmount("");
+      refetchBalance();
+      // Reset after a moment
+      setTimeout(() => {
+        setStep("idle");
+        resetApprove();
+        resetDeposit();
+      }, 3000);
+    }
+  }, [isDepositSuccess, step, refetchBalance, resetApprove, resetDeposit, depositTxHash]);
+
+  const handleDeposit = async () => {
+    if (!amount || parseFloat(amount) <= 0) return;
+    
+    const parsedAmount = parseUnits(amount, 18);
+    
+    console.log("[Deposit] Starting deposit flow...");
+    console.log("[Deposit] Treasury address:", treasuryAddress);
+    console.log("[Deposit] MNEE token address:", contracts.mneeToken);
+    console.log("[Deposit] Amount:", amount);
+    console.log("[Deposit] Parsed amount (wei):", parsedAmount.toString());
+    console.log("[Deposit] User wallet:", address);
+    
+    setError(null);
+    setStep("approving");
+    
+    try {
+      console.log("[Deposit] Calling approve on MNEE token...");
+      // First approve the treasury to spend tokens
+      writeApprove({
+        address: contracts.mneeToken as Address,
+        abi: ERC20_ABI,
+        functionName: "approve",
+        args: [treasuryAddress, parsedAmount],
+      });
+    } catch (err) {
+      console.error("[Deposit] Approval failed:", err);
+      setError(err instanceof Error ? err.message : "Deposit failed");
+      setStep("error");
+    }
+  };
+
+  const isLoading = step === "approving" || step === "depositing" || isApprovePending || isDepositPending;
 
   return (
-    <>
-      <div className="bg-[#111] border border-[#333] rounded-xl p-8 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-[#1a1a1a] flex items-center justify-center mx-auto mb-4">
-          <WalletIcon className="w-8 h-8 text-[#666]" />
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+      <h2 className="text-xl font-semibold text-white mb-4">Deposit MNEE</h2>
+      
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm text-gray-400 mb-2">Amount</label>
+          <div className="relative">
+            <input
+              type="number"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="0.00"
+              disabled={isLoading}
+              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50"
+            />
+            <button
+              onClick={() => mneeBalance && setAmount(formatUnits(mneeBalance.value, 18))}
+              disabled={isLoading}
+              className="absolute right-3 top-1/2 -translate-y-1/2 px-2 py-1 text-xs text-indigo-400 hover:text-indigo-300 disabled:opacity-50"
+            >
+              MAX
+            </button>
+          </div>
+          {mneeBalance && (
+            <p className="text-sm text-gray-500 mt-1">
+              Available: {parseFloat(formatUnits(mneeBalance.value, 18)).toFixed(2)} MNEE
+            </p>
+          )}
         </div>
-        <h3 className="text-lg font-medium text-white mb-2">No Wallets</h3>
-        <p className="text-sm text-[#888] max-w-sm mx-auto mb-6">
-          Create a new wallet or import an existing one using your private key.
-        </p>
-
-        {canManage && (
-          <div className="flex items-center justify-center gap-3">
-            <button
-              onClick={() => setShowCreateDialog(true)}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors"
-            >
-              <PlusIcon className="w-4 h-4" />
-              Create Wallet
-            </button>
-            <button
-              onClick={() => setShowImportDialog(true)}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white border border-[#555] hover:bg-[#1a1a1a] rounded-lg transition-colors"
-            >
-              <UploadIcon className="w-4 h-4" />
-              Import Wallet
-            </button>
+        
+        <button
+          onClick={handleDeposit}
+          disabled={!amount || parseFloat(amount) <= 0 || isLoading}
+          className="w-full py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium transition-colors"
+        >
+          {isLoading ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              {step === "approving" ? "Step 1/2: Approving..." : "Step 2/2: Depositing..."}
+            </span>
+          ) : (
+            "Deposit"
+          )}
+        </button>
+        
+        {step === "success" && (
+          <div className="p-3 bg-green-500/20 border border-green-500/50 rounded-lg">
+            <p className="text-green-400 text-sm text-center">Deposit successful!</p>
+          </div>
+        )}
+        
+        {error && (
+          <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
+            <p className="text-red-400 text-sm text-center">{error}</p>
           </div>
         )}
       </div>
-
-      {showCreateDialog && (
-        <CreateWalletDialog 
-          onClose={() => setShowCreateDialog(false)}
-          availableNetworks={networks}
-        />
-      )}
-      
-      {showImportDialog && (
-        <ImportWalletDialog 
-          onClose={() => setShowImportDialog(false)}
-          availableNetworks={networks}
-        />
-      )}
-    </>
-  );
-}
-
-// ============================================
-// WALLET ACTION BUTTONS
-// ============================================
-
-function CreateWalletButton({ 
-  availableNetworks 
-}: { 
-  availableNetworks: Array<{ _id: string; network: MneeNetwork; name: string }> | undefined;
-}) {
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [showImportDialog, setShowImportDialog] = useState(false);
-
-  return (
-    <>
-      <div className="flex gap-2">
-        <button
-          onClick={() => setShowCreateDialog(true)}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#888] hover:text-white border border-[#333] hover:border-[#555] rounded-lg transition-colors flex-1"
-        >
-          <PlusIcon className="w-4 h-4" />
-          Create New Wallet
-        </button>
-        <button
-          onClick={() => setShowImportDialog(true)}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-[#888] hover:text-white border border-[#333] hover:border-[#555] rounded-lg transition-colors flex-1"
-        >
-          <UploadIcon className="w-4 h-4" />
-          Import Wallet
-        </button>
-      </div>
-
-      {showCreateDialog && (
-        <CreateWalletDialog 
-          onClose={() => setShowCreateDialog(false)}
-          availableNetworks={availableNetworks}
-        />
-      )}
-      
-      {showImportDialog && (
-        <ImportWalletDialog 
-          onClose={() => setShowImportDialog(false)}
-          availableNetworks={availableNetworks}
-        />
-      )}
-    </>
-  );
-}
-
-// ============================================
-// CREATE WALLET DIALOG
-// ============================================
-
-function CreateWalletDialog({
-  onClose,
-  availableNetworks,
-}: {
-  onClose: () => void;
-  availableNetworks: Array<{ _id: string; network: MneeNetwork; name: string }> | undefined;
-}) {
-  const [name, setName] = useState("");
-  const [network, setNetwork] = useState<MneeNetwork>("sandbox");
-  const [isCreating, setIsCreating] = useState(false);
-  const toast = useToast();
-  const generateWallet = useMutation(api.wallets.generateWallet);
-
-  // Set default network when availableNetworks loads
-  useEffect(() => {
-    if (availableNetworks && availableNetworks.length > 0) {
-      const sandbox = availableNetworks.find(n => n.network === "sandbox");
-      if (sandbox) {
-        setNetwork(sandbox.network);
-      } else {
-        setNetwork(availableNetworks[0].network);
-      }
-    }
-  }, [availableNetworks]);
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-
-    setIsCreating(true);
-    try {
-      const result = await generateWallet({
-        name: name.trim(),
-        network,
-      });
-      toast.success(result.message);
-      onClose();
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to create wallet");
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-      <div className="bg-[#111] border border-[#333] rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
-        <form onSubmit={handleCreate} className="space-y-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
-              <WalletIcon className="w-5 h-5 text-white" />
-            </div>
-            <h3 className="text-lg font-semibold text-white">
-              Create Wallet
-            </h3>
-          </div>
-
-          <div className="bg-[#1a1a1a] border border-[#333] rounded-lg p-3">
-            <p className="text-sm text-[#888]">
-              A new MNEE wallet will be automatically generated with a secure address and encrypted private key.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-[#888] mb-1">
-              Wallet Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Main Wallet, Dev Wallet"
-              className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
-              required
-              autoFocus
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-[#888] mb-1">
-              Network <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={network}
-              onChange={(e) => setNetwork(e.target.value as MneeNetwork)}
-              className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white focus:outline-none focus:border-[#555]"
-            >
-              {availableNetworks && availableNetworks.length > 0 ? (
-                availableNetworks.map((n) => (
-                  <option key={n._id} value={n.network}>
-                    {n.name}
-                  </option>
-                ))
-              ) : (
-                <>
-                  <option value="sandbox">MNEE Sandbox</option>
-                  <option value="mainnet">MNEE Mainnet</option>
-                </>
-              )}
-            </select>
-            <p className="text-xs text-[#666] mt-1">
-              Choose sandbox for testing or mainnet for production
-            </p>
-          </div>
-
-          <div className="flex gap-2 pt-2">
-            <button
-              type="submit"
-              disabled={isCreating || !name.trim()}
-              className="flex-1 px-4 py-2.5 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isCreating ? "Generating..." : "Generate Wallet"}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isCreating}
-              className="flex-1 px-4 py-2.5 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors disabled:opacity-50"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
     </div>
   );
 }
 
-// ============================================
-// IMPORT WALLET DIALOG
-// ============================================
-
-function ImportWalletDialog({
-  onClose,
-  availableNetworks,
-}: {
-  onClose: () => void;
-  availableNetworks: Array<{ _id: string; network: MneeNetwork; name: string }> | undefined;
+function ApiKeyLimitsSection({ 
+  treasuryAddress: _treasuryAddress, 
+  apiKeys,
+  network: _network 
+}: { 
+  treasuryAddress: Address;
+  apiKeys: Array<{ _id: string; name: string; apiKeyPrefix: string; apiKeyHash?: string }>;
+  network: EthereumNetwork;
 }) {
-  const [name, setName] = useState("");
-  const [address, setAddress] = useState("");
-  const [privateKey, setPrivateKey] = useState("");
-  const [showPrivateKey, setShowPrivateKey] = useState(false);
-  const [network, setNetwork] = useState<MneeNetwork>("sandbox");
-  const [isImporting, setIsImporting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const toast = useToast();
-  const importWallet = useAction(api.mneeActions.importWallet);
+  // treasuryAddress and network will be used when implementing on-chain limit updates
+  void _treasuryAddress;
+  void _network;
+  
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [limits, setLimits] = useState({
+    maxPerTransaction: "100",
+    dailyLimit: "1000",
+    monthlyLimit: "10000",
+  });
 
-  // Set default network when availableNetworks loads
-  useEffect(() => {
-    if (availableNetworks && availableNetworks.length > 0) {
-      const sandbox = availableNetworks.find(n => n.network === "sandbox");
-      if (sandbox) {
-        setNetwork(sandbox.network);
-      } else {
-        setNetwork(availableNetworks[0].network);
-      }
-    }
-  }, [availableNetworks]);
-
-  const handleImport = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim() || !address.trim() || !privateKey.trim()) return;
-
-    setIsImporting(true);
-    setError(null);
-
-    try {
-      const result = await importWallet({
-        name: name.trim(),
-        address: address.trim(),
-        privateKey: privateKey.trim(),
-        network,
-      });
-
-      if (!result.success) {
-        throw new Error(result.error || "Failed to import wallet");
-      }
-
-      toast.success("Wallet imported successfully");
-      onClose();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to import wallet";
-      setError(message);
-      toast.error(message);
-    } finally {
-      setIsImporting(false);
-    }
-  };
+  const agentKeys = apiKeys.filter(k => k.apiKeyHash); // Only keys with hash
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-      <div className="bg-[#111] border border-[#333] rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl max-h-[90vh] overflow-y-auto">
-        <form onSubmit={handleImport} className="space-y-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-              <KeyIcon className="w-5 h-5 text-white" />
-            </div>
-            <h3 className="text-lg font-semibold text-white">
-              Import Wallet
-            </h3>
-          </div>
-
-          <div className="bg-amber-900/20 border border-amber-700/50 rounded-lg p-3">
-            <p className="text-sm text-amber-200">
-              <strong>Security Notice:</strong> Your private key will be encrypted and stored securely. Never share your private key with anyone.
-            </p>
-          </div>
-
-          {error && (
-            <div className="bg-red-900/20 border border-red-700/50 rounded-lg p-3">
-              <p className="text-sm text-red-300">{error}</p>
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+      <h2 className="text-xl font-semibold text-white mb-4">API Key Spending Limits</h2>
+      <p className="text-gray-400 text-sm mb-4">
+        Configure on-chain spending limits for each API key. These limits are enforced by the treasury smart contract.
+      </p>
+      
+      {agentKeys.length === 0 ? (
+        <div className="text-center py-8 bg-gray-800 rounded-lg">
+          <p className="text-gray-400">No API keys with treasury access.</p>
+          <p className="text-sm text-gray-500 mt-1">Create an agent API key first.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <select
+            value={selectedKey || ""}
+            onChange={(e) => setSelectedKey(e.target.value)}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
+          >
+            <option value="">Select an API key...</option>
+            {agentKeys.map((key) => (
+              <option key={key._id} value={key._id}>
+                {key.name} ({key.apiKeyPrefix}...)
+              </option>
+            ))}
+          </select>
+          
+          {selectedKey && (
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Per Transaction</label>
+                <input
+                  type="number"
+                  value={limits.maxPerTransaction}
+                  onChange={(e) => setLimits(l => ({ ...l, maxPerTransaction: e.target.value }))}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
+                  placeholder="0 = unlimited"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Daily Limit</label>
+                <input
+                  type="number"
+                  value={limits.dailyLimit}
+                  onChange={(e) => setLimits(l => ({ ...l, dailyLimit: e.target.value }))}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
+                  placeholder="0 = unlimited"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Monthly Limit</label>
+                <input
+                  type="number"
+                  value={limits.monthlyLimit}
+                  onChange={(e) => setLimits(l => ({ ...l, monthlyLimit: e.target.value }))}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
+                  placeholder="0 = unlimited"
+                />
+              </div>
             </div>
           )}
-
-          <div>
-            <label className="block text-sm font-medium text-[#888] mb-1">
-              Wallet Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., My MNEE Wallet"
-              className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
-              required
-              autoFocus
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-[#888] mb-1">
-              Wallet Address <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="e.g., 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa"
-              className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555] font-mono text-sm"
-              required
-              autoComplete="off"
-              spellCheck="false"
-            />
-            <p className="text-xs text-[#666] mt-1">
-              The Bitcoin address for this wallet
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-[#888] mb-1">
-              Private Key (WIF) <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <input
-                type={showPrivateKey ? "text" : "password"}
-                value={privateKey}
-                onChange={(e) => setPrivateKey(e.target.value)}
-                placeholder="Enter your WIF private key"
-                className="w-full px-3 py-2 pr-10 border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555] font-mono text-sm"
-                required
-                autoComplete="off"
-                spellCheck="false"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPrivateKey(!showPrivateKey)}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-[#666] hover:text-white transition-colors"
-                title={showPrivateKey ? "Hide private key" : "Show private key"}
-              >
-                {showPrivateKey ? (
-                  <EyeOffIcon className="w-5 h-5" />
-                ) : (
-                  <EyeIcon className="w-5 h-5" />
-                )}
-              </button>
-            </div>
-            <p className="text-xs text-[#666] mt-1">
-              WIF format starts with 5, K, L, or c (e.g., 5HueCGU8rMjx...)
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-[#888] mb-1">
-              Network <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={network}
-              onChange={(e) => setNetwork(e.target.value as MneeNetwork)}
-              className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white focus:outline-none focus:border-[#555]"
-            >
-              {availableNetworks && availableNetworks.length > 0 ? (
-                availableNetworks.map((n) => (
-                  <option key={n._id} value={n.network}>
-                    {n.name}
-                  </option>
-                ))
-              ) : (
-                <>
-                  <option value="sandbox">MNEE Sandbox</option>
-                  <option value="mainnet">MNEE Mainnet</option>
-                </>
-              )}
-            </select>
-            <p className="text-xs text-[#666] mt-1">
-              Make sure the network matches your wallet&apos;s network
-            </p>
-          </div>
-
-          <div className="flex gap-2 pt-2">
-            <button
-              type="submit"
-              disabled={isImporting || !name.trim() || !address.trim() || !privateKey.trim()}
-              className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isImporting ? "Importing..." : "Import Wallet"}
+          
+          {selectedKey && (
+            <button className="w-full py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-medium transition-colors">
+              Update Limits On-Chain
             </button>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isImporting}
-              className="flex-1 px-4 py-2.5 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors disabled:opacity-50"
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DeployOrSyncTreasurySection({ 
+  workspaceId, 
+  network,
+  adminAddress 
+}: { 
+  workspaceId: Id<"workspaces">;
+  network: EthereumNetwork;
+  adminAddress: Address;
+}) {
+  const contracts = getContractAddresses(network);
+  const publicClient = usePublicClient();
+  const createTreasury = useMutation(api.treasuries.createTreasury);
+  const [existingTreasury, setExistingTreasury] = useState<string | null>(null);
+  const [checking, setChecking] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  // Check if treasury already exists on-chain
+  useEffect(() => {
+    async function checkOnChain() {
+      if (!publicClient || !contracts.treasuryFactory) {
+        setChecking(false);
+        return;
+      }
+      
+      try {
+        const treasuryAddress = await publicClient.readContract({
+          address: contracts.treasuryFactory as Address,
+          abi: TREASURY_FACTORY_ABI,
+          functionName: "getTreasury",
+          args: [workspaceId],
+        }) as string;
+        
+        if (treasuryAddress && treasuryAddress !== "0x0000000000000000000000000000000000000000") {
+          setExistingTreasury(treasuryAddress);
+        }
+      } catch (err) {
+        console.error("Error checking on-chain treasury:", err);
+      }
+      setChecking(false);
+    }
+    
+    checkOnChain();
+  }, [publicClient, contracts.treasuryFactory, workspaceId]);
+
+  const handleSync = async () => {
+    if (!existingTreasury) return;
+    
+    setSyncing(true);
+    setSyncError(null);
+    
+    try {
+      await createTreasury({
+        workspaceId,
+        network,
+        contractAddress: existingTreasury,
+        adminAddress: adminAddress,
+        txHash: "synced-from-chain",
+      });
+    } catch (err) {
+      console.error("Sync failed:", err);
+      setSyncError(err instanceof Error ? err.message : "Failed to sync treasury");
+    }
+    setSyncing(false);
+  };
+
+  if (checking) {
+    return (
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-500 mx-auto mb-4" />
+        <p className="text-gray-400">Checking for existing treasury...</p>
+      </div>
+    );
+  }
+
+  // If treasury exists on-chain but not in database, show sync option
+  if (existingTreasury) {
+    return (
+      <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
+          <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+        </div>
+        <h3 className="text-xl font-semibold text-white mb-2">Treasury Found On-Chain</h3>
+        <p className="text-gray-400 mb-4 max-w-md mx-auto">
+          A treasury for this workspace already exists on {network === "mainnet" ? "Ethereum Mainnet" : "Sepolia"}.
+        </p>
+        
+        <div className="bg-gray-800 rounded-lg p-4 mb-6 text-left max-w-sm mx-auto">
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-400">Contract</span>
+            <a 
+              href={`https://${network === "mainnet" ? "" : "sepolia."}etherscan.io/address/${existingTreasury}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-indigo-400 hover:text-indigo-300 font-mono text-xs truncate ml-2"
             >
-              Cancel
-            </button>
+              {existingTreasury.slice(0, 10)}...{existingTreasury.slice(-8)}
+            </a>
           </div>
-        </form>
+        </div>
+        
+        <button
+          onClick={handleSync}
+          disabled={syncing}
+          className="px-6 py-3 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium transition-colors"
+        >
+          {syncing ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              Syncing...
+            </span>
+          ) : (
+            "Sync Treasury to Dashboard"
+          )}
+        </button>
+        
+        {syncError && (
+          <div className="mt-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
+            <p className="text-red-400 text-sm">{syncError}</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // No treasury exists, show deploy option
+  return (
+    <DeployTreasurySection
+      workspaceId={workspaceId}
+      network={network}
+      adminAddress={adminAddress}
+    />
+  );
+}
+
+function DeployTreasurySection({ 
+  workspaceId, 
+  network,
+  adminAddress 
+}: { 
+  workspaceId: Id<"workspaces">;
+  network: EthereumNetwork;
+  adminAddress: Address;
+}) {
+  const contracts = getContractAddresses(network);
+  const publicClient = usePublicClient();
+  const createTreasury = useMutation(api.treasuries.createTreasury);
+  const [savedToDb, setSavedToDb] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  const { writeContract, data: txHash, isPending } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess, data: receipt } = useWaitForTransactionReceipt({
+    hash: txHash,
+  });
+
+  // When transaction succeeds, extract treasury address and save to Convex
+  useEffect(() => {
+    async function saveTreasury() {
+      if (!isSuccess || !receipt || !txHash || savedToDb) return;
+      
+      try {
+        // Find the TreasuryCreated event in the logs
+        const treasuryCreatedEvent = receipt.logs.find(log => {
+          try {
+            const decoded = decodeEventLog({
+              abi: TREASURY_FACTORY_ABI,
+              data: log.data,
+              topics: log.topics,
+            });
+            return decoded.eventName === "TreasuryCreated";
+          } catch {
+            return false;
+          }
+        });
+
+        let treasuryAddress: string | null = null;
+        
+        if (treasuryCreatedEvent) {
+          const decoded = decodeEventLog({
+            abi: TREASURY_FACTORY_ABI,
+            data: treasuryCreatedEvent.data,
+            topics: treasuryCreatedEvent.topics,
+          });
+          // The treasury address is the second indexed parameter
+          treasuryAddress = (decoded.args as { treasury: string }).treasury;
+        }
+        
+        // If we couldn't get it from events, try reading from factory
+        if (!treasuryAddress && publicClient) {
+          treasuryAddress = await publicClient.readContract({
+            address: contracts.treasuryFactory as Address,
+            abi: TREASURY_FACTORY_ABI,
+            functionName: "getTreasury",
+            args: [workspaceId],
+          }) as string;
+        }
+
+        if (!treasuryAddress || treasuryAddress === "0x0000000000000000000000000000000000000000") {
+          throw new Error("Could not get treasury address from transaction");
+        }
+
+        // Save to Convex
+        await createTreasury({
+          workspaceId,
+          network,
+          contractAddress: treasuryAddress,
+          adminAddress: adminAddress,
+          txHash: txHash,
+        });
+        
+        setSavedToDb(true);
+      } catch (err) {
+        console.error("Failed to save treasury:", err);
+        setError(err instanceof Error ? err.message : "Failed to save treasury record");
+      }
+    }
+    
+    saveTreasury();
+  }, [isSuccess, receipt, txHash, savedToDb, createTreasury, workspaceId, network, adminAddress, publicClient, contracts.treasuryFactory]);
+
+  const handleDeploy = async () => {
+    if (!contracts.treasuryFactory) {
+      alert("Treasury factory not configured for this network");
+      return;
+    }
+    
+    setError(null);
+    
+    try {
+      writeContract({
+        address: contracts.treasuryFactory as Address,
+        abi: TREASURY_FACTORY_ABI,
+        functionName: "createTreasury",
+        args: [workspaceId, adminAddress],
+      });
+    } catch (error) {
+      console.error("Deploy failed:", error);
+    }
+  };
+
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-green-500 to-teal-500 flex items-center justify-center">
+        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+        </svg>
+      </div>
+      <h3 className="text-xl font-semibold text-white mb-2">Deploy Treasury Contract</h3>
+      <p className="text-gray-400 mb-6 max-w-md mx-auto">
+        Deploy a new treasury contract for {network === "mainnet" ? "Ethereum Mainnet" : "Sepolia Testnet"}. 
+        This is a one-time operation per network.
+      </p>
+      
+      <div className="bg-gray-800 rounded-lg p-4 mb-6 text-left max-w-sm mx-auto">
+        <div className="flex justify-between text-sm mb-2">
+          <span className="text-gray-400">Network</span>
+          <span className="text-white">{network === "mainnet" ? "Ethereum" : "Sepolia"}</span>
+        </div>
+        <div className="flex justify-between text-sm">
+          <span className="text-gray-400">Admin</span>
+          <span className="text-white font-mono text-xs truncate ml-2">{adminAddress}</span>
+        </div>
+      </div>
+      
+      <button
+        onClick={handleDeploy}
+        disabled={isPending || isConfirming || !contracts.treasuryFactory}
+        className="px-6 py-3 rounded-lg bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium transition-colors"
+      >
+        {isPending || isConfirming ? (
+          <span className="flex items-center justify-center gap-2">
+            <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+            Deploying...
+          </span>
+        ) : !contracts.treasuryFactory ? (
+          "Factory Not Deployed"
+        ) : (
+          "Deploy Treasury"
+        )}
+      </button>
+      
+      {isSuccess && savedToDb && (
+        <div className="mt-4 p-3 bg-green-500/20 border border-green-500/50 rounded-lg">
+          <p className="text-green-400 text-sm">Treasury deployed and saved successfully!</p>
+        </div>
+      )}
+      
+      {error && (
+        <div className="mt-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
+          <p className="text-red-400 text-sm">{error}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuickStats({ 
+  treasury, 
+  network 
+}: { 
+  treasury?: { cachedBalance?: number; status: string } | null;
+  network: EthereumNetwork;
+}) {
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+      <h3 className="text-lg font-semibold text-white mb-4">Quick Stats</h3>
+      
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <span className="text-gray-400">Network</span>
+          <span className="text-white">{network === "mainnet" ? "Mainnet" : "Sepolia"}</span>
+        </div>
+        
+        <div className="flex justify-between items-center">
+          <span className="text-gray-400">Treasury Status</span>
+          <span className={treasury?.status === "active" ? "text-green-400" : "text-gray-400"}>
+            {treasury?.status || "Not deployed"}
+          </span>
+        </div>
+        
+        <div className="flex justify-between items-center">
+          <span className="text-gray-400">Balance</span>
+          <span className="text-white font-mono">
+            {(treasury?.cachedBalance || 0).toFixed(2)} MNEE
+          </span>
+        </div>
+        
+        <div className="border-t border-gray-800 my-4" />
+        
+        <div className="flex justify-between items-center">
+          <span className="text-gray-400">Custody Model</span>
+          <span className="text-green-400 text-sm">Non-Custodial ✓</span>
+        </div>
       </div>
     </div>
   );
 }
 
-// ============================================
-// LOADING SKELETON
-// ============================================
-
-function LoadingSkeleton() {
+function InfoPanel() {
   return (
-    <div className="min-h-screen bg-[#0a0a0a]">
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="h-8 w-32 bg-[#1a1a1a] rounded mb-8 animate-pulse" />
-        <div className="flex items-start justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-[#1a1a1a] animate-pulse" />
-            <div>
-              <div className="h-7 w-32 bg-[#1a1a1a] rounded animate-pulse" />
-              <div className="h-4 w-48 bg-[#1a1a1a] rounded animate-pulse mt-2" />
-            </div>
-          </div>
-        </div>
-        <div className="space-y-4">
-          {[1, 2].map((i) => (
-            <div key={i} className="h-48 bg-[#111] border border-[#333] rounded-xl animate-pulse" />
-          ))}
-        </div>
-      </div>
-      </div>
+    <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border border-indigo-700/50 rounded-xl p-6">
+      <h3 className="text-lg font-semibold text-white mb-3">About Treasury</h3>
+      <ul className="space-y-2 text-sm text-gray-300">
+        <li className="flex items-start gap-2">
+          <span className="text-indigo-400">✓</span>
+          <span>You maintain full control of your funds</span>
+        </li>
+        <li className="flex items-start gap-2">
+          <span className="text-indigo-400">✓</span>
+          <span>Spending limits enforced on-chain</span>
+        </li>
+        <li className="flex items-start gap-2">
+          <span className="text-indigo-400">✓</span>
+          <span>Only the x402 gateway can execute payments</span>
+        </li>
+        <li className="flex items-start gap-2">
+          <span className="text-indigo-400">✓</span>
+          <span>Withdraw anytime, no lock-ups</span>
+        </li>
+      </ul>
+      
+      <a 
+        href="/docs/concepts"
+        className="mt-4 inline-flex items-center gap-1 text-sm text-indigo-400 hover:text-indigo-300"
+      >
+        Learn more
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </a>
+    </div>
   );
 }

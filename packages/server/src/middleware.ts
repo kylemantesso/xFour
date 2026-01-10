@@ -14,14 +14,14 @@ import { createVerifier, generateInvoiceId } from "./verification";
  */
 export interface MiddlewareConfig extends ServerConfig {
   /**
-   * Your MNEE wallet address for receiving payments
+   * Your Ethereum wallet address for receiving MNEE payments
    */
   payToAddress: string;
 
   /**
-   * MNEE network (sandbox or mainnet)
+   * Ethereum network (sepolia testnet or mainnet)
    */
-  network?: "sandbox" | "mainnet";
+  network?: "sepolia" | "mainnet";
 
   /**
    * Default pricing if not specified per-request

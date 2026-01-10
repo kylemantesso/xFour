@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { WorkspaceGuard } from "../../../components/WorkspaceGuard";
@@ -9,7 +9,7 @@ import { useToast } from "../../../components/Toast";
 import { Id } from "../../../convex/_generated/dataModel";
 
 // Types
-type MneeNetwork = "sandbox" | "mainnet";
+type EthereumNetwork = "sepolia" | "mainnet";
 
 // Icons
 function KeyIcon({ className }: { className?: string }) {
@@ -71,8 +71,6 @@ export default function ProvidersPage() {
 function ProvidersContent() {
   const workspaceData = useQuery(api.workspaces.getCurrentWorkspace);
   const apiKeys = useQuery(api.apiKeys.listApiKeys, {});
-  const wallets = useQuery(api.wallets.listWallets, {});
-  const mneeWallets = useQuery(api.mnee.listWorkspaceMneeWallets, {});
 
   if (!workspaceData) {
     return <LoadingSkeleton />;
@@ -81,8 +79,6 @@ function ProvidersContent() {
   const { role } = workspaceData;
   const isAdmin = role === "owner" || role === "admin";
   const canWrite = role === "owner" || role === "admin" || role === "member";
-  // Allow creation if they have either new wallets OR old mneeWallets (backward compatibility)
-  const hasWallets = (wallets && wallets.length > 0) || (mneeWallets && mneeWallets.length > 0);
 
   // Filter to only show provider keys
   const providerKeys = apiKeys?.filter(key => key.type === "provider") ?? [];
@@ -108,7 +104,7 @@ function ProvidersContent() {
               </p>
             </div>
           </div>
-          {canWrite && <CreateProviderKeyButton hasWallets={hasWallets ?? false} wallets={wallets} />}
+          {canWrite && <CreateProviderKeyButton />}
         </div>
 
         {/* Info Card */}
@@ -153,48 +149,20 @@ function ProvidersContent() {
 // CREATE PROVIDER KEY BUTTON
 // ============================================
 
-type WalletData = {
-  _id: string;
-  name: string;
-  address: string;
-  network: MneeNetwork;
-  isActive: boolean;
-  createdAt: number;
-  updatedAt: number;
-};
-
-function CreateProviderKeyButton({ 
-  hasWallets,
-  wallets 
-}: { 
-  hasWallets: boolean;
-  wallets: WalletData[] | undefined;
-}) {
+function CreateProviderKeyButton() {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [selectedWalletId, setSelectedWalletId] = useState<string>("");
-  const [showCreateWallet, setShowCreateWallet] = useState(false);
+  const [receivingAddress, setReceivingAddress] = useState("");
+  const [receivingNetwork, setReceivingNetwork] = useState<EthereumNetwork>("sepolia");
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  // Usage limits
-  const [dailyLimit, setDailyLimit] = useState("");
-  const [monthlyLimit, setMonthlyLimit] = useState("");
-  const [maxRequest, setMaxRequest] = useState("");
-  const [showLimits, setShowLimits] = useState(false);
   const createApiKey = useMutation(api.apiKeys.createApiKey);
-
-  // Set default wallet when wallets load
-  useEffect(() => {
-    if (wallets && wallets.length > 0 && !selectedWalletId) {
-      setSelectedWalletId(wallets[0]._id);
-    }
-  }, [wallets, selectedWalletId]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !selectedWalletId) return;
+    if (!name.trim() || !receivingAddress.trim()) return;
 
     setIsCreating(true);
     try {
@@ -202,18 +170,14 @@ function CreateProviderKeyButton({
         name: name.trim(),
         description: description.trim() || undefined,
         type: "provider",
-        walletId: selectedWalletId as Id<"wallets">,
-        dailyLimit: dailyLimit ? parseFloat(dailyLimit) : undefined,
-        monthlyLimit: monthlyLimit ? parseFloat(monthlyLimit) : undefined,
-        maxRequest: maxRequest ? parseFloat(maxRequest) : undefined,
+        receivingAddress: receivingAddress.trim(),
+        receivingNetwork,
       });
       setNewApiKey(result.apiKey);
       setName("");
       setDescription("");
-      setDailyLimit("");
-      setMonthlyLimit("");
-      setMaxRequest("");
-      setShowLimits(false);
+      setReceivingAddress("");
+      setReceivingNetwork("sepolia");
     } finally {
       setIsCreating(false);
     }
@@ -233,19 +197,15 @@ function CreateProviderKeyButton({
     setCopied(false);
     setName("");
     setDescription("");
-    setDailyLimit("");
-    setMonthlyLimit("");
-    setMaxRequest("");
-    setShowLimits(false);
+    setReceivingAddress("");
+    setReceivingNetwork("sepolia");
   };
 
   return (
     <>
       <button
         onClick={() => setIsOpen(true)}
-        disabled={!hasWallets}
-        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        title={!hasWallets ? "Create a wallet in the Treasury page first" : undefined}
+        className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors"
       >
         <PlusIcon className="w-4 h-4" />
         Create Provider Key
@@ -344,100 +304,42 @@ function CreateProviderKeyButton({
 
                 <div>
                   <label className="block text-sm font-medium text-[#888] mb-1">
-                    Wallet <span className="text-red-500">*</span>
+                    Receiving Address <span className="text-red-500">*</span>
                   </label>
-                  <div className="flex gap-2">
-                    <select
-                      value={selectedWalletId}
-                      onChange={(e) => setSelectedWalletId(e.target.value)}
-                      className="flex-1 px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white focus:outline-none focus:border-[#555]"
-                      required
-                    >
-                      <option value="">Select a wallet</option>
-                      {wallets?.map((wallet) => (
-                        <option key={wallet._id} value={wallet._id}>
-                          {wallet.name} ({wallet.network})
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => setShowCreateWallet(true)}
-                      className="px-3 py-2 text-sm font-medium text-[#888] hover:text-white border border-[#333] hover:border-[#555] rounded-lg transition-colors"
-                      title="Create new wallet"
-                    >
-                      <PlusIcon className="w-4 h-4" />
-                    </button>
-                  </div>
+                  <input
+                    type="text"
+                    value={receivingAddress}
+                    onChange={(e) => setReceivingAddress(e.target.value)}
+                    placeholder="0x..."
+                    className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555] font-mono"
+                    required
+                  />
                   <p className="text-xs text-[#666] mt-1">
-                    Payments will be sent to this wallet&apos;s address.
+                    Payments received by this API key will be sent to this Ethereum address.
                   </p>
                 </div>
 
-                {/* Usage Limits Section */}
                 <div>
-                  <button
-                    type="button"
-                    onClick={() => setShowLimits(!showLimits)}
-                    className="flex items-center gap-2 text-sm text-[#888] hover:text-white transition-colors"
+                  <label className="block text-sm font-medium text-[#888] mb-1">
+                    Network <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={receivingNetwork}
+                    onChange={(e) => setReceivingNetwork(e.target.value as EthereumNetwork)}
+                    className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white focus:outline-none focus:border-[#555]"
                   >
-                    <svg
-                      className={`w-4 h-4 transition-transform ${showLimits ? "rotate-90" : ""}`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                    <span>Usage Limits</span>
-                    <span className="text-[#666]">(optional)</span>
-                  </button>
-                  
-                  {showLimits && (
-                    <div className="mt-3 p-3 bg-[#1a1a1a] rounded-lg border border-[#333] space-y-3">
-                      <div className="grid grid-cols-3 gap-3">
-                        <div>
-                          <label className="block text-xs text-[#666] mb-1">Daily Limit</label>
-                          <input
-                            type="number"
-                            value={dailyLimit}
-                            onChange={(e) => setDailyLimit(e.target.value)}
-                            placeholder="No limit"
-                            className="w-full px-2 py-1.5 text-sm border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-[#666] mb-1">Monthly Limit</label>
-                          <input
-                            type="number"
-                            value={monthlyLimit}
-                            onChange={(e) => setMonthlyLimit(e.target.value)}
-                            placeholder="No limit"
-                            className="w-full px-2 py-1.5 text-sm border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-xs text-[#666] mb-1">Max Request</label>
-                          <input
-                            type="number"
-                            value={maxRequest}
-                            onChange={(e) => setMaxRequest(e.target.value)}
-                            placeholder="No limit"
-                            className="w-full px-2 py-1.5 text-sm border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
-                          />
-                        </div>
-                      </div>
-                      <p className="text-xs text-[#666]">
-                        Set MNEE spending limits for this API key. You can edit these later.
-                      </p>
-                    </div>
-                  )}
+                    <option value="sepolia">Sepolia Testnet</option>
+                    <option value="mainnet">Ethereum Mainnet</option>
+                  </select>
+                  <p className="text-xs text-[#666] mt-1">
+                    Choose which network to receive payments on.
+                  </p>
                 </div>
 
                 <div className="flex gap-2 pt-2">
                   <button
                     type="submit"
-                    disabled={isCreating || !name.trim() || !selectedWalletId}
+                    disabled={isCreating || !name.trim() || !receivingAddress.trim()}
                     className="flex-1 px-4 py-2.5 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isCreating ? "Creating..." : "Create Key"}
@@ -455,165 +357,7 @@ function CreateProviderKeyButton({
           </div>
         </div>
       )}
-
-      {showCreateWallet && (
-        <CreateWalletDialogForProviders 
-          onClose={() => setShowCreateWallet(false)}
-          onWalletCreated={(walletId) => {
-            setSelectedWalletId(walletId);
-            setShowCreateWallet(false);
-          }}
-        />
-      )}
     </>
-  );
-}
-
-// ============================================
-// CREATE WALLET DIALOG (FOR PROVIDERS PAGE)
-// ============================================
-
-function CreateWalletDialogForProviders({
-  onClose,
-  onWalletCreated,
-}: {
-  onClose: () => void;
-  onWalletCreated: (walletId: string) => void;
-}) {
-  const [name, setName] = useState("");
-  const [network, setNetwork] = useState<MneeNetwork>("mainnet");
-  const [isCreating, setIsCreating] = useState(false);
-  const toast = useToast();
-  const generateWallet = useMutation(api.wallets.generateWallet);
-  const mneeNetworks = useQuery(api.mneeNetworks.listNetworks, { includeSandbox: true });
-  const wallets = useQuery(api.wallets.listWallets, {});
-
-  // Set default network when mneeNetworks loads
-  useEffect(() => {
-    if (mneeNetworks && mneeNetworks.length > 0) {
-      const mainnet = mneeNetworks.find(n => n.network === "mainnet");
-      if (mainnet) {
-        setNetwork(mainnet.network);
-      } else {
-        setNetwork(mneeNetworks[0].network);
-      }
-    }
-  }, [mneeNetworks]);
-
-  // Poll for the new wallet after creation
-  useEffect(() => {
-    if (isCreating && wallets) {
-      const newWallet = wallets.find(w => w.name === name.trim() && w.network === network);
-      if (newWallet) {
-        onWalletCreated(newWallet._id);
-        setIsCreating(false);
-      }
-    }
-  }, [wallets, isCreating, name, network, onWalletCreated]);
-
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
-
-    setIsCreating(true);
-    try {
-      const result = await generateWallet({
-        name: name.trim(),
-        network,
-      });
-      toast.success(result.message);
-      // The useEffect will handle selecting the wallet once it appears
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to create wallet");
-      setIsCreating(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
-      <div className="bg-[#111] border border-[#333] rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
-        <form onSubmit={handleCreate} className="space-y-4">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-              </svg>
-            </div>
-            <h3 className="text-lg font-semibold text-white">
-              Create Wallet
-            </h3>
-          </div>
-
-          <div className="bg-[#1a1a1a] border border-[#333] rounded-lg p-3">
-            <p className="text-sm text-[#888]">
-              A new MNEE wallet will be automatically generated with a secure address and encrypted private key.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-[#888] mb-1">
-              Wallet Name <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Main Wallet, Dev Wallet"
-              className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555]"
-              required
-              autoFocus
-              disabled={isCreating}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-[#888] mb-1">
-              Network <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={network}
-              onChange={(e) => setNetwork(e.target.value as MneeNetwork)}
-              className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white focus:outline-none focus:border-[#555]"
-              disabled={isCreating}
-            >
-              {mneeNetworks && mneeNetworks.length > 0 ? (
-                mneeNetworks.map((n) => (
-                  <option key={n._id} value={n.network}>
-                    {n.name}
-                  </option>
-                ))
-              ) : (
-                <>
-                  <option value="sandbox">MNEE Sandbox</option>
-                  <option value="mainnet">MNEE Mainnet</option>
-                </>
-              )}
-            </select>
-            <p className="text-xs text-[#666] mt-1">
-              Choose sandbox for testing or mainnet for production
-            </p>
-          </div>
-
-          <div className="flex gap-2 pt-2">
-            <button
-              type="submit"
-              disabled={isCreating || !name.trim()}
-              className="flex-1 px-4 py-2.5 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isCreating ? "Generating..." : "Generate Wallet"}
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={isCreating}
-              className="flex-1 px-4 py-2.5 text-sm font-medium text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-lg transition-colors disabled:opacity-50"
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
   );
 }
 
@@ -627,9 +371,8 @@ type ApiKeyData = {
   description?: string;
   apiKeyPrefix: string;
   type: "agent" | "provider";
-  walletId?: Id<"wallets">;
   receivingAddress?: string;
-  receivingNetwork?: MneeNetwork;
+  receivingNetwork?: EthereumNetwork;
   createdByUserId: string;
   lastUsedAt?: number;
   expiresAt?: number;
@@ -786,22 +529,23 @@ function ProviderKeysList({
                   </div>
                 )}
 
-                {/* Show linked wallet info */}
-                {apiKey.walletId && (
+                {/* Receiving address */}
+                {apiKey.receivingAddress && (
                   <div className="pt-4">
-                    <p className="text-xs text-[#666] uppercase tracking-wider mb-1">Linked Wallet</p>
-                    <WalletInfo walletId={apiKey.walletId} />
-                  </div>
-                )}
-
-                {/* Legacy: Show receiving address if no wallet linked */}
-                {!apiKey.walletId && apiKey.receivingAddress && (
-                  <div className="pt-4">
-                    <p className="text-xs text-[#666] uppercase tracking-wider mb-1">Receiving Address (Legacy)</p>
-                    <div className="bg-[#0a0a0a] border border-[#333] rounded-lg p-3">
-                      <code className="text-sm font-mono text-white break-all">
-                        {apiKey.receivingAddress}
-                      </code>
+                    <p className="text-xs text-[#666] uppercase tracking-wider mb-1">Receiving Address</p>
+                    <div className="bg-[#1a1a1a] rounded-lg p-3 border border-[#333]">
+                      <div className="flex items-center justify-between">
+                        <code className="text-sm font-mono text-white break-all">
+                          {apiKey.receivingAddress}
+                        </code>
+                        <span className={`px-2 py-0.5 text-xs font-medium rounded-full capitalize ${
+                          apiKey.receivingNetwork === "mainnet"
+                            ? "bg-emerald-900/50 text-emerald-400"
+                            : "bg-amber-900/50 text-amber-400"
+                        }`}>
+                          {apiKey.receivingNetwork}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -868,38 +612,6 @@ function ProviderKeysList({
 // ============================================
 // WALLET INFO COMPONENT
 // ============================================
-
-function WalletInfo({ walletId }: { walletId: Id<"wallets"> }) {
-  const wallet = useQuery(api.wallets.getWallet, { walletId });
-
-  if (!wallet) {
-    return (
-      <div className="bg-[#1a1a1a] rounded-lg p-3 animate-pulse">
-        <div className="h-4 bg-[#333] rounded w-32"></div>
-      </div>
-    );
-  }
-
-  const isMainnet = wallet.network === "mainnet";
-
-  return (
-    <div className="bg-[#1a1a1a] rounded-lg p-3 border border-[#333]">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm font-medium text-white">{wallet.name}</p>
-          <p className="text-xs text-[#666] font-mono mt-1">{wallet.address}</p>
-        </div>
-        <span className={`px-2 py-0.5 text-xs font-medium rounded-full capitalize ${
-          isMainnet 
-            ? "bg-emerald-900/50 text-emerald-400" 
-            : "bg-amber-900/50 text-amber-400"
-        }`}>
-          {wallet.network}
-        </span>
-      </div>
-    </div>
-  );
-}
 
 // ============================================
 // LOADING SKELETON

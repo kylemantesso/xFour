@@ -57,11 +57,11 @@ type ApiKeyData = {
   updatedAt: number;
 };
 
-function CreateApiKeyButton({ hasMneeWallet }: { hasMneeWallet: boolean }) {
+function CreateApiKeyButton() {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [selectedNetwork, setSelectedNetwork] = useState<"sandbox" | "mainnet">("sandbox");
+  const [selectedNetwork, setSelectedNetwork] = useState<"sepolia" | "mainnet">("sepolia");
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -76,7 +76,7 @@ function CreateApiKeyButton({ hasMneeWallet }: { hasMneeWallet: boolean }) {
       const result = await createApiKey({
         name: name.trim(),
         description: description.trim() || undefined,
-        mneeNetwork: selectedNetwork,
+        ethereumNetwork: selectedNetwork,
       });
       setNewApiKey(result.apiKey);
       setName("");
@@ -102,16 +102,11 @@ function CreateApiKeyButton({ hasMneeWallet }: { hasMneeWallet: boolean }) {
     setDescription("");
   };
 
-  // Allow API key creation if MNEE wallet is set up
-  const hasPaymentMethod = hasMneeWallet;
-
   return (
     <>
       <button
         onClick={() => setIsOpen(true)}
-        disabled={!hasPaymentMethod}
-        className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        title={!hasPaymentMethod ? "No payment methods configured (add tokens or enable MNEE)" : undefined}
+        className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-black bg-white hover:bg-gray-200 rounded-lg transition-colors"
       >
         <PlusIcon className="w-4 h-4" />
         Create API Key
@@ -214,11 +209,11 @@ function CreateApiKeyButton({ hasMneeWallet }: { hasMneeWallet: boolean }) {
                   </label>
                   <select
                     value={selectedNetwork}
-                    onChange={(e) => setSelectedNetwork(e.target.value as "sandbox" | "mainnet")}
+                    onChange={(e) => setSelectedNetwork(e.target.value as "sepolia" | "mainnet")}
                     className="w-full px-3 py-2 border border-[#333] rounded-lg bg-[#0a0a0a] text-white focus:outline-none focus:border-[#555]"
                   >
-                    <option value="sandbox">MNEE Sandbox (Testing)</option>
-                    <option value="mainnet">MNEE Mainnet (Production)</option>
+                    <option value="sepolia">Sepolia Testnet (Testing)</option>
+                    <option value="mainnet">Ethereum Mainnet (Production)</option>
                   </select>
                   <p className="text-xs text-[#666] mt-1">
                     Select the network this agent will use for payments
@@ -507,8 +502,6 @@ function WorkspaceSettings() {
   const members = useQuery(api.workspaces.listMembers);
   const invites = useQuery(api.invites.listInvites);
   const apiKeys = useQuery(api.apiKeys.listApiKeys, {});
-  // Check for MNEE wallets
-  const mneeWallets = useQuery(api.mnee.listWorkspaceMneeWallets, {});
 
   if (!workspaceData || !members) {
     return <LoadingSkeleton />;
@@ -558,7 +551,7 @@ function WorkspaceSettings() {
                 </p>
               </div>
             </div>
-            {canWrite && <CreateApiKeyButton hasMneeWallet={(mneeWallets && mneeWallets.length > 0) || false} />}
+            {canWrite && <CreateApiKeyButton />}
           </div>
           <ApiKeysList apiKeys={apiKeys} canManage={isAdmin} />
         </section>

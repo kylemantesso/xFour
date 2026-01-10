@@ -462,7 +462,7 @@ function MNEEIntegration() {
               <div className="bg-[#0a0a0a] border border-[#333] rounded-lg p-4 font-mono text-sm break-all mb-6">
                 <span className="text-[#888]">Ethereum Mainnet:</span>
                 <br />
-                <span className="text-blue-400">0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFB6cF</span>
+                <span className="text-blue-400">0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF</span>
               </div>
 
               <h3 className="text-xl font-semibold text-white mb-4">

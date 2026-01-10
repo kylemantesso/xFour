@@ -22,7 +22,7 @@ export default function ActivityPage() {
 function ActivityContent() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [currentPage, setCurrentPage] = useState(1);
-  const [selectedNetwork, setSelectedNetwork] = useState<"sandbox" | "mainnet">("sandbox");
+  const [selectedNetwork, setSelectedNetwork] = useState<"sepolia" | "mainnet">("sepolia");
   const payments = useQuery(api.payments.listPayments, { limit: 100 });
   const receivedStats = useQuery(api.gateway.getReceivedPaymentStats);
   const stats = useQuery(api.payments.getPaymentStats);
@@ -69,25 +69,25 @@ function ActivityContent() {
         {/* Network Toggle Switch */}
         <div className="flex items-center justify-center gap-3 mb-6">
           <span className={`text-sm font-medium transition-colors ${
-            selectedNetwork === "sandbox" ? "text-amber-400" : "text-[#666]"
+            selectedNetwork === "sepolia" ? "text-amber-400" : "text-[#666]"
           }`}>
-            Sandbox
+            Sepolia
           </span>
           <button
-            onClick={() => setSelectedNetwork(selectedNetwork === "sandbox" ? "mainnet" : "sandbox")}
+            onClick={() => setSelectedNetwork(selectedNetwork === "sepolia" ? "mainnet" : "sepolia")}
             className="relative w-14 h-7 rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#0a0a0a] focus:ring-emerald-500"
             style={{
-              backgroundColor: selectedNetwork === "sandbox" ? "rgb(245 158 11 / 0.3)" : "rgb(16 185 129 / 0.3)",
+              backgroundColor: selectedNetwork === "sepolia" ? "rgb(245 158 11 / 0.3)" : "rgb(16 185 129 / 0.3)",
             }}
           >
             <span
               className="absolute top-0.5 left-0.5 w-6 h-6 rounded-full shadow-lg transform transition-all duration-300 flex items-center justify-center"
               style={{
                 transform: selectedNetwork === "mainnet" ? "translateX(28px)" : "translateX(0)",
-                backgroundColor: selectedNetwork === "sandbox" ? "rgb(245 158 11)" : "rgb(16 185 129)",
+                backgroundColor: selectedNetwork === "sepolia" ? "rgb(245 158 11)" : "rgb(16 185 129)",
               }}
             >
-              {selectedNetwork === "sandbox" ? (
+              {selectedNetwork === "sepolia" ? (
                 <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M6.672 1.911a1 1 0 10-1.932.518l.259.966a1 1 0 001.932-.518l-.26-.966zM2.429 4.74a1 1 0 10-.517 1.932l.966.259a1 1 0 00.517-1.932l-.966-.26zm8.814-.569a1 1 0 00-1.415-1.414l-.707.707a1 1 0 101.415 1.415l.707-.708zm-7.071 7.072l.707-.707A1 1 0 003.465 9.12l-.708.707a1 1 0 001.415 1.415zm3.2-5.171a1 1 0 00-1.3 1.3l4 10a1 1 0 001.823.075l1.38-2.759 3.018 3.02a1 1 0 001.414-1.415l-3.019-3.02 2.76-1.379a1 1 0 00-.076-1.822l-10-4z" clipRule="evenodd" />
                 </svg>
@@ -243,7 +243,7 @@ interface PaymentData {
   providerName: string;
   providerHost: string;
   amount: number; // Amount in MNEE
-  network: "sandbox" | "mainnet"; // MNEE network
+  network: "sepolia" | "mainnet"; // Ethereum network
   status: string;
   createdAt: number;
   txHash?: string;
@@ -539,17 +539,17 @@ function LoadingSkeleton() {
   );
 }
 
-function EmptyState({ network }: { network: "sandbox" | "mainnet" }) {
+function EmptyState({ network }: { network: "sepolia" | "mainnet" }) {
   return (
     <div className="px-6 py-16 text-center">
       <div className="w-16 h-16 rounded-2xl bg-[#1a1a1a] flex items-center justify-center mx-auto mb-4">
         <ActivityIcon className="w-8 h-8 text-[#666]" />
       </div>
       <h3 className="text-lg font-medium text-white mb-2">
-        0 payments on {network === "sandbox" ? "Sandbox" : "Mainnet"}
+        0 payments on {network === "sepolia" ? "Sepolia" : "Mainnet"}
       </h3>
       <p className="text-sm text-[#888] max-w-sm mx-auto">
-        When your agents make payments through the gateway on {network === "sandbox" ? "sandbox" : "mainnet"}, they&apos;ll appear here.
+        When your agents make payments through the gateway on {network === "sepolia" ? "Sepolia testnet" : "mainnet"}, they&apos;ll appear here.
       </p>
     </div>
   );
@@ -674,7 +674,7 @@ function Pagination({
 // Real-time Activity Timeline Chart
 // ============================================
 
-function ActivityTimelineChart({ network }: { network: "sandbox" | "mainnet" }) {
+function ActivityTimelineChart({ network }: { network: "sepolia" | "mainnet" }) {
   const timeline = useQuery(api.payments.getActivityTimeline, { windowSeconds: 60, network });
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [newEventIds, setNewEventIds] = useState<Set<string>>(new Set());

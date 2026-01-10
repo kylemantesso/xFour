@@ -62,6 +62,11 @@ export function WorkspaceGuard({ children }: WorkspaceGuardProps) {
     return <LoadingState message="Setting up your workspace..." />;
   }
 
+  // User data is null - still waiting for ensureUserAndWorkspace to complete
+  if (userData === null) {
+    return <LoadingState message="Creating your workspace..." />;
+  }
+
   // User is authenticated and has workspace data
   return <>{children}</>;
 }

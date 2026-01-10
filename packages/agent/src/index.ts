@@ -49,7 +49,7 @@ export type QuoteResult =
       paymentId: string;
       invoiceId: string;
       amount: string; // Amount in MNEE
-      network: string; // MNEE network (sandbox/mainnet)
+      network: string; // Ethereum network (sepolia/mainnet)
     }
   | {
       status: "denied";
@@ -64,8 +64,8 @@ export type PayResult = {
   paymentId?: string;
   invoiceId?: string;
   amount?: string; // Amount in MNEE
-  network?: string; // MNEE network (sandbox/mainnet)
-  txHash?: string;
+  network?: string; // Ethereum network (sepolia/mainnet)
+  txHash?: string; // Ethereum transaction hash
   errorCode?: string;
   errorMessage?: string;
 };

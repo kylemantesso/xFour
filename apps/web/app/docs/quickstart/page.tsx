@@ -156,7 +156,7 @@ pnpm add @x402/server`}</CodeBlock>
         <p className="text-[#888] mb-4">
           Log into the x402 Gateway dashboard and navigate to{" "}
           <strong className="text-white">Providers → Register</strong>. You&apos;ll
-          receive your provider API key and MNEE wallet address.
+          receive your provider API key and configure your Ethereum wallet address.
         </p>
 
         <h3 className="text-lg font-semibold text-white mb-3 mt-8">
@@ -171,8 +171,8 @@ app.use(express.json());
 const x402 = createX402Middleware({
   gatewayUrl: 'https://xfour.xyz/api/gateway',
   apiKey: process.env.X402_SERVER_KEY!,
-  payToAddress: process.env.MNEE_ADDRESS!,
-  network: 'mainnet',
+  payToAddress: process.env.ETHEREUM_ADDRESS!, // Your 0x address
+  network: 'mainnet', // or 'sepolia' for testnet
 });
 
 // Protect your paid endpoints

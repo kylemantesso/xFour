@@ -1,6 +1,5 @@
 import { v } from "convex/values";
-import { query, mutation } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
+import { query, mutation, internalQuery } from "./_generated/server";
 import {
   getCurrentWorkspaceContext,
   requireRole,
@@ -9,6 +8,22 @@ import {
   ALL_ROLES,
   generateApiKey,
 } from "./lib/auth";
+
+// ============================================
+// INTERNAL QUERIES (for other Convex modules)
+// ============================================
+
+/**
+ * Get API key by ID (internal use only)
+ */
+export const getApiKeyInternal = internalQuery({
+  args: {
+    apiKeyId: v.id("apiKeys"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.apiKeyId);
+  },
+});
 
 /**
  * List all API keys for the current workspace
@@ -38,11 +53,13 @@ export const listApiKeys = query({
       name: key.name,
       description: key.description,
       apiKeyPrefix: key.apiKeyPrefix,
+      apiKeyHash: key.apiKeyHash,
       type: key.type,
-      walletId: key.walletId,
-      mneeNetwork: key.mneeNetwork,
+      treasuryId: key.treasuryId,
+      ethereumNetwork: key.ethereumNetwork,
       receivingAddress: key.receivingAddress,
       receivingNetwork: key.receivingNetwork,
+      spendingLimits: key.spendingLimits,
       createdByUserId: key.createdByUserId,
       lastUsedAt: key.lastUsedAt,
       expiresAt: key.expiresAt,
@@ -60,19 +77,21 @@ export const createApiKey = mutation({
   args: {
     name: v.string(),
     description: v.optional(v.string()),
-    type: v.optional(v.union(v.literal("agent"), v.literal("provider"))), // Optional, defaults to "agent"
-    // Wallet reference (preferred method)
-    walletId: v.optional(v.id("wallets")),
-    // For agent keys (legacy, use walletId instead)
-    mneeNetwork: v.optional(v.union(v.literal("sandbox"), v.literal("mainnet"))),
-    // For provider keys (legacy, use walletId instead)
+    type: v.optional(v.union(v.literal("agent"), v.literal("provider"))),
+    // Treasury reference (for agent keys)
+    treasuryId: v.optional(v.id("treasuries")),
+    // For agent keys: network preference
+    ethereumNetwork: v.optional(v.union(v.literal("sepolia"), v.literal("mainnet"))),
+    // For provider keys: receiving address
     receivingAddress: v.optional(v.string()),
-    receivingNetwork: v.optional(v.union(v.literal("sandbox"), v.literal("mainnet"))),
+    receivingNetwork: v.optional(v.union(v.literal("sepolia"), v.literal("mainnet"))),
     expiresAt: v.optional(v.number()),
-    // Policy/usage limits (optional, creates policy if any are provided)
-    dailyLimit: v.optional(v.number()),
-    monthlyLimit: v.optional(v.number()),
-    maxRequest: v.optional(v.number()),
+    // Spending limits (synced to treasury contract)
+    spendingLimits: v.optional(v.object({
+      maxPerTransaction: v.number(),
+      dailyLimit: v.number(),
+      monthlyLimit: v.number(),
+    })),
   },
   handler: async (ctx, args) => {
     const { workspaceId, role, clerkUserId } = await getCurrentWorkspaceContext(ctx);
@@ -81,39 +100,43 @@ export const createApiKey = mutation({
     // Default to "agent" type for backward compatibility
     const keyType = args.type ?? "agent";
 
-    // If walletId is provided, validate it belongs to workspace
-    if (args.walletId) {
-      const wallet = await ctx.db.get(args.walletId);
-      if (!wallet || wallet.workspaceId !== workspaceId) {
-        throw new Error("Wallet not found in this workspace");
+    // If treasuryId is provided, validate it belongs to workspace
+    if (args.treasuryId) {
+      const treasury = await ctx.db.get(args.treasuryId);
+      if (!treasury || treasury.workspaceId !== workspaceId) {
+        throw new Error("Treasury not found in this workspace");
       }
-      if (!wallet.isActive) {
-        throw new Error("Cannot link to an inactive wallet");
+      if (treasury.status !== "active") {
+        throw new Error("Cannot link to an inactive treasury");
       }
-    } else {
-      // Legacy validation for non-wallet keys
-      if (keyType === "provider") {
-        if (!args.receivingAddress) {
-          throw new Error("Provider keys must have a wallet or receiving address");
-        }
-        if (!args.receivingNetwork) {
-          throw new Error("Provider keys must specify a receiving network");
-        }
+    }
+
+    // Validation for provider keys
+    if (keyType === "provider") {
+      if (!args.receivingAddress) {
+        throw new Error("Provider keys must have a receiving address");
+      }
+      if (!args.receivingNetwork) {
+        throw new Error("Provider keys must specify a receiving network");
       }
     }
 
     const now = Date.now();
     const { key, prefix } = generateApiKey();
 
-    // Determine network from wallet if provided, otherwise use args or default to mainnet
-    let network: "sandbox" | "mainnet" | undefined;
-    if (args.walletId) {
-      const wallet = await ctx.db.get(args.walletId);
-      if (wallet) {
-        network = wallet.network;
+    // Create keccak256 hash of API key for on-chain matching
+    // Note: This should match the hashApiKey function in the treasury module
+    const apiKeyHash = `keccak256:${key}`; // Placeholder - actual hash done on-chain
+
+    // Determine network from treasury if provided
+    let network: "sepolia" | "mainnet" | undefined;
+    if (args.treasuryId) {
+      const treasury = await ctx.db.get(args.treasuryId);
+      if (treasury) {
+        network = treasury.network;
       }
     } else if (keyType === "agent") {
-      network = args.mneeNetwork ?? "mainnet";
+      network = args.ethereumNetwork ?? "sepolia"; // Default to testnet
     } else if (keyType === "provider") {
       network = args.receivingNetwork;
     }
@@ -124,31 +147,22 @@ export const createApiKey = mutation({
       description: args.description,
       apiKey: key,
       apiKeyPrefix: prefix,
+      apiKeyHash,
       type: keyType,
-      walletId: args.walletId,
-      mneeNetwork: keyType === "agent" ? network : undefined,
+      treasuryId: args.treasuryId,
+      ethereumNetwork: keyType === "agent" ? network : undefined,
       receivingAddress: keyType === "provider" ? args.receivingAddress : undefined,
       receivingNetwork: keyType === "provider" ? network : undefined,
+      spendingLimits: args.spendingLimits ? {
+        ...args.spendingLimits,
+        isSyncedOnChain: false, // Will be synced when user configures on-chain
+      } : undefined,
       createdByUserId: clerkUserId,
       expiresAt: args.expiresAt,
       isActive: true,
       createdAt: now,
       updatedAt: now,
     });
-
-    // Create policy if any limits are provided
-    if (args.dailyLimit !== undefined || args.monthlyLimit !== undefined || args.maxRequest !== undefined) {
-      await ctx.db.insert("agentPolicies", {
-        workspaceId,
-        apiKeyId,
-        dailyLimit: args.dailyLimit,
-        monthlyLimit: args.monthlyLimit,
-        maxRequest: args.maxRequest,
-        isActive: true,
-        createdAt: now,
-        updatedAt: now,
-      });
-    }
 
     // Return the full key only once on creation
     return { apiKeyId, apiKey: key, prefix };
@@ -163,13 +177,19 @@ export const updateApiKey = mutation({
     apiKeyId: v.id("apiKeys"),
     name: v.optional(v.string()),
     description: v.optional(v.string()),
-    // Wallet reference
-    walletId: v.optional(v.union(v.id("wallets"), v.null())),
-    // For agent keys (legacy)
-    mneeNetwork: v.optional(v.union(v.literal("sandbox"), v.literal("mainnet"))),
-    // For provider keys (legacy)
+    // Treasury reference
+    treasuryId: v.optional(v.union(v.id("treasuries"), v.null())),
+    // For agent keys
+    ethereumNetwork: v.optional(v.union(v.literal("sepolia"), v.literal("mainnet"))),
+    // For provider keys
     receivingAddress: v.optional(v.string()),
-    receivingNetwork: v.optional(v.union(v.literal("sandbox"), v.literal("mainnet"))),
+    receivingNetwork: v.optional(v.union(v.literal("sepolia"), v.literal("mainnet"))),
+    // Spending limits
+    spendingLimits: v.optional(v.object({
+      maxPerTransaction: v.number(),
+      dailyLimit: v.number(),
+      monthlyLimit: v.number(),
+    })),
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
@@ -181,41 +201,38 @@ export const updateApiKey = mutation({
       throw new Error("API key not found in this workspace");
     }
 
-    // If walletId is provided (and not null), validate it belongs to workspace
-    if (args.walletId !== undefined && args.walletId !== null) {
-      const wallet = await ctx.db.get(args.walletId);
-      if (!wallet || wallet.workspaceId !== workspaceId) {
-        throw new Error("Wallet not found in this workspace");
+    // If treasuryId is provided (and not null), validate it belongs to workspace
+    if (args.treasuryId !== undefined && args.treasuryId !== null) {
+      const treasury = await ctx.db.get(args.treasuryId);
+      if (!treasury || treasury.workspaceId !== workspaceId) {
+        throw new Error("Treasury not found in this workspace");
       }
-      if (!wallet.isActive) {
-        throw new Error("Cannot link to an inactive wallet");
+      if (treasury.status !== "active") {
+        throw new Error("Cannot link to an inactive treasury");
       }
     }
 
-    const updates: {
-      name?: string;
-      description?: string;
-      walletId?: Id<"wallets"> | undefined;
-      mneeNetwork?: "sandbox" | "mainnet";
-      receivingAddress?: string;
-      receivingNetwork?: "sandbox" | "mainnet";
-      isActive?: boolean;
-      updatedAt: number;
-    } = { updatedAt: Date.now() };
+    const updates: Record<string, unknown> = { updatedAt: Date.now() };
 
     if (args.name !== undefined) updates.name = args.name;
     if (args.description !== undefined) updates.description = args.description;
-    if (args.walletId !== undefined) {
-      updates.walletId = args.walletId === null ? undefined : args.walletId;
+    if (args.treasuryId !== undefined) {
+      updates.treasuryId = args.treasuryId === null ? undefined : args.treasuryId;
     }
-    if (args.mneeNetwork !== undefined && apiKey.type === "agent") {
-      updates.mneeNetwork = args.mneeNetwork;
+    if (args.ethereumNetwork !== undefined && apiKey.type === "agent") {
+      updates.ethereumNetwork = args.ethereumNetwork;
     }
     if (args.receivingAddress !== undefined && apiKey.type === "provider") {
       updates.receivingAddress = args.receivingAddress;
     }
     if (args.receivingNetwork !== undefined && apiKey.type === "provider") {
       updates.receivingNetwork = args.receivingNetwork;
+    }
+    if (args.spendingLimits !== undefined) {
+      updates.spendingLimits = {
+        ...args.spendingLimits,
+        isSyncedOnChain: false, // Mark as needing sync
+      };
     }
     if (args.isActive !== undefined) updates.isActive = args.isActive;
 
@@ -272,10 +289,16 @@ export const regenerateApiKey = mutation({
     }
 
     const { key, prefix } = generateApiKey();
+    const apiKeyHash = `keccak256:${key}`; // Placeholder - actual hash done on-chain
 
     await ctx.db.patch(args.apiKeyId, {
       apiKey: key,
       apiKeyPrefix: prefix,
+      apiKeyHash,
+      spendingLimits: apiKey.spendingLimits ? {
+        ...apiKey.spendingLimits,
+        isSyncedOnChain: false, // New key needs sync
+      } : undefined,
       updatedAt: Date.now(),
     });
 
@@ -315,12 +338,24 @@ export const validateApiKey = query({
       return { valid: false, error: "Workspace not found" };
     }
 
+    // Get treasury if linked
+    let treasuryAddress: string | undefined;
+    if (keyRecord.treasuryId) {
+      const treasury = await ctx.db.get(keyRecord.treasuryId);
+      if (treasury && treasury.status === "active") {
+        treasuryAddress = treasury.contractAddress;
+      }
+    }
+
     return {
       valid: true,
       apiKeyId: keyRecord._id,
       workspaceId: keyRecord.workspaceId,
       workspaceName: workspace.name,
-      mneeNetwork: keyRecord.mneeNetwork,
+      ethereumNetwork: keyRecord.ethereumNetwork,
+      treasuryId: keyRecord.treasuryId,
+      treasuryAddress,
+      apiKeyHash: keyRecord.apiKeyHash,
     };
   },
 });
@@ -367,256 +402,33 @@ export const getApiKey = query({
   },
 });
 
-// ============================================
-// AGENT POLICY MANAGEMENT (MNEE spending limits)
-// ============================================
-
 /**
- * Get agent policy for an API key
+ * Mark spending limits as synced on-chain
  */
-export const getAgentPolicy = query({
+export const markSpendingLimitsSynced = mutation({
   args: {
     apiKeyId: v.id("apiKeys"),
   },
   handler: async (ctx, args) => {
     const { workspaceId, role } = await getCurrentWorkspaceContext(ctx);
-    requireRole(role, ALL_ROLES, "view agent policies");
+    requireRole(role, ADMIN_ROLES, "manage API keys");
 
     const apiKey = await ctx.db.get(args.apiKeyId);
     if (!apiKey || apiKey.workspaceId !== workspaceId) {
       throw new Error("API key not found in this workspace");
     }
 
-    const policy = await ctx.db
-      .query("agentPolicies")
-      .withIndex("by_apiKeyId", (q) => q.eq("apiKeyId", args.apiKeyId))
-      .unique();
-
-    return policy;
-  },
-});
-
-/**
- * Create an agent policy with MNEE spending limits
- */
-export const createAgentPolicy = mutation({
-  args: {
-    apiKeyId: v.id("apiKeys"),
-    dailyLimit: v.optional(v.number()), // Daily spend limit in MNEE
-    monthlyLimit: v.optional(v.number()), // Monthly spend limit in MNEE
-    maxRequest: v.optional(v.number()), // Max per-request amount in MNEE
-    allowedProviders: v.optional(v.array(v.id("providers"))),
-    isActive: v.optional(v.boolean()),
-  },
-  handler: async (ctx, args) => {
-    const { workspaceId, role } = await getCurrentWorkspaceContext(ctx);
-    requireRole(role, ADMIN_ROLES, "create agent policies");
-
-    const apiKey = await ctx.db.get(args.apiKeyId);
-    if (!apiKey || apiKey.workspaceId !== workspaceId) {
-      throw new Error("API key not found in this workspace");
-    }
-
-    // Check if policy already exists
-    const existingPolicy = await ctx.db
-      .query("agentPolicies")
-      .withIndex("by_apiKeyId", (q) => q.eq("apiKeyId", args.apiKeyId))
-      .unique();
-
-    if (existingPolicy) {
-      throw new Error("Policy already exists for this API key. Use updateAgentPolicy instead.");
-    }
-
-    // Validate allowed providers belong to workspace
-    if (args.allowedProviders && args.allowedProviders.length > 0) {
-      for (const providerId of args.allowedProviders) {
-        const provider = await ctx.db.get(providerId);
-        if (!provider || provider.workspaceId !== workspaceId) {
-          throw new Error(`Provider ${providerId} not found in this workspace`);
-        }
-      }
-    }
-
-    const now = Date.now();
-    const policyId = await ctx.db.insert("agentPolicies", {
-      workspaceId,
-      apiKeyId: args.apiKeyId,
-      dailyLimit: args.dailyLimit,
-      monthlyLimit: args.monthlyLimit,
-      maxRequest: args.maxRequest,
-      allowedProviders: args.allowedProviders,
-      isActive: args.isActive ?? true,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    return { policyId };
-  },
-});
-
-/**
- * Update an agent policy with MNEE spending limits
- */
-export const updateAgentPolicy = mutation({
-  args: {
-    apiKeyId: v.id("apiKeys"),
-    dailyLimit: v.optional(v.number()), // Daily spend limit in MNEE
-    monthlyLimit: v.optional(v.number()), // Monthly spend limit in MNEE
-    maxRequest: v.optional(v.number()), // Max per-request amount in MNEE
-    allowedProviders: v.optional(v.array(v.id("providers"))),
-    isActive: v.optional(v.boolean()),
-  },
-  handler: async (ctx, args) => {
-    const { workspaceId, role } = await getCurrentWorkspaceContext(ctx);
-    requireRole(role, ADMIN_ROLES, "update agent policies");
-
-    const apiKey = await ctx.db.get(args.apiKeyId);
-    if (!apiKey || apiKey.workspaceId !== workspaceId) {
-      throw new Error("API key not found in this workspace");
-    }
-
-    const policy = await ctx.db
-      .query("agentPolicies")
-      .withIndex("by_apiKeyId", (q) => q.eq("apiKeyId", args.apiKeyId))
-      .unique();
-
-    if (!policy) {
-      throw new Error("Policy not found for this API key. Use createAgentPolicy instead.");
-    }
-
-    // Validate allowed providers belong to workspace
-    if (args.allowedProviders && args.allowedProviders.length > 0) {
-      for (const providerId of args.allowedProviders) {
-        const provider = await ctx.db.get(providerId);
-        if (!provider || provider.workspaceId !== workspaceId) {
-          throw new Error(`Provider ${providerId} not found in this workspace`);
-        }
-      }
-    }
-
-    const updates: {
-      dailyLimit?: number;
-      monthlyLimit?: number;
-      maxRequest?: number;
-      allowedProviders?: Id<"providers">[];
-      isActive?: boolean;
-      updatedAt: number;
-    } = { updatedAt: Date.now() };
-
-    if (args.dailyLimit !== undefined) updates.dailyLimit = args.dailyLimit;
-    if (args.monthlyLimit !== undefined) updates.monthlyLimit = args.monthlyLimit;
-    if (args.maxRequest !== undefined) updates.maxRequest = args.maxRequest;
-    if (args.allowedProviders !== undefined) updates.allowedProviders = args.allowedProviders;
-    if (args.isActive !== undefined) updates.isActive = args.isActive;
-
-    await ctx.db.patch(policy._id, updates);
-    return { success: true };
-  },
-});
-
-/**
- * Delete an agent policy
- */
-export const deleteAgentPolicy = mutation({
-  args: {
-    apiKeyId: v.id("apiKeys"),
-  },
-  handler: async (ctx, args) => {
-    const { workspaceId, role } = await getCurrentWorkspaceContext(ctx);
-    requireRole(role, ADMIN_ROLES, "delete agent policies");
-
-    const apiKey = await ctx.db.get(args.apiKeyId);
-    if (!apiKey || apiKey.workspaceId !== workspaceId) {
-      throw new Error("API key not found in this workspace");
-    }
-
-    const policy = await ctx.db
-      .query("agentPolicies")
-      .withIndex("by_apiKeyId", (q) => q.eq("apiKeyId", args.apiKeyId))
-      .unique();
-
-    if (!policy) {
-      throw new Error("Policy not found for this API key");
-    }
-
-    await ctx.db.delete(policy._id);
-    return { success: true };
-  },
-});
-
-/**
- * Upsert (create or update) an agent policy
- * This simplifies frontend code by handling both cases
- */
-export const upsertAgentPolicy = mutation({
-  args: {
-    apiKeyId: v.id("apiKeys"),
-    dailyLimit: v.optional(v.number()), // Daily spend limit in MNEE
-    monthlyLimit: v.optional(v.number()), // Monthly spend limit in MNEE
-    maxRequest: v.optional(v.number()), // Max per-request amount in MNEE
-    allowedProviders: v.optional(v.array(v.id("providers"))),
-    isActive: v.optional(v.boolean()),
-  },
-  handler: async (ctx, args) => {
-    const { workspaceId, role } = await getCurrentWorkspaceContext(ctx);
-    requireRole(role, ADMIN_ROLES, "manage agent policies");
-
-    const apiKey = await ctx.db.get(args.apiKeyId);
-    if (!apiKey || apiKey.workspaceId !== workspaceId) {
-      throw new Error("API key not found in this workspace");
-    }
-
-    // Validate allowed providers belong to workspace
-    if (args.allowedProviders && args.allowedProviders.length > 0) {
-      for (const providerId of args.allowedProviders) {
-        const provider = await ctx.db.get(providerId);
-        if (!provider || provider.workspaceId !== workspaceId) {
-          throw new Error(`Provider ${providerId} not found in this workspace`);
-        }
-      }
-    }
-
-    // Check if policy already exists
-    const existingPolicy = await ctx.db
-      .query("agentPolicies")
-      .withIndex("by_apiKeyId", (q) => q.eq("apiKeyId", args.apiKeyId))
-      .unique();
-
-    const now = Date.now();
-
-    if (existingPolicy) {
-      // Update existing policy
-      const updates: {
-        dailyLimit?: number;
-        monthlyLimit?: number;
-        maxRequest?: number;
-        allowedProviders?: Id<"providers">[];
-        isActive?: boolean;
-        updatedAt: number;
-      } = { updatedAt: now };
-
-      if (args.dailyLimit !== undefined) updates.dailyLimit = args.dailyLimit;
-      if (args.monthlyLimit !== undefined) updates.monthlyLimit = args.monthlyLimit;
-      if (args.maxRequest !== undefined) updates.maxRequest = args.maxRequest;
-      if (args.allowedProviders !== undefined) updates.allowedProviders = args.allowedProviders;
-      if (args.isActive !== undefined) updates.isActive = args.isActive;
-
-      await ctx.db.patch(existingPolicy._id, updates);
-      return { success: true, policyId: existingPolicy._id };
-    } else {
-      // Create new policy
-      const policyId = await ctx.db.insert("agentPolicies", {
-        workspaceId,
-        apiKeyId: args.apiKeyId,
-        dailyLimit: args.dailyLimit,
-        monthlyLimit: args.monthlyLimit,
-        maxRequest: args.maxRequest,
-        allowedProviders: args.allowedProviders,
-        isActive: args.isActive ?? true,
-        createdAt: now,
-        updatedAt: now,
+    if (apiKey.spendingLimits) {
+      await ctx.db.patch(args.apiKeyId, {
+        spendingLimits: {
+          ...apiKey.spendingLimits,
+          isSyncedOnChain: true,
+          lastSyncedAt: Date.now(),
+        },
+        updatedAt: Date.now(),
       });
-      return { success: true, policyId };
     }
+
+    return { success: true };
   },
 });

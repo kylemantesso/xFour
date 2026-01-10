@@ -41,7 +41,11 @@ export default function Home() {
 function Dashboard() {
   const userData = useQuery(api.users.getCurrentUser);
   const apiKeys = useQuery(api.apiKeys.listApiKeys, {});
-  const mneeWallets = useQuery(api.mnee.listWorkspaceMneeWallets);
+  const workspaceData = useQuery(api.workspaces.getCurrentWorkspace);
+  const treasuries = useQuery(
+    api.treasuries.listTreasuries,
+    workspaceData?.workspace?._id ? { workspaceId: workspaceData.workspace._id } : "skip"
+  );
 
   if (!userData) {
     return (
@@ -117,10 +121,10 @@ function Dashboard() {
               </div>
               <div>
                 <h2 className="text-lg font-semibold text-white">
-                  MNEE Wallets
+                  Treasury
                 </h2>
                 <p className="text-sm text-[#666]">
-                  {mneeWallets === undefined ? "Loading..." : `${mneeWallets.length} wallet${mneeWallets.length !== 1 ? "s" : ""} configured`}
+                  {treasuries === undefined ? "Loading..." : `${treasuries.length} treasur${treasuries.length !== 1 ? "ies" : "y"} deployed`}
                 </p>
               </div>
             </div>
@@ -132,27 +136,27 @@ function Dashboard() {
             </Link>
           </div>
           <div className="p-6">
-            {mneeWallets === undefined ? (
+            {treasuries === undefined ? (
               <div className="h-10 w-40 bg-[#1a1a1a] rounded animate-pulse" />
-            ) : mneeWallets.length === 0 ? (
-              <p className="text-[#888]">No MNEE wallets configured yet</p>
+            ) : treasuries.length === 0 ? (
+              <p className="text-[#888]">No treasury contracts deployed yet</p>
             ) : (
               <div className="space-y-3">
-                {mneeWallets.map((wallet) => (
-                  <div key={wallet.address} className="flex items-center justify-between p-3 bg-[#0a0a0a] rounded-lg">
+                {treasuries.map((treasury) => (
+                  <div key={treasury._id} className="flex items-center justify-between p-3 bg-[#0a0a0a] rounded-lg">
                     <div>
                       <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${
-                        wallet.network === "mainnet" 
+                        treasury.network === "mainnet" 
                           ? "bg-emerald-900/50 text-emerald-400" 
                           : "bg-blue-900/50 text-blue-400"
                       }`}>
-                        {wallet.network}
+                        {treasury.network}
                       </span>
                       <code className="text-xs font-mono text-[#666] ml-2">
-                        {wallet.address.slice(0, 12)}...{wallet.address.slice(-8)}
+                        {treasury.contractAddress.slice(0, 8)}...{treasury.contractAddress.slice(-6)}
                       </code>
                     </div>
-                    {wallet.isActive && (
+                    {treasury.status === "active" && (
                       <span className="w-2 h-2 bg-emerald-500 rounded-full" />
                     )}
                   </div>
@@ -160,7 +164,7 @@ function Dashboard() {
               </div>
             )}
             <p className="text-sm text-[#666] mt-3">
-              Fund your MNEE wallet to enable agent payments
+              Deploy a treasury contract to enable agent payments
             </p>
           </div>
         </div>
@@ -325,7 +329,7 @@ type ApiKeyData = {
   name: string;
   description?: string;
   apiKeyPrefix: string;
-  mneeNetwork?: "sandbox" | "mainnet";
+  ethereumNetwork?: "sepolia" | "mainnet";
   createdByUserId: string;
   lastUsedAt?: number;
   expiresAt?: number;
@@ -338,7 +342,7 @@ function CreateApiKeyButton() {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [selectedNetwork, setSelectedNetwork] = useState<"sandbox" | "mainnet">("mainnet");
+  const [selectedNetwork, setSelectedNetwork] = useState<"sepolia" | "mainnet">("mainnet");
   const [isNetworkDropdownOpen, setIsNetworkDropdownOpen] = useState(false);
   const [newApiKey, setNewApiKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -354,7 +358,7 @@ function CreateApiKeyButton() {
       const result = await createApiKey({
         name: name.trim(),
         description: description.trim() || undefined,
-        mneeNetwork: selectedNetwork,
+        ethereumNetwork: selectedNetwork,
       });
       setNewApiKey(result.apiKey);
       setName("");
@@ -381,8 +385,8 @@ function CreateApiKeyButton() {
   };
 
   const networks = [
-    { id: "mainnet" as const, name: "MNEE Mainnet", description: "Production network" },
-    { id: "sandbox" as const, name: "MNEE Sandbox", description: "Test network" },
+    { id: "mainnet" as const, name: "Ethereum Mainnet", description: "Production network" },
+    { id: "sepolia" as const, name: "Sepolia Testnet", description: "Test network" },
   ];
 
   return (

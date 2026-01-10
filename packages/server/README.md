@@ -26,7 +26,7 @@ app.use(express.json());
 const x402 = createX402Middleware({
   gatewayUrl: 'https://gateway.x402.com',
   apiKey: process.env.X402_SERVER_KEY!,
-  payToAddress: '1ABC...', // Your MNEE wallet address
+  payToAddress: '0x123...', // Your Ethereum wallet address
   network: 'mainnet',
 });
 
@@ -114,11 +114,11 @@ interface MiddlewareConfig {
   // Required: Your provider API key
   apiKey: string;
   
-  // Required: Your MNEE wallet address
+  // Required: Your Ethereum wallet address
   payToAddress: string;
   
-  // Optional: MNEE network (default: 'mainnet')
-  network?: 'sandbox' | 'mainnet';
+  // Optional: Ethereum network (default: 'mainnet')
+  network?: 'sepolia' | 'mainnet';
   
   // Optional: Default price if not specified per-route
   defaultPrice?: number;
@@ -193,7 +193,7 @@ const headers = x402.createInvoiceHeaders(0.05, undefined, 'AI Completion');
 // {
 //   'X-402-Invoice-Id': 'inv_...',
 //   'X-402-Amount': '0.05',
-//   'X-402-Pay-To': '1ABC...',
+//   'X-402-Pay-To': '0x123...',
 //   'X-402-Network': 'mainnet',
 //   'X-402-Description': 'AI Completion'
 // }
@@ -311,14 +311,14 @@ app.post('/api/endpoint',
 
 ## Testing
 
-For testing, use the sandbox network:
+For testing, use the Sepolia testnet:
 
 ```typescript
 const x402 = createX402Middleware({
   gatewayUrl: 'http://localhost:3000/api/gateway',
   apiKey: process.env.X402_SERVER_KEY_TEST!,
-  payToAddress: 'test-address',
-  network: 'sandbox', // Use sandbox for testing
+  payToAddress: '0xYourTestAddress',
+  network: 'sepolia', // Use Sepolia testnet for testing
 });
 ```
 

@@ -33,8 +33,8 @@ interface QuoteResponseAllowed {
   status: "allowed";
   paymentId: string;
   invoiceId: string;
-  amount: number; // Amount in MNEE
-  network: "sandbox" | "mainnet";
+  amount: number; // Amount in MNEE (18 decimals)
+  network: "sepolia" | "mainnet";
 }
 
 interface QuoteResponseDenied {
@@ -52,18 +52,18 @@ interface PayResponseOk {
   status: "ok";
   paymentId: string;
   invoiceId: string;
-  amount: number; // Amount in MNEE
+  amount: number; // Amount in MNEE (18 decimals)
   workspaceId: string;
-  payTo: string; // MNEE Bitcoin address
-  network: "sandbox" | "mainnet"; // MNEE network
-  // MNEE wallet info for payment execution
-  mneeWalletAddress?: string;
-  encryptedWif?: string;
+  payTo: string; // Ethereum address (0x...)
+  network: "sepolia" | "mainnet"; // Ethereum network
+  // Treasury info for payment execution
+  treasuryAddress?: string;
+  apiKey?: string; // For on-chain hashing
 }
 
 interface PayResponseError {
   status: "error";
-  code: "INVALID_API_KEY" | "PAYMENT_NOT_FOUND" | "PAYMENT_NOT_ALLOWED" | "PAYMENT_FAILED" | "UNSUPPORTED_CURRENCY" | "NO_MNEE_WALLET";
+  code: "INVALID_API_KEY" | "PAYMENT_NOT_FOUND" | "PAYMENT_NOT_ALLOWED" | "PAYMENT_FAILED" | "UNSUPPORTED_CURRENCY" | "NO_TREASURY";
   message?: string;
 }
 
@@ -134,25 +134,29 @@ function errorResponse(message: string, status = 400): Response {
 }
 
 /**
- * Determine MNEE network from invoice network field
- * Returns null if not a supported MNEE network
+ * Determine Ethereum network from invoice network field
+ * Returns null if not a supported network
  */
-function getMneeNetwork(networkName: string): "sandbox" | "mainnet" | null {
+function getEthereumNetwork(networkName: string): "sepolia" | "mainnet" | null {
   const normalized = networkName.toLowerCase();
-  if (normalized === "mnee-sandbox" || normalized === "mnee_sandbox" || normalized === "sandbox") {
-    return "sandbox";
+  // Sepolia testnet
+  if (normalized === "sepolia" || normalized === "mnee-sepolia" || normalized === "ethereum-sepolia") {
+    return "sepolia";
   }
-  if (normalized === "mnee-mainnet" || normalized === "mnee_mainnet" || normalized === "mainnet" || normalized === "mnee") {
+  // Mainnet
+  if (normalized === "mainnet" || normalized === "ethereum" || normalized === "mnee-mainnet" || normalized === "ethereum-mainnet" || normalized === "mnee") {
     return "mainnet";
   }
   return null;
 }
 
 /**
- * Format MNEE amount (ensures max 5 decimal places)
+ * Format MNEE amount for storage
+ * MNEE on Ethereum uses 18 decimals but we store amounts as human-readable numbers
  */
 function formatMneeAmount(amount: number): number {
-  return Math.round(amount * 100000) / 100000;
+  // Round to 8 decimal places for reasonable precision
+  return Math.round(amount * 100000000) / 100000000;
 }
 
 // ============================================
@@ -163,7 +167,7 @@ function formatMneeAmount(amount: number): number {
  * POST /gateway/quote
  * 
  * Evaluates an x402 invoice and returns a quote for MNEE payment.
- * Only supports MNEE currency on MNEE networks.
+ * Only supports MNEE currency on Ethereum networks.
  * 
  * Request body:
  * {
@@ -173,8 +177,8 @@ function formatMneeAmount(amount: number): number {
  *     "X-402-Invoice-Id": "inv_123",
  *     "X-402-Amount": "0.50",
  *     "X-402-Currency": "MNEE",
- *     "X-402-Network": "mnee-mainnet",
- *     "X-402-Pay-To": "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"
+ *     "X-402-Network": "mainnet",
+ *     "X-402-Pay-To": "0x742d35Cc6634C0532925a3b844Bc9e7595f..."
  *   }
  * }
  * 
@@ -252,10 +256,10 @@ const quoteAction = httpAction(async (ctx, request) => {
     return errorResponse(`Unsupported currency: ${invoice.currency}. Only MNEE is supported.`, 400);
   }
 
-  // Step 4: Determine MNEE network from invoice
-  const mneeNetwork = getMneeNetwork(invoice.network);
-  if (!mneeNetwork) {
-    return errorResponse(`Unsupported network: ${invoice.network}. Use mnee-mainnet or mnee-sandbox.`, 400);
+  // Step 4: Determine Ethereum network from invoice
+  const ethereumNetwork = getEthereumNetwork(invoice.network);
+  if (!ethereumNetwork) {
+    return errorResponse(`Unsupported network: ${invoice.network}. Use mainnet or sepolia.`, 400);
   }
 
   // Step 5: Extract host from requestUrl
@@ -281,7 +285,7 @@ const quoteAction = httpAction(async (ctx, request) => {
   });
 
   // Step 9: Create payment record
-  const paymentId = await ctx.runMutation(internal.gateway.createMneePaymentQuote, {
+  const paymentId = await ctx.runMutation(internal.gateway.createPaymentQuote, {
     workspaceId,
     apiKeyId,
     providerId,
@@ -289,7 +293,7 @@ const quoteAction = httpAction(async (ctx, request) => {
     invoiceId: invoice.invoiceId,
     amount,
     payTo: invoice.payTo,
-    network: mneeNetwork,
+    network: ethereumNetwork,
     status: policyResult.allowed ? "allowed" : "denied",
     denialReason: policyResult.reason ?? undefined,
   });
@@ -304,7 +308,7 @@ const quoteAction = httpAction(async (ctx, request) => {
       paymentId: paymentId.toString(),
       invoiceId: invoice.invoiceId,
       amount,
-      network: mneeNetwork,
+      network: ethereumNetwork,
     };
     return jsonResponse(response);
   } else {
@@ -324,8 +328,8 @@ const quoteAction = httpAction(async (ctx, request) => {
 /**
  * POST /gateway/pay
  * 
- * Confirms a payment quote and returns info needed for MNEE payment execution.
- * The actual payment execution happens in the Next.js API route.
+ * Confirms a payment quote and returns info needed for MNEE ERC20 payment execution.
+ * The actual payment execution happens in the Next.js API route via the X402Gateway contract.
  * 
  * Request body:
  * {
@@ -340,10 +344,10 @@ const quoteAction = httpAction(async (ctx, request) => {
  *   "invoiceId": "<payment.invoiceId>",
  *   "amount": <amount in MNEE>,
  *   "workspaceId": "<id>",
- *   "payTo": "<bitcoin address>",
- *   "network": "mainnet" | "sandbox",
- *   "mneeWalletAddress": "<workspace mnee address>",
- *   "encryptedWif": "<encrypted private key>"
+ *   "payTo": "<ethereum address>",
+ *   "network": "mainnet" | "sepolia",
+ *   "treasuryAddress": "<treasury contract address>",
+ *   "apiKey": "<api key for hashing on-chain>"
  * }
  * 
  * Response (error):
@@ -433,20 +437,36 @@ const payAction = httpAction(async (ctx, request) => {
     return jsonResponse(response, 404);
   }
 
-  // Step 4: Get MNEE wallet for this workspace
-  const mneeWallet = await ctx.runQuery(internal.lib.mnee.getMneeWallet, {
-    workspaceId,
-    network: payment.network,
+  // Step 4: Get API key details for treasury lookup
+  const apiKeyDetails = await ctx.runQuery(internal.gateway.getApiKeyDetails, {
+    apiKeyId,
   });
 
-  if (!mneeWallet) {
+  // Step 4b: Get treasury for this workspace
+  let treasuryAddress: string | undefined;
+  if (apiKeyDetails?.treasuryId) {
+    const treasury = await ctx.runQuery(internal.treasuries.getTreasuryInternal, {
+      workspaceId,
+      network: payment.network,
+    });
+    if (treasury && treasury.status === "active") {
+      treasuryAddress = treasury.contractAddress;
+    }
+  }
+
+  if (!treasuryAddress) {
     const response: PayResponseError = {
       status: "error",
-      code: "NO_MNEE_WALLET",
-      message: `No MNEE wallet configured for ${payment.network} network`,
+      code: "NO_TREASURY",
+      message: `No treasury deployed for ${payment.network} network. Please deploy a treasury first.`,
     };
     return jsonResponse(response, 400);
   }
+
+  // Get the original API key for hashing
+  const originalApiKey = await ctx.runQuery(internal.apiKeys.getApiKeyInternal, {
+    apiKeyId,
+  });
 
   // Build the response
   const buildResponse = (): PayResponseOk => ({
@@ -457,8 +477,8 @@ const payAction = httpAction(async (ctx, request) => {
     workspaceId: workspaceId.toString(),
     payTo: payment.payTo,
     network: payment.network,
-    mneeWalletAddress: mneeWallet.address,
-    encryptedWif: mneeWallet.encryptedWif,
+    treasuryAddress,
+    apiKey: originalApiKey?.apiKey,
   });
 
   // Step 5: Check payment status
@@ -507,7 +527,6 @@ const payAction = httpAction(async (ctx, request) => {
 interface MarkSettledRequest {
   paymentId: string;
   txHash?: string;
-  ticketId?: string;
 }
 
 const markSettledAction = httpAction(async (ctx, request) => {
@@ -547,7 +566,6 @@ const markSettledAction = httpAction(async (ctx, request) => {
     await ctx.runMutation(internal.gateway.markPaymentSettled, {
       paymentId: paymentId as Id<"payments">,
       txHash: body.txHash,
-      ticketId: body.ticketId,
     });
 
     return jsonResponse({ status: "ok" });
@@ -789,7 +807,7 @@ http.route({
   handler: payAction,
 });
 
-// Mark payment as settled endpoint (called by Next.js after MNEE payment succeeds)
+// Mark payment as settled endpoint (called by Next.js after Ethereum payment succeeds)
 http.route({
   path: "/gateway/mark-settled",
   method: "POST",
@@ -803,7 +821,7 @@ http.route({
   handler: markSettledAction,
 });
 
-// Mark payment as failed endpoint (called by Next.js when MNEE payment fails)
+// Mark payment as failed endpoint (called by Next.js when Ethereum payment fails)
 http.route({
   path: "/gateway/mark-failed",
   method: "POST",

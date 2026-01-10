@@ -28,17 +28,17 @@ interface LogEntry {
   timestamp: number;
 }
 
-// MNEE-only networks
+// Ethereum networks
 const PRESET_NETWORKS = [
-  { key: "mnee-sandbox", name: "MNEE Sandbox", description: "MNEE testnet" },
-  { key: "mnee-mainnet", name: "MNEE Mainnet", description: "MNEE production" },
+  { key: "sepolia", name: "Sepolia Testnet", description: "Ethereum testnet" },
+  { key: "mainnet", name: "Ethereum Mainnet", description: "Ethereum production" },
 ];
 
 export default function SDKDemoPage() {
   const [apiKey, setApiKey] = useState("");
   const [selectedApiKeyId, setSelectedApiKeyId] = useState<Id<"apiKeys"> | "">("");
   const [providerAmount, setProviderAmount] = useState("0.01");
-  const [providerNetwork, setProviderNetwork] = useState("mnee-sandbox");
+  const [providerNetwork, setProviderNetwork] = useState("sepolia");
   const [isRunning, setIsRunning] = useState(false);
   const [steps, setSteps] = useState<Step[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -119,7 +119,7 @@ export default function SDKDemoPage() {
       {
         id: "call-pay",
         title: "5. Call Gateway /pay",
-        description: "SDK executes the MNEE payment",
+        description: "SDK executes the payment",
         status: "pending",
       },
       {
@@ -386,7 +386,7 @@ export default function SDKDemoPage() {
           </Link>
           <h1 className="text-3xl font-bold mt-4">xFour SDK Demo</h1>
           <p className="text-[#888] mt-2">
-            Watch the SDK handle an xFour MNEE payment flow step-by-step
+            Watch the SDK handle an xFour payment flow step-by-step
           </p>
         </div>
 
@@ -450,13 +450,13 @@ export default function SDKDemoPage() {
               Mock Provider Settings
             </h3>
             <p className="text-xs text-[#666] mb-4">
-              Configure what the mock provider will request in MNEE.
+              Configure what the mock provider will request.
             </p>
             
             <div className="grid md:grid-cols-2 gap-4">
               {/* Network */}
               <div>
-                <label className="block text-xs text-[#888] mb-1">MNEE Network</label>
+                <label className="block text-xs text-[#888] mb-1">Network</label>
                 <select
                   value={providerNetwork}
                   onChange={(e) => setProviderNetwork(e.target.value)}
@@ -482,11 +482,11 @@ export default function SDKDemoPage() {
               </div>
             </div>
 
-            {/* MNEE info */}
-            <div className="mt-4 p-3 rounded-lg bg-amber-900/20 border border-amber-900/50">
-              <p className="text-xs text-amber-300">
-                <strong>💡 MNEE Payments:</strong> All payments use the MNEE Bitcoin-based stablecoin. 
-                Make sure your workspace has an MNEE wallet with sufficient balance.
+            {/* Network info */}
+            <div className="mt-4 p-3 rounded-lg bg-violet-900/20 border border-violet-900/50">
+              <p className="text-xs text-violet-300">
+                <strong>💡 Ethereum Payments:</strong> Payments use MNEE on Ethereum. 
+                Make sure your treasury has sufficient MNEE balance on the selected network.
               </p>
             </div>
           </div>
@@ -584,7 +584,7 @@ const response = await client.fetchWithX402(
 // 1. Detects 402 Payment Required
 // 2. Extracts xFour invoice headers
 // 3. Calls /quote to get authorization
-// 4. Calls /pay to execute MNEE payment
+// 4. Calls /pay to execute payment
 // 5. Retries with proof header
 // 6. Returns the final response`}</code>
           </pre>

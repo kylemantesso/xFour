@@ -27,6 +27,9 @@ export function LandingPage() {
       {/* SDK Examples */}
       <SDKExamplesSection />
 
+      {/* Non-Custodial Treasury Section */}
+      <TreasurySection />
+
       {/* Features Grid */}
       <FeaturesSection />
 
@@ -89,7 +92,7 @@ function HeroSection() {
         <p className="text-xl md:text-2xl text-[#888] max-w-3xl mx-auto mb-10 animate-fade-in-up animation-delay-200 leading-relaxed">
           Enable AI agents to <span className="text-white font-medium">make payments</span> for services 
           and <span className="text-white font-medium">accept payments</span> for APIs — 
-          all with <span className="text-white font-medium">MNEE</span>, a USD-backed stablecoin on BSV.
+          all with <span className="text-white font-medium">non-custodial treasuries</span> and MNEE stablecoin.
         </p>
 
         {/* CTA Buttons */}
@@ -116,16 +119,16 @@ function HeroSection() {
         {/* Trust Indicators */}
         <div className="flex items-center justify-center gap-8 mt-12 animate-fade-in-up animation-delay-400">
           <div className="flex items-center gap-2 text-sm text-[#666]">
-            <BSVIcon className="w-5 h-5" />
-            <span>BSV Chain</span>
+            <VaultIcon className="w-5 h-5" />
+            <span>Non-Custodial</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-[#666]">
-            <CurrencyIcon className="w-5 h-5" />
-            <span>Sub-cent Fees</span>
+            <EthereumIcon className="w-5 h-5" />
+            <span>Ethereum</span>
           </div>
           <div className="flex items-center gap-2 text-sm text-[#666]">
-            <BoltIcon className="w-5 h-5" />
-            <span>Real-time</span>
+            <ShieldCheckIcon className="w-5 h-5" />
+            <span>On-Chain Limits</span>
           </div>
         </div>
       </div>
@@ -135,7 +138,7 @@ function HeroSection() {
 
 function LiveStatsSection() {
   const stats = useQuery(api.payments.getPublicStats);
-  const [selectedNetwork, setSelectedNetwork] = useState<"sandbox" | "mainnet">("sandbox");
+  const [selectedNetwork, setSelectedNetwork] = useState<"sepolia" | "mainnet">("sepolia");
 
   return (
     <section className="relative py-20 border-t border-b border-[#222]">
@@ -163,25 +166,25 @@ function LiveStatsSection() {
         {/* Network Toggle Switch */}
         <div className="flex items-center justify-center gap-3 mb-6">
           <span className={`text-sm font-medium transition-colors ${
-            selectedNetwork === "sandbox" ? "text-amber-400" : "text-[#666]"
+            selectedNetwork === "sepolia" ? "text-amber-400" : "text-[#666]"
           }`}>
-            Sandbox
+            Sepolia
           </span>
           <button
-            onClick={() => setSelectedNetwork(selectedNetwork === "sandbox" ? "mainnet" : "sandbox")}
+            onClick={() => setSelectedNetwork(selectedNetwork === "sepolia" ? "mainnet" : "sepolia")}
             className="relative w-14 h-7 rounded-full transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-[#0a0a0a] focus:ring-emerald-500"
             style={{
-              backgroundColor: selectedNetwork === "sandbox" ? "rgb(245 158 11 / 0.3)" : "rgb(16 185 129 / 0.3)",
+              backgroundColor: selectedNetwork === "sepolia" ? "rgb(245 158 11 / 0.3)" : "rgb(16 185 129 / 0.3)",
             }}
           >
             <span
               className="absolute top-0.5 left-0.5 w-6 h-6 rounded-full shadow-lg transform transition-all duration-300 flex items-center justify-center"
               style={{
                 transform: selectedNetwork === "mainnet" ? "translateX(28px)" : "translateX(0)",
-                backgroundColor: selectedNetwork === "sandbox" ? "rgb(245 158 11)" : "rgb(16 185 129)",
+                backgroundColor: selectedNetwork === "sepolia" ? "rgb(245 158 11)" : "rgb(16 185 129)",
               }}
             >
-              {selectedNetwork === "sandbox" ? (
+              {selectedNetwork === "sepolia" ? (
                 <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M6.672 1.911a1 1 0 10-1.932.518l.259.966a1 1 0 001.932-.518l-.26-.966zM2.429 4.74a1 1 0 10-.517 1.932l.966.259a1 1 0 00.517-1.932l-.966-.26zm8.814-.569a1 1 0 00-1.415-1.414l-.707.707a1 1 0 101.415 1.415l.707-.708zm-7.071 7.072l.707-.707A1 1 0 003.465 9.12l-.708.707a1 1 0 001.415 1.415zm3.2-5.171a1 1 0 00-1.3 1.3l4 10a1 1 0 001.823.075l1.38-2.759 3.018 3.02a1 1 0 001.414-1.415l-3.019-3.02 2.76-1.379a1 1 0 00-.076-1.822l-10-4z" clipRule="evenodd" />
                 </svg>
@@ -239,7 +242,7 @@ function LiveStatsSection() {
   );
 }
 
-function PublicActivityChart({ network }: { network: "sandbox" | "mainnet" }) {
+function PublicActivityChart({ network }: { network: "sepolia" | "mainnet" }) {
   const timeline = useQuery(api.payments.getPublicActivityTimeline, { windowSeconds: 60, network });
   const [currentTime, setCurrentTime] = useState(Date.now());
   const [newEventIds, setNewEventIds] = useState<Set<string>>(new Set());
@@ -602,7 +605,7 @@ function SDKExamplesSection() {
                   <br />
                   {'  '}<span className="text-violet-400">gatewayUrl</span>: <span className="text-emerald-400">&apos;https://gateway.x402.com&apos;</span>,<br />
                   {'  '}<span className="text-violet-400">apiKey</span>: <span className="text-white">process</span>.<span className="text-white">env</span>.<span className="text-white">X402_SERVER_KEY</span>,<br />
-                  {'  '}<span className="text-violet-400">payToAddress</span>: <span className="text-emerald-400">&apos;1ABC...&apos;</span>, <span className="text-[#666]">{'// Your MNEE address'}</span><br />
+                  {'  '}<span className="text-violet-400">payToAddress</span>: <span className="text-emerald-400">&apos;0x123...&apos;</span>, <span className="text-[#666]">{'// Your Ethereum address'}</span><br />
                   {'  '}<span className="text-violet-400">network</span>: <span className="text-emerald-400">&apos;mainnet&apos;</span>,<br />
                   {'}'});<br />
                   <br />
@@ -672,8 +675,8 @@ function ProblemSolutionSection() {
                 {[
                   "Agents can't pay for services autonomously",
                   "APIs have no native way to charge per-request",
-                  "No budget controls or spending policies",
-                  "Complex payment integrations for providers",
+                  "Custodial risk — give up control of your funds",
+                  "No verifiable spending limits on-chain",
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-3 text-[#888]">
                     <XCircleIcon className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
@@ -693,18 +696,19 @@ function ProblemSolutionSection() {
                 The Solution
               </div>
               <h3 className="text-2xl md:text-3xl font-bold text-white mb-4">
-                x402 Protocol + MNEE Stablecoin
+                Non-Custodial Smart Contract Treasuries
               </h3>
               <p className="text-[#888] leading-relaxed mb-6">
-                A complete payment protocol that enables agents to pay for APIs AND API providers to 
-                receive payments — all using MNEE stablecoin with budget controls and instant settlement.
+                Deploy your own treasury contract with full admin control. Set spending limits, 
+                enable agents, and withdraw anytime — all enforced on-chain, not by us.
               </p>
               <ul className="space-y-3">
                 {[
-                  "Agents make autonomous payments via @x402/agent SDK",
-                  "APIs accept payments via @x402/server SDK",
-                  "Programmable spending policies and limits",
-                  "Real-time settlement with MNEE stablecoin",
+                  "Your funds stay in YOUR smart contract",
+                  "On-chain spending limits (per-tx, daily, monthly)",
+                  "Withdraw anytime — no lockups or approvals",
+                  "Agents transact via @x402/agent SDK",
+                  "APIs monetize via @x402/server SDK",
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-3 text-[#888]">
                     <CheckCircleIcon className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />
@@ -720,19 +724,177 @@ function ProblemSolutionSection() {
   );
 }
 
+function TreasurySection() {
+  return (
+    <section className="py-24 border-t border-[#222] bg-gradient-to-b from-[#0a0a0a] via-[#080808] to-[#0a0a0a]">
+      <div className="max-w-6xl mx-auto px-4">
+        {/* Header */}
+        <div className="text-center mb-12">
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500/10 border border-emerald-500/30 rounded-full mb-4">
+            <VaultIcon className="w-4 h-4 text-emerald-400" />
+            <span className="text-sm font-medium text-emerald-400">Non-Custodial Architecture</span>
+          </div>
+          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+            Your Funds. Your Contract. Your Control.
+          </h2>
+          <p className="text-lg text-[#888] max-w-2xl mx-auto">
+            Unlike traditional payment processors, x402 uses smart contract treasuries where 
+            <span className="text-white font-medium"> you retain full custody</span> of your funds at all times.
+          </p>
+        </div>
+
+        {/* Architecture Diagram */}
+        <div className="bg-[#111] border border-[#333] rounded-2xl p-8 mb-12">
+          <div className="grid md:grid-cols-2 gap-8">
+            {/* Your Treasury */}
+            <div className="bg-gradient-to-br from-emerald-500/10 to-teal-500/5 border border-emerald-500/30 rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                  <VaultIcon className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Your Treasury Contract</h3>
+                  <p className="text-xs text-emerald-400/80">Deployed per workspace • You are ADMIN</p>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircleIcon className="w-4 h-4 text-emerald-400" />
+                  <span className="text-[#ccc]">Deposit & withdraw anytime</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircleIcon className="w-4 h-4 text-emerald-400" />
+                  <span className="text-[#ccc]">Set per-API-key spending limits</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircleIcon className="w-4 h-4 text-emerald-400" />
+                  <span className="text-[#ccc]">Daily & monthly budget caps</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircleIcon className="w-4 h-4 text-emerald-400" />
+                  <span className="text-[#ccc]">Pause in emergencies</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircleIcon className="w-4 h-4 text-emerald-400" />
+                  <span className="text-[#ccc]">Emergency withdraw when paused</span>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-emerald-500/20">
+                <p className="text-xs text-emerald-400/60 font-mono">
+                  ADMIN_ROLE = your wallet address
+                </p>
+              </div>
+            </div>
+
+            {/* Gateway */}
+            <div className="bg-[#0a0a0a] border border-[#333] rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                  <BoltIcon className="w-5 h-5 text-blue-400" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">x402 Gateway</h3>
+                  <p className="text-xs text-blue-400/80">Limited permissions • Execute only</p>
+                </div>
+              </div>
+              
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <CheckCircleIcon className="w-4 h-4 text-blue-400" />
+                  <span className="text-[#ccc]">Execute payments within YOUR limits</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <XCircleIcon className="w-4 h-4 text-red-400/60" />
+                  <span className="text-[#666]">Cannot withdraw your funds</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <XCircleIcon className="w-4 h-4 text-red-400/60" />
+                  <span className="text-[#666]">Cannot change your limits</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <XCircleIcon className="w-4 h-4 text-red-400/60" />
+                  <span className="text-[#666]">Cannot pause your contract</span>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <XCircleIcon className="w-4 h-4 text-red-400/60" />
+                  <span className="text-[#666]">Cannot exceed spending limits</span>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-[#333]">
+                <p className="text-xs text-blue-400/60 font-mono">
+                  GATEWAY_ROLE = limited to executePayment()
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Connection Arrow */}
+          <div className="flex items-center justify-center my-6">
+            <div className="flex items-center gap-4 px-6 py-3 bg-[#0a0a0a] border border-[#333] rounded-full">
+              <span className="text-sm text-[#888]">Payments flow through gateway</span>
+              <ArrowRightIcon className="w-4 h-4 text-emerald-400" />
+              <span className="text-sm text-emerald-400 font-medium">Only within your limits</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Benefits Grid */}
+        <div className="grid md:grid-cols-3 gap-6">
+          <div className="bg-[#111] border border-[#333] rounded-xl p-5 hover:border-emerald-500/30 transition-colors">
+            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center mb-4">
+              <ShieldCheckIcon className="w-5 h-5 text-emerald-400" />
+            </div>
+            <h4 className="text-white font-semibold mb-2">Trustless Security</h4>
+            <p className="text-sm text-[#888]">
+              No need to trust us with your funds. Smart contracts enforce all rules transparently on-chain.
+            </p>
+          </div>
+          <div className="bg-[#111] border border-[#333] rounded-xl p-5 hover:border-emerald-500/30 transition-colors">
+            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center mb-4">
+              <ChartIcon className="w-5 h-5 text-emerald-400" />
+            </div>
+            <h4 className="text-white font-semibold mb-2">Full Transparency</h4>
+            <p className="text-sm text-[#888]">
+              Every payment, deposit, and withdrawal is recorded on Ethereum. Verify everything yourself.
+            </p>
+          </div>
+          <div className="bg-[#111] border border-[#333] rounded-xl p-5 hover:border-emerald-500/30 transition-colors">
+            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center mb-4">
+              <BoltIcon className="w-5 h-5 text-emerald-400" />
+            </div>
+            <h4 className="text-white font-semibold mb-2">Instant Control</h4>
+            <p className="text-sm text-[#888]">
+              Change limits, pause payments, or withdraw — all instant, no approval needed from anyone.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function FeaturesSection() {
   const features = [
+    {
+      icon: <VaultIcon className="w-6 h-6" />,
+      title: "Non-Custodial Treasuries",
+      description: "Your funds stay in YOUR smart contract. Deposit, withdraw, and set limits — all under your control.",
+      gradient: "from-emerald-500 to-teal-600",
+    },
+    {
+      icon: <ShieldCheckIcon className="w-6 h-6" />,
+      title: "On-Chain Spending Limits",
+      description: "Per-transaction, daily, and monthly limits enforced by immutable smart contracts. Not our rules — yours.",
+      gradient: "from-pink-500 to-rose-600",
+    },
     {
       icon: <KeyIcon className="w-6 h-6" />,
       title: "Secure API Keys",
       description: "Generate API keys for each agent with workspace isolation. Keys are hashed — only you see the full key once.",
       gradient: "from-amber-500 to-orange-600",
-    },
-    {
-      icon: <ShieldCheckIcon className="w-6 h-6" />,
-      title: "Payment Policies",
-      description: "Set spending limits, allowed providers, and budget caps. Control exactly what each agent can spend.",
-      gradient: "from-emerald-500 to-teal-600",
     },
     {
       icon: <ChartIcon className="w-6 h-6" />,
@@ -741,16 +903,10 @@ function FeaturesSection() {
       gradient: "from-violet-500 to-purple-600",
     },
     {
-      icon: <VaultIcon className="w-6 h-6" />,
-      title: "MNEE Wallets",
-      description: "Automatically generated MNEE wallets per workspace. Fund once, let agents transact within policy limits.",
-      gradient: "from-pink-500 to-rose-600",
-    },
-    {
-      icon: <BSVIcon className="w-6 h-6" />,
-      title: "BSV Chain",
-      description: "Built on MNEE stablecoin — a USD-backed token on BSV (Bitcoin SV) with instant settlement and near-zero fees.",
-      gradient: "from-orange-500 to-amber-600",
+      icon: <EthereumIcon className="w-6 h-6" />,
+      title: "Ethereum Network",
+      description: "Built on MNEE stablecoin — a USD-backed ERC20 token on Ethereum with robust settlement and wide ecosystem support.",
+      gradient: "from-indigo-500 to-violet-600",
     },
     {
       icon: <CodeIcon className="w-6 h-6" />,
@@ -769,7 +925,7 @@ function FeaturesSection() {
           </h2>
           <p className="text-lg text-[#888] max-w-2xl mx-auto">
             A complete infrastructure layer for autonomous AI commerce, 
-            powered by MNEE stablecoin on BSV Chain.
+            powered by MNEE stablecoin on Ethereum.
           </p>
         </div>
 
@@ -889,34 +1045,34 @@ function WhatIsX402Section() {
           {/* Why MNEE is perfect */}
           <div className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/30 rounded-2xl p-8">
             <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <span className="text-2xl">⚡</span> Why MNEE is the Perfect Fit
+              <span className="text-2xl">⚡</span> Why MNEE + Smart Contracts
             </h3>
             <p className="text-[#888] mb-6">
-              x402 payments require a currency that&apos;s <span className="text-white">fast</span>, <span className="text-white">cheap</span>, and <span className="text-white">programmable</span>. 
-              MNEE on Bitcoin (BSV) delivers all three.
+              x402 payments require a currency that&apos;s <span className="text-white">stable</span>, <span className="text-white">programmable</span>, and <span className="text-white">non-custodial</span>. 
+              MNEE on Ethereum delivers all three.
             </p>
             <div className="space-y-4">
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
-                  <BoltIcon className="w-5 h-5 text-emerald-400" />
+                  <VaultIcon className="w-5 h-5 text-emerald-400" />
                 </div>
                 <div>
-                  <h4 className="text-white font-semibold">Near-Instant Settlement</h4>
-                  <p className="text-sm text-[#888]">Payments confirm in 1-2 seconds, not minutes or hours. Perfect for real-time API calls.</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
-                  <CurrencyIcon className="w-5 h-5 text-emerald-400" />
-                </div>
-                <div>
-                  <h4 className="text-white font-semibold">Sub-Cent Fees</h4>
-                  <p className="text-sm text-[#888]">Transaction fees are fractions of a cent. Pay $0.01 for an API call, not $0.01 + $2 gas.</p>
+                  <h4 className="text-white font-semibold">Non-Custodial by Design</h4>
+                  <p className="text-sm text-[#888]">Your treasury is YOUR smart contract. We can&apos;t touch your funds — only execute within your limits.</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
                   <ShieldCheckIcon className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <h4 className="text-white font-semibold">On-Chain Spending Limits</h4>
+                  <p className="text-sm text-[#888]">Per-transaction, daily, and monthly limits enforced by immutable contract code.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                  <CurrencyIcon className="w-5 h-5 text-emerald-400" />
                 </div>
                 <div>
                   <h4 className="text-white font-semibold">USD-Backed Stability</h4>
@@ -945,9 +1101,9 @@ function WhatIsX402Section() {
               </thead>
               <tbody>
                 <tr className="border-b border-[#222] bg-emerald-500/5">
-                  <td className="py-3 px-6 text-white font-semibold">MNEE (x402)</td>
-                  <td className="py-3 px-4 text-center text-emerald-400">~1 sec</td>
-                  <td className="py-3 px-4 text-center text-emerald-400">&lt;$0.001</td>
+                  <td className="py-3 px-6 text-white font-semibold">MNEE on Ethereum</td>
+                  <td className="py-3 px-4 text-center text-emerald-400">~12 sec</td>
+                  <td className="py-3 px-4 text-center text-emerald-400">~$0.01-0.10</td>
                   <td className="py-3 px-4 text-center text-emerald-400">✓</td>
                   <td className="py-3 px-4 text-center text-emerald-400">✓</td>
                 </tr>
@@ -959,11 +1115,11 @@ function WhatIsX402Section() {
                   <td className="py-3 px-4 text-center text-red-400">✗</td>
                 </tr>
                 <tr className="border-b border-[#222]">
-                  <td className="py-3 px-6 text-[#888]">Ethereum</td>
-                  <td className="py-3 px-4 text-center text-[#666]">~15 sec</td>
-                  <td className="py-3 px-4 text-center text-red-400">$1-50+</td>
-                  <td className="py-3 px-4 text-center text-red-400">✗</td>
+                  <td className="py-3 px-6 text-[#888]">Native ETH</td>
+                  <td className="py-3 px-4 text-center text-[#666]">~12 sec</td>
+                  <td className="py-3 px-4 text-center text-amber-400">$0.50-5+</td>
                   <td className="py-3 px-4 text-center text-amber-400">~</td>
+                  <td className="py-3 px-4 text-center text-emerald-400">✓</td>
                 </tr>
                 <tr>
                   <td className="py-3 px-6 text-[#888]">Bitcoin (BTC)</td>
@@ -1025,10 +1181,12 @@ function TrophyIcon({ className }: { className?: string }) {
   );
 }
 
-function BSVIcon({ className }: { className?: string }) {
+function EthereumIcon({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-      <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 21.6c-5.302 0-9.6-4.298-9.6-9.6S6.698 2.4 12 2.4s9.6 4.298 9.6 9.6-4.298 9.6-9.6 9.6zm1.2-14.4H9.6v2.4h3.6c.662 0 1.2.538 1.2 1.2s-.538 1.2-1.2 1.2H9.6v2.4h3.6c.662 0 1.2.538 1.2 1.2s-.538 1.2-1.2 1.2H9.6v2.4h3.6c1.988 0 3.6-1.612 3.6-3.6 0-1.092-.49-2.07-1.26-2.73.77-.66 1.26-1.638 1.26-2.73 0-1.988-1.612-3.6-3.6-3.6z" />
+      <path d="M12 1.5L5.5 12.25L12 16.5L18.5 12.25L12 1.5Z" opacity="0.6" />
+      <path d="M12 16.5L5.5 12.25L12 22.5L18.5 12.25L12 16.5Z" />
+      <path d="M12 1.5L5.5 12.25L12 9.5L18.5 12.25L12 1.5Z" />
     </svg>
   );
 }

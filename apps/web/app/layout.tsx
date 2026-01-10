@@ -5,6 +5,7 @@ import "./globals.css";
 import ConvexClientProvider from "@/components/ConvexClientProvider";
 import { TopNav } from "@/components/TopNav";
 import { ToastProvider } from "@/components/Toast";
+import { Web3Provider } from "@/components/Web3Provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -66,10 +67,12 @@ export default function RootLayout({
           className={`${geistSans.variable} ${geistMono.variable} antialiased bg-[#0a0a0a]`}
         >
           <ConvexClientProvider>
-            <ToastProvider>
-              <TopNav />
-              {children}
-            </ToastProvider>
+            <Web3Provider>
+              <ToastProvider>
+                <TopNav />
+                {children}
+              </ToastProvider>
+            </Web3Provider>
           </ConvexClientProvider>
         </body>
       </html>

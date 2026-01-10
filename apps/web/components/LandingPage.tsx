@@ -1,90 +1,25 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { SignUpButton } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { api } from "../convex/_generated/api";
 import Link from "next/link";
 
-// ============================================
-// COUNT UP HOOK
-// ============================================
-
-function useCountUp(
-  endValue: number,
-  duration: number = 1500,
-  startOnMount: boolean = true
-): { value: number; isAnimating: boolean; start: () => void } {
-  const [value, setValue] = useState(0);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [hasStarted, setHasStarted] = useState(false);
-  const animationRef = useRef<number | null>(null);
-
-  const start = useCallback(() => {
-    if (hasStarted || endValue === 0) return;
-    setHasStarted(true);
-    setIsAnimating(true);
-    
-    const startTime = performance.now();
-    const startValue = 0;
-    
-    const animate = (currentTime: number) => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      
-      // Ease out cubic for smooth deceleration
-      const easeOut = 1 - Math.pow(1 - progress, 3);
-      const currentValue = Math.floor(startValue + (endValue - startValue) * easeOut);
-      
-      setValue(currentValue);
-      
-      if (progress < 1) {
-        animationRef.current = requestAnimationFrame(animate);
-      } else {
-        setValue(endValue);
-        setIsAnimating(false);
-      }
-    };
-    
-    animationRef.current = requestAnimationFrame(animate);
-  }, [endValue, duration, hasStarted]);
-
-  useEffect(() => {
-    if (startOnMount && endValue > 0 && !hasStarted) {
-      start();
-    }
-    
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-    };
-  }, [endValue, startOnMount, hasStarted, start]);
-
-  // Reset when endValue changes significantly (new data loaded)
-  useEffect(() => {
-    if (hasStarted && endValue > value * 1.1) {
-      setHasStarted(false);
-    }
-  }, [endValue, hasStarted, value]);
-
-  return { value, isAnimating, start };
-}
-
 export function LandingPage() {
   return (
     <main className="min-h-screen bg-[#0a0a0a] overflow-hidden">
-      {/* Hero Section */}
+      {/* Hackathon Top Banner - Fixed at very top */}
+      <HackathonTopBanner />
+
+      {/* Hero Section with reactive background */}
       <HeroSection />
 
-      {/* MNEE Hackathon Banner - Prominent for judges */}
-      <HackathonBanner />
+      {/* Live Stats Section - Immediately after hero */}
+      <LiveStatsSection />
 
       {/* What is x402 Section */}
       <WhatIsX402Section />
-
-      {/* Live Stats Section */}
-      <LiveStatsSection />
 
       {/* Recent Transactions */}
       <RecentTransactionsSection />
@@ -106,21 +41,78 @@ export function LandingPage() {
 
 function HeroSection() {
   const stats = useQuery(api.payments.getPublicStats);
-  const totalPayments = stats?.totalPayments ?? 0;
-  const { value: animatedPayments } = useCountUp(totalPayments, 2000);
+  const timeline = useQuery(api.payments.getPublicActivityTimeline, { windowSeconds: 60 });
   const isLoading = stats === undefined;
+  const displayValue = stats?.totalPayments ?? 0;
   
-  // Use the actual value if animation hasn't caught up, ensure it's never negative
-  const displayValue = Math.max(0, totalPayments > 0 ? animatedPayments : totalPayments);
+  // Track payment events for background animation
+  const [pulseEvents, setPulseEvents] = useState<Array<{ id: string; x: number; y: number; size: number; color: string }>>([]);
+  const prevEventsRef = useRef<Set<string>>(new Set());
+  
+  // When new payments come in, create pulse effects
+  useEffect(() => {
+    if (!timeline?.events) return;
+    
+    const currentIds = new Set(timeline.events.map(e => e.id));
+    const newEvents: typeof pulseEvents = [];
+    
+    timeline.events.forEach(event => {
+      if (!prevEventsRef.current.has(event.id)) {
+        // New payment! Create a pulse at a random position
+        const colors = event.status === "settled" || event.status === "completed"
+          ? ["from-emerald-500/40", "from-green-500/40", "from-teal-500/40"]
+          : event.status === "denied" || event.status === "failed"
+          ? ["from-red-500/30"]
+          : ["from-blue-500/30", "from-violet-500/30"];
+        
+        newEvents.push({
+          id: event.id,
+          x: Math.random() * 100,
+          y: Math.random() * 100,
+          size: Math.min(400, 100 + event.amount * 50),
+          color: colors[Math.floor(Math.random() * colors.length)],
+        });
+      }
+    });
+    
+    if (newEvents.length > 0) {
+      setPulseEvents(prev => [...prev, ...newEvents].slice(-10)); // Keep last 10
+    }
+    
+    prevEventsRef.current = currentIds;
+  }, [timeline]);
+  
+  // Clean up old pulses
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPulseEvents(prev => prev.slice(-5));
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
-    <section className="relative min-h-[90vh] flex items-center justify-center">
-      {/* Animated Background */}
+    <section className="relative min-h-[85vh] flex items-center justify-center">
+      {/* Animated Background - Reactive to payments */}
       <div className="absolute inset-0 overflow-hidden">
-        {/* Gradient Orbs */}
+        {/* Base Gradient Orbs */}
         <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-gradient-to-br from-pink-500/20 to-violet-600/20 rounded-full blur-3xl animate-hero-float" />
         <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-gradient-to-br from-blue-500/15 to-cyan-500/15 rounded-full blur-3xl animate-hero-float-delayed" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-full blur-3xl animate-hero-pulse" />
+        
+        {/* Payment Pulse Effects - Appear when payments come in */}
+        {pulseEvents.map((pulse) => (
+          <div
+            key={pulse.id}
+            className={`absolute rounded-full blur-2xl bg-gradient-to-br ${pulse.color} to-transparent animate-payment-pulse pointer-events-none`}
+            style={{
+              left: `${pulse.x}%`,
+              top: `${pulse.y}%`,
+              width: `${pulse.size}px`,
+              height: `${pulse.size}px`,
+              transform: "translate(-50%, -50%)",
+            }}
+          />
+        ))}
         
         {/* Grid Pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_70%)]" />
@@ -492,7 +484,6 @@ function StatCard({
   icon,
   loading,
   accent,
-  decimals = 0,
 }: {
   label: string;
   value: number;
@@ -500,10 +491,7 @@ function StatCard({
   icon: React.ReactNode;
   loading?: boolean;
   accent?: "emerald" | "violet" | "blue";
-  decimals?: number;
 }) {
-  const { value: animatedValue } = useCountUp(value, 1500);
-  
   const accentColors = {
     emerald: "from-emerald-500/20 to-emerald-500/5 border-emerald-500/30",
     violet: "from-violet-500/20 to-violet-500/5 border-violet-500/30",
@@ -516,10 +504,10 @@ function StatCard({
     blue: "text-blue-400",
   };
 
-  // Format the display value
-  const displayValue = decimals > 0 
-    ? (animatedValue * value / (animatedValue || 1)).toFixed(decimals)
-    : animatedValue.toLocaleString();
+  // Format the display value - simple and stable
+  const displayValue = typeof value === "number" && value % 1 !== 0
+    ? value.toFixed(2)
+    : value.toLocaleString();
 
   return (
     <div className={`bg-gradient-to-br ${accent ? accentColors[accent] : "from-[#1a1a1a] to-[#111] border-[#333]"} border rounded-xl p-5`}>
@@ -533,9 +521,7 @@ function StatCard({
         </div>
       ) : (
         <p className="text-2xl font-bold text-white tabular-nums">
-          {typeof value === "number" && value % 1 !== 0
-            ? value.toFixed(2)
-            : displayValue}
+          {displayValue}
           {suffix && <span className="text-base text-[#888]">{suffix}</span>}
         </p>
       )}
@@ -874,48 +860,37 @@ function FeaturesSection() {
   );
 }
 
-function HackathonBanner() {
+function HackathonTopBanner() {
   return (
-    <section className="py-6 bg-gradient-to-r from-pink-500/10 via-violet-500/10 to-blue-500/10 border-y border-pink-500/20">
-      <div className="max-w-6xl mx-auto px-4">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-pink-500 to-violet-600 flex items-center justify-center shadow-lg shadow-pink-500/25">
-              <TrophyIcon className="w-7 h-7 text-white" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-xs font-bold rounded uppercase tracking-wider">
-                  MNEE Hackathon
-                </span>
-                <span className="text-white font-semibold">AI & Agent Payments Track</span>
-              </div>
-              <p className="text-sm text-[#888]">
-                Built for the MNEE Hackathon · Programmable Money for Agents
-              </p>
-            </div>
+    <div className="bg-gradient-to-r from-pink-600 via-violet-600 to-blue-600 text-white">
+      <div className="max-w-7xl mx-auto px-4 py-2">
+        <div className="flex items-center justify-center gap-4 text-sm">
+          <div className="flex items-center gap-2">
+            <TrophyIcon className="w-4 h-4" />
+            <span className="font-semibold">MNEE Hackathon Entry</span>
           </div>
-          <div className="flex items-center gap-3">
-            <Link 
-              href="/hackathon" 
-              className="px-5 py-2.5 bg-white text-black font-semibold rounded-lg text-sm hover:bg-gray-100 transition-all flex items-center gap-2"
-            >
-              View Full Submission
-              <ArrowRightIcon className="w-4 h-4" />
-            </Link>
-            <a 
-              href="https://github.com/anthropics/xfour" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="px-5 py-2.5 border border-[#444] text-white rounded-lg text-sm hover:bg-[#111] transition-all flex items-center gap-2"
-            >
-              <GithubIcon className="w-4 h-4" />
-              Source Code
-            </a>
-          </div>
+          <span className="hidden sm:inline text-white/60">|</span>
+          <span className="hidden sm:inline text-white/90">AI & Agent Payments Track</span>
+          <span className="text-white/60">|</span>
+          <Link 
+            href="/hackathon" 
+            className="font-medium hover:underline flex items-center gap-1"
+          >
+            View Submission
+            <ArrowRightIcon className="w-3 h-3" />
+          </Link>
+          <a 
+            href="https://github.com/kylemantesso/x402-gateway" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="hidden md:flex items-center gap-1 font-medium hover:underline"
+          >
+            <GithubIcon className="w-3 h-3" />
+            Source
+          </a>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 

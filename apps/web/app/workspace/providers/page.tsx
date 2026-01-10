@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { WorkspaceGuard } from "../../../components/WorkspaceGuard";
-import { BackToDashboard } from "../../../components/BackToDashboard";
 import { useToast } from "../../../components/Toast";
 import { Id } from "../../../convex/_generated/dataModel";
 
@@ -86,9 +85,6 @@ function ProvidersContent() {
   return (
     <div className="min-h-screen bg-[#0a0a0a]">
       <div className="max-w-4xl mx-auto px-4 py-8">
-        {/* Back link */}
-        <BackToDashboard />
-
         {/* Header */}
         <div className="flex items-start justify-between mb-8">
           <div className="flex items-center gap-4">

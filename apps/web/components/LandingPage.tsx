@@ -18,6 +18,9 @@ export function LandingPage() {
       {/* Live Stats + Recent Transactions Combined */}
       <LiveStatsSection />
 
+      {/* Scrolling Transaction Ticker */}
+      <TransactionTicker />
+
       {/* What is x402 Section */}
       <WhatIsX402Section />
 
@@ -413,6 +416,132 @@ function PublicActivityChart({ network }: { network: "sepolia" | "mainnet" }) {
         <span className="text-emerald-500 font-medium">now</span>
       </div>
     </div>
+  );
+}
+
+function TransactionTicker() {
+  const transactions = useQuery(api.payments.getPublicRecentTransactions, { limit: 20 });
+  const isLoading = transactions === undefined;
+
+  const getBlockExplorerUrl = (network: string, txHash: string) => {
+    if (network === "sepolia") {
+      return `https://sepolia.etherscan.io/tx/${txHash}`;
+    }
+    return `https://etherscan.io/tx/${txHash}`;
+  };
+
+  const formatTxHash = (hash: string) => {
+    return `${hash.slice(0, 6)}...${hash.slice(-4)}`;
+  };
+
+  const formatAmount = (amount: number) => {
+    if (amount < 0.01) return amount.toFixed(4);
+    if (amount < 1) return amount.toFixed(2);
+    return amount.toFixed(2);
+  };
+
+  const formatTimeAgo = (timestamp: number) => {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+    if (seconds < 60) return `${seconds}s ago`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  };
+
+  // If no transactions, don't render
+  if (!isLoading && (!transactions || transactions.length === 0)) {
+    return null;
+  }
+
+  // Double the transactions for seamless looping
+  const displayTransactions = transactions ? [...transactions, ...transactions] : [];
+
+  return (
+    <section className="relative py-4 border-b border-[#222] overflow-hidden bg-[#080808]">
+      {/* Gradient masks for smooth fade edges */}
+      <div className="absolute left-0 top-0 bottom-0 w-24 bg-gradient-to-r from-[#080808] to-transparent z-10 pointer-events-none" />
+      <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-[#080808] to-transparent z-10 pointer-events-none" />
+
+      {/* Header */}
+      <div className="flex items-center justify-center gap-2 mb-3">
+        <div className="relative">
+          <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full block" />
+          <span className="absolute inset-0 w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping" />
+        </div>
+        <span className="text-xs font-medium text-[#666] uppercase tracking-wider">Live Transactions</span>
+      </div>
+
+      {/* Scrolling container */}
+      {isLoading ? (
+        <div className="flex items-center justify-center h-14">
+          <div className="flex items-center gap-3">
+            <div className="w-4 h-4 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
+            <span className="text-sm text-[#666]">Loading transactions...</span>
+          </div>
+        </div>
+      ) : (
+        <div className="relative overflow-hidden">
+          <div className="flex items-center gap-4 animate-scroll-left w-max">
+            {displayTransactions.map((tx, index) => (
+              <a
+                key={`${tx.id}-${index}`}
+                href={tx.txHash ? getBlockExplorerUrl(tx.network, tx.txHash) : "#"}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex items-center gap-3 px-4 py-2.5 bg-[#111] border border-[#222] rounded-lg hover:border-emerald-500/30 hover:bg-[#151515] transition-all duration-200 cursor-pointer flex-shrink-0"
+              >
+                {/* Status indicator */}
+                <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
+                
+                {/* Amount */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-semibold text-white tabular-nums">
+                    {formatAmount(tx.amount)}
+                  </span>
+                  <span className="text-xs text-[#666]">MNEE</span>
+                </div>
+
+                {/* Divider */}
+                <span className="w-px h-4 bg-[#333]" />
+
+                {/* TX Hash with icon */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs text-[#888] font-mono group-hover:text-emerald-400 transition-colors">
+                    {tx.txHash ? formatTxHash(tx.txHash) : "pending"}
+                  </span>
+                  <ExternalLinkIcon className="w-3 h-3 text-[#555] group-hover:text-emerald-400 transition-colors" />
+                </div>
+
+                {/* Network badge */}
+                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                  tx.network === "mainnet" 
+                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                    : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                }`}>
+                  {tx.network === "mainnet" ? "ETH" : "SEP"}
+                </span>
+
+                {/* Time ago */}
+                <span className="text-[10px] text-[#555]">
+                  {formatTimeAgo(tx.timestamp)}
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function ExternalLinkIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+    </svg>
   );
 }
 

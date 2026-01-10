@@ -72,30 +72,37 @@ export default function TreasuryPage() {
 
   if (!isSignedIn) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <p className="text-gray-400">Please sign in to access treasury management</p>
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
+        <p className="text-[#888]">Please sign in to access treasury management</p>
       </div>
     );
   }
 
   if (!workspace) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-500" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-950">
+    <div className="min-h-screen bg-[#0a0a0a]">
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-white">Treasury</h1>
-            <p className="text-gray-400 mt-1">
-              Non-custodial treasury for your AI agents
-            </p>
+        <div className="flex items-start justify-between mb-8">
+          <div className="flex items-center gap-4">
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
+              <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-white">Treasury</h1>
+              <p className="text-sm text-[#888] mt-1">
+                Non-custodial treasury for your AI agents
+              </p>
+            </div>
           </div>
           
           {/* Network Selector */}
@@ -103,7 +110,7 @@ export default function TreasuryPage() {
             <select
               value={selectedNetwork}
               onChange={(e) => setSelectedNetwork(e.target.value as EthereumNetwork)}
-              className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="bg-[#111] border border-[#333] rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
             >
               <option value="sepolia">Sepolia Testnet</option>
               <option value="mainnet">Ethereum Mainnet</option>
@@ -168,14 +175,14 @@ export default function TreasuryPage() {
 
 function WalletConnectionPrompt() {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+    <div className="bg-[#111] border border-[#333] rounded-xl p-8 text-center">
       <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center">
         <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
         </svg>
       </div>
       <h3 className="text-xl font-semibold text-white mb-2">Connect Your Wallet</h3>
-      <p className="text-gray-400 mb-6 max-w-md mx-auto">
+      <p className="text-[#888] mb-6 max-w-md mx-auto">
         Connect your Ethereum wallet to manage your treasury. You maintain full control of your funds at all times.
       </p>
       <ConnectWallet className="mx-auto" />
@@ -195,7 +202,7 @@ function NetworkSwitchPrompt({
   const targetName = targetNetwork === "mainnet" ? "Ethereum Mainnet" : "Sepolia Testnet";
   
   return (
-    <div className="bg-amber-900/20 border border-amber-700/50 rounded-xl p-6">
+    <div className="bg-amber-900/20 border border-amber-900/50 rounded-xl p-6">
       <div className="flex items-start gap-4">
         <div className="p-2 rounded-lg bg-amber-500/20">
           <svg className="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -204,7 +211,7 @@ function NetworkSwitchPrompt({
         </div>
         <div className="flex-1">
           <h3 className="text-lg font-semibold text-amber-400">Wrong Network</h3>
-          <p className="text-gray-400 mt-1">
+          <p className="text-[#888] mt-1">
             You&apos;re connected to {currentChain}. Please switch to {targetName} to manage this treasury.
           </p>
           <button
@@ -304,22 +311,22 @@ function TreasuryOverview({
     : (treasury.cachedBalance || 0).toFixed(4);
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+    <div className="bg-[#111] border border-[#333] rounded-xl p-6">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-semibold text-white">Treasury Overview</h2>
         <span className={`px-3 py-1 rounded-full text-xs font-medium ${
           treasury.status === "active" 
-            ? "bg-green-500/20 text-green-400" 
-            : "bg-gray-700 text-gray-400"
+            ? "bg-emerald-900/30 text-emerald-400" 
+            : "bg-[#1a1a1a] text-[#888]"
         }`}>
           {treasury.status}
         </span>
       </div>
       
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-gray-800 rounded-lg p-4">
+        <div className="bg-[#1a1a1a] rounded-lg p-4">
           <div className="flex items-center justify-between">
-            <p className="text-gray-400 text-sm">Balance</p>
+            <p className="text-[#888] text-sm">Balance</p>
             <button 
               onClick={fetchBalance}
               disabled={isRefreshing}
@@ -329,21 +336,21 @@ function TreasuryOverview({
             </button>
           </div>
           <p className="text-2xl font-bold text-white mt-1">
-            {displayBalance} <span className="text-lg text-gray-400">MNEE</span>
+            {displayBalance} <span className="text-lg text-[#888]">MNEE</span>
           </p>
           {liveBalance !== null && (
-            <p className="text-xs text-green-500 mt-1">Live from chain</p>
+            <p className="text-xs text-emerald-400 mt-1">Live from chain</p>
           )}
           {error && (
             <p className="text-xs text-red-400 mt-1">{error}</p>
           )}
           {debugInfo && (
-            <p className="text-xs text-gray-500 mt-1 font-mono">{debugInfo}</p>
+            <p className="text-xs text-[#666] mt-1 font-mono">{debugInfo}</p>
           )}
         </div>
         
-        <div className="bg-gray-800 rounded-lg p-4">
-          <p className="text-gray-400 text-sm">Contract</p>
+        <div className="bg-[#1a1a1a] rounded-lg p-4">
+          <p className="text-[#888] text-sm">Contract</p>
           <a 
             href={`https://${network === "mainnet" ? "" : "sepolia."}etherscan.io/address/${treasury.contractAddress}`}
             target="_blank"
@@ -476,12 +483,12 @@ function DepositSection({
   const isLoading = step === "approving" || step === "depositing" || isApprovePending || isDepositPending;
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+    <div className="bg-[#111] border border-[#333] rounded-xl p-6">
       <h2 className="text-xl font-semibold text-white mb-4">Deposit MNEE</h2>
       
       <div className="space-y-4">
         <div>
-          <label className="block text-sm text-gray-400 mb-2">Amount</label>
+          <label className="block text-sm text-[#888] mb-2">Amount</label>
           <div className="relative">
             <input
               type="number"
@@ -489,7 +496,7 @@ function DepositSection({
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0.00"
               disabled={isLoading}
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50"
+              className="w-full bg-[#0a0a0a] border border-[#333] rounded-lg px-4 py-3 text-white placeholder-[#666] focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:opacity-50"
             />
             <button
               onClick={() => mneeBalance && setAmount(formatUnits(mneeBalance.value, 18))}
@@ -500,7 +507,7 @@ function DepositSection({
             </button>
           </div>
           {mneeBalance && (
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-[#666] mt-1">
               Available: {parseFloat(formatUnits(mneeBalance.value, 18)).toFixed(2)} MNEE
             </p>
           )}
@@ -509,7 +516,7 @@ function DepositSection({
         <button
           onClick={handleDeposit}
           disabled={!amount || parseFloat(amount) <= 0 || isLoading}
-          className="w-full py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium transition-colors"
+          className="w-full py-3 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:bg-[#1a1a1a] disabled:cursor-not-allowed text-white font-medium transition-colors"
         >
           {isLoading ? (
             <span className="flex items-center justify-center gap-2">
@@ -525,13 +532,13 @@ function DepositSection({
         </button>
         
         {step === "success" && (
-          <div className="p-3 bg-green-500/20 border border-green-500/50 rounded-lg">
-            <p className="text-green-400 text-sm text-center">Deposit successful!</p>
+          <div className="p-3 bg-emerald-900/30 border border-emerald-900/50 rounded-lg">
+            <p className="text-emerald-400 text-sm text-center">Deposit successful!</p>
           </div>
         )}
         
         {error && (
-          <div className="p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
+          <div className="p-3 bg-red-900/30 border border-red-900/50 rounded-lg">
             <p className="text-red-400 text-sm text-center">{error}</p>
           </div>
         )}
@@ -563,23 +570,23 @@ function ApiKeyLimitsSection({
   const agentKeys = apiKeys.filter(k => k.apiKeyHash); // Only keys with hash
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+    <div className="bg-[#111] border border-[#333] rounded-xl p-6">
       <h2 className="text-xl font-semibold text-white mb-4">API Key Spending Limits</h2>
-      <p className="text-gray-400 text-sm mb-4">
+      <p className="text-[#888] text-sm mb-4">
         Configure on-chain spending limits for each API key. These limits are enforced by the treasury smart contract.
       </p>
       
       {agentKeys.length === 0 ? (
-        <div className="text-center py-8 bg-gray-800 rounded-lg">
-          <p className="text-gray-400">No API keys with treasury access.</p>
-          <p className="text-sm text-gray-500 mt-1">Create an agent API key first.</p>
+        <div className="text-center py-8 bg-[#1a1a1a] rounded-lg">
+          <p className="text-[#888]">No API keys with treasury access.</p>
+          <p className="text-sm text-[#666] mt-1">Create an agent API key first.</p>
         </div>
       ) : (
         <div className="space-y-4">
           <select
             value={selectedKey || ""}
             onChange={(e) => setSelectedKey(e.target.value)}
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white"
+            className="w-full bg-[#0a0a0a] border border-[#333] rounded-lg px-4 py-2 text-white"
           >
             <option value="">Select an API key...</option>
             {agentKeys.map((key) => (
@@ -592,32 +599,32 @@ function ApiKeyLimitsSection({
           {selectedKey && (
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Per Transaction</label>
+                <label className="block text-sm text-[#888] mb-1">Per Transaction</label>
                 <input
                   type="number"
                   value={limits.maxPerTransaction}
                   onChange={(e) => setLimits(l => ({ ...l, maxPerTransaction: e.target.value }))}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
+                  className="w-full bg-[#0a0a0a] border border-[#333] rounded-lg px-3 py-2 text-white text-sm"
                   placeholder="0 = unlimited"
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Daily Limit</label>
+                <label className="block text-sm text-[#888] mb-1">Daily Limit</label>
                 <input
                   type="number"
                   value={limits.dailyLimit}
                   onChange={(e) => setLimits(l => ({ ...l, dailyLimit: e.target.value }))}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
+                  className="w-full bg-[#0a0a0a] border border-[#333] rounded-lg px-3 py-2 text-white text-sm"
                   placeholder="0 = unlimited"
                 />
               </div>
               <div>
-                <label className="block text-sm text-gray-400 mb-1">Monthly Limit</label>
+                <label className="block text-sm text-[#888] mb-1">Monthly Limit</label>
                 <input
                   type="number"
                   value={limits.monthlyLimit}
                   onChange={(e) => setLimits(l => ({ ...l, monthlyLimit: e.target.value }))}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm"
+                  className="w-full bg-[#0a0a0a] border border-[#333] rounded-lg px-3 py-2 text-white text-sm"
                   placeholder="0 = unlimited"
                 />
               </div>
@@ -703,9 +710,9 @@ function DeployOrSyncTreasurySection({
 
   if (checking) {
     return (
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+      <div className="bg-[#111] border border-[#333] rounded-xl p-8 text-center">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-500 mx-auto mb-4" />
-        <p className="text-gray-400">Checking for existing treasury...</p>
+        <p className="text-[#888]">Checking for existing treasury...</p>
       </div>
     );
   }
@@ -713,20 +720,20 @@ function DeployOrSyncTreasurySection({
   // If treasury exists on-chain but not in database, show sync option
   if (existingTreasury) {
     return (
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
+      <div className="bg-[#111] border border-[#333] rounded-xl p-8 text-center">
         <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
           <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
         </div>
         <h3 className="text-xl font-semibold text-white mb-2">Treasury Found On-Chain</h3>
-        <p className="text-gray-400 mb-4 max-w-md mx-auto">
+        <p className="text-[#888] mb-4 max-w-md mx-auto">
           A treasury for this workspace already exists on {network === "mainnet" ? "Ethereum Mainnet" : "Sepolia"}.
         </p>
         
-        <div className="bg-gray-800 rounded-lg p-4 mb-6 text-left max-w-sm mx-auto">
+        <div className="bg-[#1a1a1a] rounded-lg p-4 mb-6 text-left max-w-sm mx-auto">
           <div className="flex justify-between text-sm">
-            <span className="text-gray-400">Contract</span>
+            <span className="text-[#888]">Contract</span>
             <a 
               href={`https://${network === "mainnet" ? "" : "sepolia."}etherscan.io/address/${existingTreasury}`}
               target="_blank"
@@ -741,7 +748,7 @@ function DeployOrSyncTreasurySection({
         <button
           onClick={handleSync}
           disabled={syncing}
-          className="px-6 py-3 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium transition-colors"
+          className="px-6 py-3 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:bg-[#1a1a1a] disabled:cursor-not-allowed text-white font-medium transition-colors"
         >
           {syncing ? (
             <span className="flex items-center justify-center gap-2">
@@ -757,7 +764,7 @@ function DeployOrSyncTreasurySection({
         </button>
         
         {syncError && (
-          <div className="mt-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
+          <div className="mt-4 p-3 bg-red-900/30 border border-red-900/50 rounded-lg">
             <p className="text-red-400 text-sm">{syncError}</p>
           </div>
         )}
@@ -881,25 +888,25 @@ function DeployTreasurySection({
   };
 
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-green-500 to-teal-500 flex items-center justify-center">
+    <div className="bg-[#111] border border-[#333] rounded-xl p-8 text-center">
+      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center">
         <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
         </svg>
       </div>
       <h3 className="text-xl font-semibold text-white mb-2">Deploy Treasury Contract</h3>
-      <p className="text-gray-400 mb-6 max-w-md mx-auto">
+      <p className="text-[#888] mb-6 max-w-md mx-auto">
         Deploy a new treasury contract for {network === "mainnet" ? "Ethereum Mainnet" : "Sepolia Testnet"}. 
         This is a one-time operation per network.
       </p>
       
-      <div className="bg-gray-800 rounded-lg p-4 mb-6 text-left max-w-sm mx-auto">
+      <div className="bg-[#1a1a1a] rounded-lg p-4 mb-6 text-left max-w-sm mx-auto">
         <div className="flex justify-between text-sm mb-2">
-          <span className="text-gray-400">Network</span>
+          <span className="text-[#888]">Network</span>
           <span className="text-white">{network === "mainnet" ? "Ethereum" : "Sepolia"}</span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-gray-400">Admin</span>
+          <span className="text-[#888]">Admin</span>
           <span className="text-white font-mono text-xs truncate ml-2">{adminAddress}</span>
         </div>
       </div>
@@ -907,7 +914,7 @@ function DeployTreasurySection({
       <button
         onClick={handleDeploy}
         disabled={isPending || isConfirming || !contracts.treasuryFactory}
-        className="px-6 py-3 rounded-lg bg-green-600 hover:bg-green-700 disabled:bg-gray-700 disabled:cursor-not-allowed text-white font-medium transition-colors"
+        className="px-6 py-3 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:bg-[#1a1a1a] disabled:cursor-not-allowed text-white font-medium transition-colors"
       >
         {isPending || isConfirming ? (
           <span className="flex items-center justify-center gap-2">
@@ -925,13 +932,13 @@ function DeployTreasurySection({
       </button>
       
       {isSuccess && savedToDb && (
-        <div className="mt-4 p-3 bg-green-500/20 border border-green-500/50 rounded-lg">
-          <p className="text-green-400 text-sm">Treasury deployed and saved successfully!</p>
+        <div className="mt-4 p-3 bg-emerald-900/30 border border-emerald-900/50 rounded-lg">
+          <p className="text-emerald-400 text-sm">Treasury deployed and saved successfully!</p>
         </div>
       )}
       
       {error && (
-        <div className="mt-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg">
+        <div className="mt-4 p-3 bg-red-900/30 border border-red-900/50 rounded-lg">
           <p className="text-red-400 text-sm">{error}</p>
         </div>
       )}
@@ -947,34 +954,34 @@ function QuickStats({
   network: EthereumNetwork;
 }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+    <div className="bg-[#111] border border-[#333] rounded-xl p-6">
       <h3 className="text-lg font-semibold text-white mb-4">Quick Stats</h3>
       
       <div className="space-y-4">
         <div className="flex justify-between items-center">
-          <span className="text-gray-400">Network</span>
+          <span className="text-[#888]">Network</span>
           <span className="text-white">{network === "mainnet" ? "Mainnet" : "Sepolia"}</span>
         </div>
         
         <div className="flex justify-between items-center">
-          <span className="text-gray-400">Treasury Status</span>
-          <span className={treasury?.status === "active" ? "text-green-400" : "text-gray-400"}>
+          <span className="text-[#888]">Treasury Status</span>
+          <span className={treasury?.status === "active" ? "text-emerald-400" : "text-[#888]"}>
             {treasury?.status || "Not deployed"}
           </span>
         </div>
         
         <div className="flex justify-between items-center">
-          <span className="text-gray-400">Balance</span>
+          <span className="text-[#888]">Balance</span>
           <span className="text-white font-mono">
             {(treasury?.cachedBalance || 0).toFixed(2)} MNEE
           </span>
         </div>
         
-        <div className="border-t border-gray-800 my-4" />
+        <div className="border-t border-[#333] my-4" />
         
         <div className="flex justify-between items-center">
-          <span className="text-gray-400">Custody Model</span>
-          <span className="text-green-400 text-sm">Non-Custodial ✓</span>
+          <span className="text-[#888]">Custody Model</span>
+          <span className="text-emerald-400 text-sm">Non-Custodial ✓</span>
         </div>
       </div>
     </div>
@@ -983,9 +990,9 @@ function QuickStats({
 
 function InfoPanel() {
   return (
-    <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/50 border border-indigo-700/50 rounded-xl p-6">
+    <div className="bg-gradient-to-br from-indigo-900/30 to-purple-900/30 border border-indigo-900/50 rounded-xl p-6">
       <h3 className="text-lg font-semibold text-white mb-3">About Treasury</h3>
-      <ul className="space-y-2 text-sm text-gray-300">
+      <ul className="space-y-2 text-sm text-[#ccc]">
         <li className="flex items-start gap-2">
           <span className="text-indigo-400">✓</span>
           <span>You maintain full control of your funds</span>

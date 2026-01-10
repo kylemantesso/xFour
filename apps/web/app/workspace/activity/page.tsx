@@ -425,9 +425,15 @@ function PaymentRow({ payment }: { payment: PaymentData }) {
             {payment.txHash && (
               <div className="col-span-1 sm:col-span-2 md:col-span-2">
                 <p className="text-[#666] mb-1">Transaction</p>
-                <p className="text-violet-400 font-mono text-xs break-all">
+                <a
+                  href={`https://${payment.network === "mainnet" ? "" : "sepolia."}etherscan.io/tx/${payment.txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-violet-400 hover:text-violet-300 font-mono text-xs break-all inline-flex items-center gap-2 group transition-colors"
+                >
                   {payment.txHash}
-                </p>
+                  <ExternalLinkIcon className="w-3 h-3 flex-shrink-0 opacity-60 group-hover:opacity-100" />
+                </a>
               </div>
             )}
 
@@ -939,6 +945,19 @@ function ChevronRightIcon({ className }: { className?: string }) {
         strokeLinejoin="round"
         strokeWidth={2}
         d="M9 5l7 7-7 7"
+      />
+    </svg>
+  );
+}
+
+function ExternalLinkIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth={2}
+        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
       />
     </svg>
   );

@@ -182,6 +182,7 @@ function CreateApiKeyButton({
   const [monthlyLimit, setMonthlyLimit] = useState("");
   const [showLimits, setShowLimits] = useState(false);
   const createApiKey = useMutation(api.apiKeys.createApiKey);
+  const markSynced = useMutation(api.apiKeys.markSpendingLimitsSynced);
   const toast = useToast();
 
   // Set default treasury when treasuries load
@@ -215,7 +216,7 @@ function CreateApiKeyButton({
       });
 
       // Auto-configure API key on-chain
-      if (selectedTreasury) {
+      if (selectedTreasury && spendingLimits) {
         try {
           console.log("Auto-configuring API key on Treasury contract...");
           const configResponse = await fetch("/api/treasury/configure-api-key", {
@@ -225,23 +226,22 @@ function CreateApiKeyButton({
               apiKey: result.apiKey,
               treasuryAddress: selectedTreasury.contractAddress,
               network: selectedTreasury.network,
-              spendingLimits: spendingLimits || {
-                maxPerTransaction: 100,  // Default: 100 MNEE
-                dailyLimit: 1000,        // Default: 1000 MNEE/day
-                monthlyLimit: 10000,     // Default: 10000 MNEE/month
-              },
+              spendingLimits: spendingLimits,
             }),
           });
           const configResult = await configResponse.json();
           if (configResult.status === "ok") {
             console.log("✅ API key configured on-chain:", configResult.txHash || "already configured");
+            // Mark as synced in the database
+            await markSynced({ apiKeyId: result.apiKeyId });
+            toast.success("API key created and synced on-chain!");
           } else {
             console.warn("⚠️ Failed to configure on-chain:", configResult.error);
-            toast.warning("API key created but on-chain sync failed. You may need to sync manually.");
+            toast.warning("API key created but on-chain sync failed. Click 'Sync on-chain' to retry.");
           }
         } catch (syncError) {
           console.error("Failed to sync API key on-chain:", syncError);
-          toast.warning("API key created but on-chain sync failed. You may need to sync manually.");
+          toast.warning("API key created but on-chain sync failed. Click 'Sync on-chain' to retry.");
         }
       }
 
@@ -692,7 +692,12 @@ function ApiKeysList({
               </div>
 
                 {/* Spending Limits Editor */}
-                <PolicyEditor apiKeyId={apiKey._id} spendingLimits={apiKey.spendingLimits} canManage={canManage} />
+                <PolicyEditor 
+                  apiKeyId={apiKey._id} 
+                  spendingLimits={apiKey.spendingLimits} 
+                  canManage={canManage} 
+                  treasuryId={apiKey.treasuryId}
+                />
 
                 {/* Actions */}
               {canManage && (
@@ -744,6 +749,7 @@ function PolicyEditor({
   apiKeyId,
   spendingLimits,
   canManage,
+  treasuryId,
 }: {
   apiKeyId: Id<"apiKeys">;
   spendingLimits?: {
@@ -753,8 +759,15 @@ function PolicyEditor({
     isSyncedOnChain?: boolean;
   };
   canManage: boolean;
+  treasuryId?: Id<"treasuries">;
 }) {
   const updateApiKey = useMutation(api.apiKeys.updateApiKey);
+  const markSynced = useMutation(api.apiKeys.markSpendingLimitsSynced);
+  const treasury = useQuery(
+    api.treasuries.getTreasuryById,
+    treasuryId ? { treasuryId } : "skip"
+  );
+  const apiKeyData = useQuery(api.apiKeys.getApiKey, { apiKeyId });
   const toast = useToast();
 
   const [isEditing, setIsEditing] = useState(false);
@@ -762,6 +775,7 @@ function PolicyEditor({
   const [dailyLimit, setDailyLimit] = useState("");
   const [monthlyLimit, setMonthlyLimit] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     if (spendingLimits) {
@@ -782,7 +796,7 @@ function PolicyEditor({
           monthlyLimit: monthlyLimit ? parseFloat(monthlyLimit) : 0,
         },
       });
-      toast.success("Spending limits saved. Remember to sync on-chain!");
+      toast.success("Spending limits saved");
       setIsEditing(false);
     } catch {
       toast.error("Failed to save spending limits");
@@ -791,21 +805,92 @@ function PolicyEditor({
     }
   };
 
+  const handleSyncOnChain = async () => {
+    if (!treasury || !apiKeyData || !spendingLimits) {
+      toast.error("Missing treasury or API key data");
+      return;
+    }
+
+    setIsSyncing(true);
+    try {
+      const response = await fetch("/api/treasury/configure-api-key", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiKey: apiKeyData.apiKey,
+          treasuryAddress: treasury.contractAddress,
+          network: treasury.network,
+          spendingLimits: {
+            maxPerTransaction: spendingLimits.maxPerTransaction / 100, // Convert from cents to MNEE
+            dailyLimit: spendingLimits.dailyLimit / 100,
+            monthlyLimit: spendingLimits.monthlyLimit / 100,
+          },
+        }),
+      });
+
+      const result = await response.json();
+
+      if (result.status === "ok") {
+        // Mark as synced in the database
+        await markSynced({ apiKeyId });
+        toast.success(result.alreadyConfigured 
+          ? "API key already configured on-chain" 
+          : "Spending limits synced on-chain!"
+        );
+      } else {
+        toast.error(result.error || "Failed to sync on-chain");
+      }
+    } catch (error) {
+      console.error("Sync error:", error);
+      toast.error("Failed to sync on-chain");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const needsSync = spendingLimits && !spendingLimits.isSyncedOnChain;
+
     return (
     <div className="pt-4 space-y-3">
       <div className="flex items-center justify-between">
         <h4 className="text-sm font-medium text-white">Spending Limits</h4>
-        {canManage && !isEditing && (
-        <button
-            onClick={() => setIsEditing(true)}
-            className="text-xs text-[#888] hover:text-white transition-colors"
-        >
-            Edit
-        </button>
-        )}
-        {spendingLimits && !spendingLimits.isSyncedOnChain && (
-          <span className="text-xs text-amber-400">Not synced on-chain</span>
-        )}
+        <div className="flex items-center gap-3">
+          {canManage && !isEditing && (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="text-xs text-[#888] hover:text-white transition-colors"
+            >
+              Edit
+            </button>
+          )}
+          {needsSync && treasuryId && (
+            <button
+              onClick={handleSyncOnChain}
+              disabled={isSyncing || !apiKeyData}
+              className="text-xs text-amber-400 hover:text-amber-300 transition-colors disabled:opacity-50 flex items-center gap-1"
+            >
+              {isSyncing ? (
+                <>
+                  <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Syncing...
+                </>
+              ) : (
+                "Sync on-chain"
+              )}
+            </button>
+          )}
+          {spendingLimits?.isSyncedOnChain && (
+            <span className="text-xs text-emerald-400 flex items-center gap-1">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              Synced
+            </span>
+          )}
+        </div>
       </div>
 
       {isEditing ? (

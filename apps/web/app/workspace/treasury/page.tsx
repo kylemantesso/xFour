@@ -55,6 +55,10 @@ export default function TreasuryPage() {
   // Selected network
   const [selectedNetwork, setSelectedNetwork] = useState<EthereumNetwork>("sepolia");
   
+  // Trigger for refreshing treasury balance after deposit
+  const [balanceRefreshKey, setBalanceRefreshKey] = useState(0);
+  const handleDepositSuccess = () => setBalanceRefreshKey(k => k + 1);
+  
   // Treasury state (would come from Convex query)
   const treasuries = useQuery(
     api.treasuries.listTreasuries,
@@ -130,10 +134,16 @@ export default function TreasuryPage() {
                 <TreasuryOverview 
                   treasury={currentTreasury} 
                   network={selectedNetwork}
+                  refreshKey={balanceRefreshKey}
+                />
+                <GatewayAdminSection
+                  treasuryAddress={currentTreasury.contractAddress as Address}
+                  network={selectedNetwork}
                 />
                 <DepositSection 
                   treasuryAddress={currentTreasury.contractAddress as Address}
                   network={selectedNetwork}
+                  onDepositSuccess={handleDepositSuccess}
                 />
                 <ApiKeyLimitsSection 
                   treasuryAddress={currentTreasury.contractAddress as Address}
@@ -156,6 +166,17 @@ export default function TreasuryPage() {
             <InfoPanel />
           </div>
         </div>
+
+        {/* Transaction History - Full Width */}
+        {currentTreasury && (
+          <div className="mt-6">
+            <TransactionHistory 
+              treasuryAddress={currentTreasury.contractAddress as Address}
+              network={selectedNetwork}
+              refreshKey={balanceRefreshKey}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -220,16 +241,19 @@ function NetworkSwitchPrompt({
 
 function TreasuryOverview({ 
   treasury, 
-  network 
+  network,
+  refreshKey = 0,
 }: { 
   treasury: { contractAddress: string; cachedBalance?: number; status: string };
   network: EthereumNetwork;
+  refreshKey?: number;
 }) {
   const { chain } = useAccount();
   const publicClient = usePublicClient({ chainId: CHAIN_IDS[network] });
   const contracts = getContractAddresses(network);
   const [liveBalance, setLiveBalance] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<string>("");
 
@@ -289,14 +313,15 @@ function TreasuryOverview({
       setDebugInfo(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setIsRefreshing(false);
+      setIsInitialLoading(false);
     }
   };
 
-  // Fetch balance on mount and when treasury changes
+  // Fetch balance on mount, when treasury changes, or when refreshKey updates (after deposit)
   useEffect(() => {
     fetchBalance();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [treasury.contractAddress, publicClient, network]);
+  }, [treasury.contractAddress, publicClient, network, refreshKey]);
 
   const displayBalance = liveBalance !== null 
     ? parseFloat(liveBalance).toFixed(4) 
@@ -321,23 +346,32 @@ function TreasuryOverview({
             <p className="text-[#888] text-sm">Balance</p>
             <button 
               onClick={fetchBalance}
-              disabled={isRefreshing}
+              disabled={isRefreshing || isInitialLoading}
               className="text-xs text-indigo-400 hover:text-indigo-300 disabled:opacity-50"
             >
               {isRefreshing ? "..." : "↻ Refresh"}
             </button>
           </div>
-          <p className="text-2xl font-bold text-white mt-1">
-            {displayBalance} <span className="text-lg text-[#888]">MNEE</span>
-          </p>
-          {liveBalance !== null && (
-            <p className="text-xs text-emerald-400 mt-1">Live from chain</p>
-          )}
-          {error && (
-            <p className="text-xs text-red-400 mt-1">{error}</p>
-          )}
-          {debugInfo && (
-            <p className="text-xs text-[#666] mt-1 font-mono">{debugInfo}</p>
+          {isInitialLoading ? (
+            <div className="mt-1 space-y-2">
+              <div className="h-8 w-32 bg-[#333] rounded animate-pulse" />
+              <div className="h-4 w-24 bg-[#333] rounded animate-pulse" />
+            </div>
+          ) : (
+            <>
+              <p className="text-2xl font-bold text-white mt-1">
+                {displayBalance} <span className="text-lg text-[#888]">MNEE</span>
+              </p>
+              {liveBalance !== null && (
+                <p className="text-xs text-emerald-400 mt-1">Live from chain</p>
+              )}
+              {error && (
+                <p className="text-xs text-red-400 mt-1">{error}</p>
+              )}
+              {debugInfo && (
+                <p className="text-xs text-[#666] mt-1 font-mono">{debugInfo}</p>
+              )}
+            </>
           )}
         </div>
         
@@ -357,12 +391,160 @@ function TreasuryOverview({
   );
 }
 
+// Gateway address - must match GATEWAY_PRIVATE_KEY in .env
+const GATEWAY_ADDRESS = "0xD795B7De0F5d068980318cf614ffcdF5591f2433" as Address;
+
+function GatewayAdminSection({
+  treasuryAddress,
+  network,
+}: {
+  treasuryAddress: Address;
+  network: EthereumNetwork;
+}) {
+  const publicClient = usePublicClient({ chainId: CHAIN_IDS[network] });
+  const [hasAdminRole, setHasAdminRole] = useState<boolean | null>(null);
+  const [isChecking, setIsChecking] = useState(true);
+  const [adminRole, setAdminRole] = useState<`0x${string}` | null>(null);
+
+  const {
+    writeContract: writeGrantRole,
+    data: grantTxHash,
+    isPending: isGrantPending,
+  } = useWriteContract();
+
+  const { isSuccess: isGrantSuccess } = useWaitForTransactionReceipt({
+    hash: grantTxHash,
+  });
+
+  // Check if gateway has admin role
+  const checkAdminRole = async () => {
+    if (!publicClient) return;
+    
+    setIsChecking(true);
+    try {
+      // Get the ADMIN_ROLE bytes32
+      const role = await publicClient.readContract({
+        address: treasuryAddress,
+        abi: TREASURY_ABI,
+        functionName: "ADMIN_ROLE",
+      }) as `0x${string}`;
+      setAdminRole(role);
+
+      // Check if gateway has this role
+      const hasRole = await publicClient.readContract({
+        address: treasuryAddress,
+        abi: TREASURY_ABI,
+        functionName: "hasRole",
+        args: [role, GATEWAY_ADDRESS],
+      }) as boolean;
+      
+      setHasAdminRole(hasRole);
+    } catch (err) {
+      console.error("Error checking gateway admin role:", err);
+      setHasAdminRole(false);
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  useEffect(() => {
+    checkAdminRole();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [treasuryAddress, publicClient]);
+
+  // Re-check after successful grant
+  useEffect(() => {
+    if (isGrantSuccess) {
+      checkAdminRole();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isGrantSuccess]);
+
+  const handleGrantRole = () => {
+    if (!adminRole) return;
+    
+    writeGrantRole({
+      address: treasuryAddress,
+      abi: TREASURY_ABI,
+      functionName: "grantRole",
+      args: [adminRole, GATEWAY_ADDRESS],
+    });
+  };
+
+  // Don't show anything if gateway already has admin role
+  if (hasAdminRole === true) {
+    return null;
+  }
+
+  // Show loading state
+  if (isChecking || hasAdminRole === null) {
+    return (
+      <div className="bg-[#111] border border-[#333] rounded-xl p-4">
+        <div className="flex items-center gap-3">
+          <div className="animate-spin h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full" />
+          <span className="text-[#888] text-sm">Checking gateway permissions...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Show prompt to grant admin role
+  return (
+    <div className="bg-amber-900/20 border border-amber-900/50 rounded-xl p-4">
+      <div className="flex items-start gap-4">
+        <div className="p-2 rounded-lg bg-amber-500/20 flex-shrink-0">
+          <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <div className="flex-1">
+          <h3 className="text-sm font-semibold text-amber-400">Enable Automatic API Key Configuration</h3>
+          <p className="text-xs text-[#888] mt-1">
+            To automatically configure API key spending limits on-chain when creating keys, the x402 gateway needs admin permissions on your treasury.
+          </p>
+          <div className="mt-2 p-2 bg-[#0a0a0a] rounded-lg">
+            <p className="text-xs text-[#666] font-mono">
+              Gateway: {GATEWAY_ADDRESS.slice(0, 10)}...{GATEWAY_ADDRESS.slice(-8)}
+            </p>
+          </div>
+          <button
+            onClick={handleGrantRole}
+            disabled={isGrantPending}
+            className="mt-3 px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-sm font-medium transition-colors flex items-center gap-2"
+          >
+            {isGrantPending ? (
+              <>
+                <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                Granting Access...
+              </>
+            ) : grantTxHash ? (
+              <>
+                <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                Confirming...
+              </>
+            ) : (
+              "Grant Gateway Admin Access"
+            )}
+          </button>
+          {grantTxHash && !isGrantSuccess && (
+            <p className="text-xs text-[#888] mt-2">
+              Transaction: {grantTxHash.slice(0, 10)}...
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DepositSection({ 
   treasuryAddress, 
-  network 
+  network,
+  onDepositSuccess,
 }: { 
   treasuryAddress: Address;
   network: EthereumNetwork;
+  onDepositSuccess?: () => void;
 }) {
   const { address } = useAccount();
   const [amount, setAmount] = useState("");
@@ -432,6 +614,8 @@ function DepositSection({
       setStep("success");
       setAmount("");
       refetchBalance();
+      // Trigger treasury balance refresh
+      onDepositSuccess?.();
       // Reset after a moment
       setTimeout(() => {
         setStep("idle");
@@ -439,7 +623,7 @@ function DepositSection({
         resetDeposit();
       }, 3000);
     }
-  }, [isDepositSuccess, step, refetchBalance, resetApprove, resetDeposit, depositTxHash]);
+  }, [isDepositSuccess, step, refetchBalance, resetApprove, resetDeposit, depositTxHash, onDepositSuccess]);
 
   const handleDeposit = async () => {
     if (!amount || parseFloat(amount) <= 0) return;
@@ -1012,6 +1196,259 @@ function InfoPanel() {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
       </a>
+    </div>
+  );
+}
+
+type Transaction = {
+  hash: string;
+  type: "deposit" | "withdrawal" | "payment";
+  amount: string;
+  from: string;
+  to: string;
+  timestamp: number;
+  blockNumber: bigint;
+};
+
+function TransactionHistory({ 
+  treasuryAddress, 
+  network,
+  refreshKey = 0,
+}: { 
+  treasuryAddress: Address;
+  network: EthereumNetwork;
+  refreshKey?: number;
+}) {
+  const publicClient = usePublicClient({ chainId: CHAIN_IDS[network] });
+  const contracts = getContractAddresses(network);
+  const [transactions, setTransactions] = useState<Array<Transaction>>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const explorerUrl = network === "mainnet" 
+    ? "https://etherscan.io" 
+    : "https://sepolia.etherscan.io";
+
+  useEffect(() => {
+    async function fetchTransactions() {
+      if (!publicClient || !contracts.mneeToken) {
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        // Get current block number
+        const currentBlock = await publicClient.getBlockNumber();
+        // Look back ~7 days worth of blocks (assuming ~12s per block)
+        const fromBlock = currentBlock - BigInt(50400); // ~7 days
+
+        // Get incoming transfers (deposits)
+        const incomingLogs = await publicClient.getLogs({
+          address: contracts.mneeToken as Address,
+          event: {
+            type: "event",
+            name: "Transfer",
+            inputs: [
+              { type: "address", indexed: true, name: "from" },
+              { type: "address", indexed: true, name: "to" },
+              { type: "uint256", indexed: false, name: "value" },
+            ],
+          },
+          args: {
+            to: treasuryAddress,
+          },
+          fromBlock: fromBlock > BigInt(0) ? fromBlock : BigInt(0),
+          toBlock: "latest",
+        });
+
+        // Get outgoing transfers (withdrawals/payments)
+        const outgoingLogs = await publicClient.getLogs({
+          address: contracts.mneeToken as Address,
+          event: {
+            type: "event",
+            name: "Transfer",
+            inputs: [
+              { type: "address", indexed: true, name: "from" },
+              { type: "address", indexed: true, name: "to" },
+              { type: "uint256", indexed: false, name: "value" },
+            ],
+          },
+          args: {
+            from: treasuryAddress,
+          },
+          fromBlock: fromBlock > BigInt(0) ? fromBlock : BigInt(0),
+          toBlock: "latest",
+        });
+
+        // Combine and process logs
+        const allLogs = [...incomingLogs, ...outgoingLogs];
+        
+        // Get block timestamps for each unique block
+        const blockNumbers = [...new Set(allLogs.map(log => log.blockNumber))];
+        const blockTimestamps: Record<string, number> = {};
+        
+        await Promise.all(
+          blockNumbers.map(async (blockNum) => {
+            if (blockNum) {
+              const block = await publicClient.getBlock({ blockNumber: blockNum });
+              blockTimestamps[blockNum.toString()] = Number(block.timestamp) * 1000;
+            }
+          })
+        );
+
+        // Transform logs into transactions
+        const txs: Array<Transaction> = allLogs.map(log => {
+          const from = log.args.from as string;
+          const to = log.args.to as string;
+          const value = log.args.value as bigint;
+          const isIncoming = to.toLowerCase() === treasuryAddress.toLowerCase();
+          
+          return {
+            hash: log.transactionHash || "",
+            type: isIncoming ? "deposit" : "withdrawal",
+            amount: formatUnits(value, 18),
+            from,
+            to,
+            timestamp: blockTimestamps[log.blockNumber?.toString() || ""] || 0,
+            blockNumber: log.blockNumber || BigInt(0),
+          };
+        });
+
+        // Sort by block number descending (most recent first)
+        txs.sort((a, b) => Number(b.blockNumber - a.blockNumber));
+
+        setTransactions(txs);
+      } catch (err) {
+        console.error("Failed to fetch transactions:", err);
+        setError("Failed to load transaction history");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    fetchTransactions();
+  }, [publicClient, treasuryAddress, contracts.mneeToken, refreshKey]);
+
+  const formatAddress = (addr: string) => {
+    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  };
+
+  const formatDate = (timestamp: number) => {
+    if (!timestamp) return "—";
+    return new Date(timestamp).toLocaleString();
+  };
+
+  return (
+    <div className="bg-[#111] border border-[#333] rounded-xl p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-semibold text-white">Transaction History</h2>
+        <span className="text-xs text-[#666]">Last 7 days</span>
+      </div>
+
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-500" />
+        </div>
+      ) : error ? (
+        <div className="text-center py-12">
+          <p className="text-red-400">{error}</p>
+        </div>
+      ) : transactions.length === 0 ? (
+        <div className="text-center py-12">
+          <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-[#1a1a1a] flex items-center justify-center">
+            <svg className="w-6 h-6 text-[#666]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+          </div>
+          <p className="text-[#888]">No transactions yet</p>
+          <p className="text-sm text-[#666] mt-1">Deposit MNEE to see transactions here</p>
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="text-left text-sm text-[#888] border-b border-[#333]">
+                <th className="pb-3 font-medium">Type</th>
+                <th className="pb-3 font-medium">Amount</th>
+                <th className="pb-3 font-medium">From</th>
+                <th className="pb-3 font-medium">To</th>
+                <th className="pb-3 font-medium">Date</th>
+                <th className="pb-3 font-medium text-right">Transaction</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#222]">
+              {transactions.map((tx, index) => (
+                <tr key={`${tx.hash}-${index}`} className="hover:bg-[#1a1a1a] transition-colors">
+                  <td className="py-4">
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                      tx.type === "deposit" 
+                        ? "bg-emerald-900/30 text-emerald-400" 
+                        : "bg-orange-900/30 text-orange-400"
+                    }`}>
+                      {tx.type === "deposit" ? (
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                        </svg>
+                      ) : (
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                        </svg>
+                      )}
+                      {tx.type === "deposit" ? "Deposit" : "Withdrawal"}
+                    </span>
+                  </td>
+                  <td className="py-4">
+                    <span className={`font-mono text-sm ${
+                      tx.type === "deposit" ? "text-emerald-400" : "text-orange-400"
+                    }`}>
+                      {tx.type === "deposit" ? "+" : "-"}{parseFloat(tx.amount).toFixed(4)} MNEE
+                    </span>
+                  </td>
+                  <td className="py-4">
+                    <a 
+                      href={`${explorerUrl}/address/${tx.from}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-sm text-[#888] hover:text-indigo-400 transition-colors"
+                    >
+                      {formatAddress(tx.from)}
+                    </a>
+                  </td>
+                  <td className="py-4">
+                    <a 
+                      href={`${explorerUrl}/address/${tx.to}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-sm text-[#888] hover:text-indigo-400 transition-colors"
+                    >
+                      {formatAddress(tx.to)}
+                    </a>
+                  </td>
+                  <td className="py-4 text-sm text-[#888]">
+                    {formatDate(tx.timestamp)}
+                  </td>
+                  <td className="py-4 text-right">
+                    <a 
+                      href={`${explorerUrl}/tx/${tx.hash}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
+                    >
+                      View
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                      </svg>
+                    </a>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

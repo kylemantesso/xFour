@@ -213,6 +213,42 @@ export const TREASURY_ABI = [
     stateMutability: "nonpayable",
     type: "function",
   },
+  // AccessControl functions
+  {
+    inputs: [],
+    name: "ADMIN_ROLE",
+    outputs: [{ name: "", type: "bytes32" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "GATEWAY_ROLE",
+    outputs: [{ name: "", type: "bytes32" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "role", type: "bytes32" }, { name: "account", type: "address" }],
+    name: "hasRole",
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "role", type: "bytes32" }, { name: "account", type: "address" }],
+    name: "grantRole",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "role", type: "bytes32" }, { name: "account", type: "address" }],
+    name: "revokeRole",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
 ] as const;
 
 export const X402_GATEWAY_ABI = [

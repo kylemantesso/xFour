@@ -38,158 +38,17 @@ export function LandingPage() {
 
 function HeroSection() {
   const stats = useQuery(api.payments.getPublicStats);
-  const timeline = useQuery(api.payments.getPublicActivityTimeline, { windowSeconds: 60 });
   const isLoading = stats === undefined;
   const displayValue = stats?.totalPayments ?? 0;
-  
-  // Current time for scrolling animation
-  const [currentTime, setCurrentTime] = useState(Date.now());
-  
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(Date.now());
-    }, 50);
-    return () => clearInterval(interval);
-  }, []);
-  
-  const windowMs = 60 * 1000;
-  const events = timeline?.events ?? [];
-  const maxAmount = timeline?.maxAmount ?? 0.02;
 
   return (
     <section className="relative min-h-[85vh] flex items-center justify-center">
-      {/* Animated Background with Heartbeat Visualization */}
+      {/* Animated Background */}
       <div className="absolute inset-0 overflow-hidden">
         {/* Large gradient blurs that react to payments */}
         <div className="absolute top-1/4 left-1/4 w-[600px] h-[600px] bg-gradient-to-br from-pink-500/20 to-violet-600/20 rounded-full blur-3xl animate-hero-float" />
         <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-gradient-to-br from-blue-500/15 to-cyan-500/15 rounded-full blur-3xl animate-hero-float-delayed" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-full blur-3xl animate-hero-pulse" />
-        
-        {/* HEARTBEAT LINE GRAPH - Full width scrolling visualization */}
-        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[400px] pointer-events-none">
-          {/* Gradient glow behind the line */}
-          <div className="absolute inset-0 bg-gradient-to-t from-transparent via-emerald-500/5 to-transparent" />
-          
-          {/* SVG Heartbeat Line */}
-          <svg 
-            className="absolute inset-0 w-full h-full" 
-            preserveAspectRatio="none"
-            viewBox="0 0 1000 400"
-          >
-            {/* Gradient definitions */}
-            <defs>
-              <linearGradient id="heartbeatGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="rgb(16, 185, 129)" stopOpacity="0" />
-                <stop offset="20%" stopColor="rgb(16, 185, 129)" stopOpacity="0.3" />
-                <stop offset="80%" stopColor="rgb(16, 185, 129)" stopOpacity="0.6" />
-                <stop offset="100%" stopColor="rgb(16, 185, 129)" stopOpacity="0.8" />
-              </linearGradient>
-              <linearGradient id="heartbeatFill" x1="0%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stopColor="rgb(16, 185, 129)" stopOpacity="0.3" />
-                <stop offset="100%" stopColor="rgb(16, 185, 129)" stopOpacity="0" />
-              </linearGradient>
-              <filter id="glow">
-                <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
-                <feMerge>
-                  <feMergeNode in="coloredBlur"/>
-                  <feMergeNode in="SourceGraphic"/>
-                </feMerge>
-              </filter>
-            </defs>
-            
-            {/* Generate path from events */}
-            {events.length > 0 && (() => {
-              // Build points for the heartbeat line
-              const points: Array<{x: number; y: number}> = [];
-              const sortedEvents = [...events].sort((a, b) => a.timestamp - b.timestamp);
-              
-              // Start from left edge
-              points.push({ x: 0, y: 200 });
-              
-              sortedEvents.forEach(event => {
-                const age = currentTime - event.timestamp;
-                const x = 1000 - (age / windowMs) * 1000;
-                if (x >= 0 && x <= 1000) {
-                  const intensity = Math.min(1, event.amount / maxAmount);
-                  const spike = intensity * 150;
-                  // Create heartbeat spike pattern
-                  points.push({ x: x - 15, y: 200 });
-                  points.push({ x: x - 5, y: 200 + spike * 0.3 });
-                  points.push({ x: x, y: 200 - spike });
-                  points.push({ x: x + 5, y: 200 + spike * 0.5 });
-                  points.push({ x: x + 10, y: 200 });
-                }
-              });
-              
-              // End at right edge
-              points.push({ x: 1000, y: 200 });
-              
-              // Sort by x position
-              points.sort((a, b) => a.x - b.x);
-              
-              const pathD = points.map((p, i) => 
-                i === 0 ? `M ${p.x} ${p.y}` : `L ${p.x} ${p.y}`
-              ).join(' ');
-              
-              const fillPathD = pathD + ` L 1000 400 L 0 400 Z`;
-              
-              return (
-                <>
-                  {/* Fill area under the line */}
-                  <path d={fillPathD} fill="url(#heartbeatFill)" />
-                  {/* Main heartbeat line */}
-                  <path 
-                    d={pathD} 
-                    fill="none" 
-                    stroke="url(#heartbeatGradient)" 
-                    strokeWidth="3"
-                    filter="url(#glow)"
-                  />
-                </>
-              );
-            })()}
-            
-            {/* Baseline if no events */}
-            {events.length === 0 && (
-              <path 
-                d="M 0 200 L 1000 200" 
-                fill="none" 
-                stroke="rgba(16, 185, 129, 0.2)" 
-                strokeWidth="2"
-                strokeDasharray="10 10"
-              />
-            )}
-            
-            {/* "Now" indicator on right edge */}
-            <circle cx="990" cy="200" r="6" fill="rgb(16, 185, 129)" className="animate-pulse" />
-            <circle cx="990" cy="200" r="12" fill="rgb(16, 185, 129)" opacity="0.3" className="animate-ping" />
-          </svg>
-          
-          {/* Payment amount labels that float up */}
-          {events.slice(-5).map(event => {
-            const age = currentTime - event.timestamp;
-            const x = 100 - (age / windowMs) * 100;
-            if (x < 0 || x > 100) return null;
-            const isNew = age < 2000;
-            return (
-              <div
-                key={event.id}
-                className={`absolute text-xs font-mono transition-all duration-500 ${
-                  isNew ? "opacity-100 -translate-y-2" : "opacity-0"
-                }`}
-                style={{
-                  left: `${x}%`,
-                  top: "30%",
-                  transform: "translateX(-50%)",
-                }}
-              >
-                <span className="px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded backdrop-blur-sm">
-                  +{event.amount.toFixed(3)} MNEE
-                </span>
-              </div>
-            );
-          })}
-        </div>
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1600px] h-[1600px] bg-gradient-to-br from-emerald-500/10 to-teal-500/10 rounded-full blur-3xl animate-hero-pulse" />
         
         {/* Grid Pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:64px_64px] [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_70%)]" />
@@ -220,9 +79,9 @@ function HeroSection() {
 
         {/* Main Headline */}
         <h1 className="text-5xl md:text-7xl font-bold text-white tracking-tight mb-6 animate-fade-in-up animation-delay-100">
-          MNEE + x402 Payments
+          The Agentic Economy
           <span className="block mt-2 bg-gradient-to-r from-pink-400 via-violet-400 to-blue-400 bg-clip-text text-transparent animate-gradient-x">
-            for AI Agents
+            Runs on x402 and MNEE
           </span>
         </h1>
 
@@ -230,7 +89,7 @@ function HeroSection() {
         <p className="text-xl md:text-2xl text-[#888] max-w-3xl mx-auto mb-10 animate-fade-in-up animation-delay-200 leading-relaxed">
           Enable AI agents to <span className="text-white font-medium">make payments</span> for services 
           and <span className="text-white font-medium">accept payments</span> for APIs — 
-          all with <span className="text-white font-medium">MNEE</span>, a USD-backed stablecoin on Bitcoin.
+          all with <span className="text-white font-medium">MNEE</span>, a USD-backed stablecoin on BSV.
         </p>
 
         {/* CTA Buttons */}
@@ -276,26 +135,7 @@ function HeroSection() {
 
 function LiveStatsSection() {
   const stats = useQuery(api.payments.getPublicStats);
-  const transactions = useQuery(api.payments.getPublicRecentTransactions, { limit: 20 });
   const [selectedNetwork, setSelectedNetwork] = useState<"sandbox" | "mainnet">("sandbox");
-
-  const getExplorerUrl = (txHash: string, network: string) => {
-    if (network === "mainnet") {
-      return `https://whatsonchain.com/tx/${txHash}`;
-    }
-    // Sandbox/testnet transactions use test.whatsonchain.com
-    return `https://test.whatsonchain.com/tx/${txHash}`;
-  };
-
-  const formatTime = (timestamp: number) => {
-    const now = Date.now();
-    const diff = now - timestamp;
-    const seconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(seconds / 60);
-    if (seconds < 60) return `${seconds}s ago`;
-    if (minutes < 60) return `${minutes}m ago`;
-    return `${Math.floor(minutes / 60)}h ago`;
-  };
 
   return (
     <section className="relative py-20 border-t border-b border-[#222]">
@@ -361,67 +201,6 @@ function LiveStatsSection() {
 
         {/* Activity Chart */}
         <PublicActivityChart network={selectedNetwork} />
-
-        {/* Scrolling Transactions Ticker */}
-        <div className="mt-8 overflow-hidden">
-          <div className="flex items-center gap-2 mb-4">
-            <ReceiptIcon className="w-4 h-4 text-violet-400" />
-            <span className="text-sm font-medium text-[#888]">Recent On-Chain Transactions</span>
-            <span className="text-xs text-[#666]">(click to verify)</span>
-          </div>
-          
-          <div className="relative">
-            {/* Fade edges */}
-            <div className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-[#0a0a0a] to-transparent z-10 pointer-events-none" />
-            <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-[#0a0a0a] to-transparent z-10 pointer-events-none" />
-            
-            {/* Scrolling container */}
-            <div className="flex animate-scroll-left">
-              {transactions && transactions.length > 0 ? (
-                <>
-                  {/* Duplicate the list for seamless loop */}
-                  {[...transactions, ...transactions].map((tx, idx) => (
-                    <a
-                      key={`${tx.id}-${idx}`}
-                      href={tx.txHash ? getExplorerUrl(tx.txHash, tx.network) : "#"}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex-shrink-0 mx-2 px-4 py-3 bg-[#111] hover:bg-[#1a1a1a] border border-[#333] hover:border-violet-500/50 rounded-xl transition-all group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                          <CheckCircleIcon className="w-4 h-4 text-emerald-400" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-white font-medium text-sm">{tx.amount.toFixed(4)} MNEE</span>
-                            <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${
-                              tx.network === "mainnet" 
-                                ? "bg-emerald-500/20 text-emerald-400" 
-                                : "bg-amber-500/20 text-amber-400"
-                            }`}>
-                              {tx.network}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 text-xs text-[#666]">
-                            <span className="font-mono">
-                              {tx.txHash ? `${tx.txHash.slice(0, 6)}...${tx.txHash.slice(-4)}` : "..."}
-                            </span>
-                            <span>•</span>
-                            <span>{formatTime(tx.timestamp)}</span>
-                          </div>
-                        </div>
-                        <ExternalLinkIcon className="w-3 h-3 text-[#444] group-hover:text-violet-400 transition-colors ml-2" />
-                      </div>
-                    </a>
-                  ))}
-                </>
-              ) : (
-                <div className="px-4 py-3 text-[#666]">Loading transactions...</div>
-              )}
-            </div>
-          </div>
-        </div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8">
@@ -1322,14 +1101,6 @@ function CodeIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-    </svg>
-  );
-}
-
-function ExternalLinkIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
     </svg>
   );
 }

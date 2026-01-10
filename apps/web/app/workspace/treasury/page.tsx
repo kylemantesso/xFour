@@ -43,7 +43,7 @@ const CHAIN_IDS = {
 } as const;
 
 export default function TreasuryPage() {
-  const { isSignedIn } = useAuth();
+  const { isSignedIn, isLoaded } = useAuth();
   const userData = useQuery(api.users.getCurrentUser);
   const workspace = userData?.currentWorkspace;
   const workspaceId = workspace?._id;
@@ -70,15 +70,7 @@ export default function TreasuryPage() {
   // Get current treasury for selected network
   const currentTreasury = treasuries?.find(t => t.network === selectedNetwork);
 
-  if (!isSignedIn) {
-    return (
-      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
-        <p className="text-[#888]">Please sign in to access treasury management</p>
-      </div>
-    );
-  }
-
-  if (!workspace) {
+  if (!isLoaded || !isSignedIn || !workspace) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-500" />

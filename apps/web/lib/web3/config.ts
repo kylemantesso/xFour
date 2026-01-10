@@ -19,8 +19,8 @@ if (!projectId) {
 const metadata = {
   name: "x402 Gateway",
   description: "Non-custodial payment gateway for AI agents using MNEE stablecoin",
-  url: "https://x402.dev", // Update with your actual domain
-  icons: ["https://x402.dev/icon.png"], // Update with your actual icon
+  url: typeof window !== "undefined" ? window.location.origin : "https://www.xfour.xyz",
+  icons: ["https://www.xfour.xyz/icon.png"],
 };
 
 // Supported chains

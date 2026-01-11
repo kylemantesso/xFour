@@ -9,6 +9,7 @@
  */
 
 import type * as apiKeys from "../apiKeys.js";
+import type * as feedback from "../feedback.js";
 import type * as gateway from "../gateway.js";
 import type * as http from "../http.js";
 import type * as invites from "../invites.js";
@@ -29,6 +30,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   apiKeys: typeof apiKeys;
+  feedback: typeof feedback;
   gateway: typeof gateway;
   http: typeof http;
   invites: typeof invites;

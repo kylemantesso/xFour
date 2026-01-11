@@ -283,5 +283,17 @@ export default defineSchema(
     .index("by_workspaceId", ["workspaceId"])
     .index("by_providerId", ["providerId"]),
 
+  // ============================================
+  // FEEDBACK TABLE
+  // ============================================
+  feedback: defineTable({
+    userId: v.id("users"),
+    message: v.string(),
+    type: v.string(), // "bug", "feature", "general"
+    createdAt: v.number(),
+  })
+    .index("by_userId", ["userId"])
+    .index("by_createdAt", ["createdAt"]),
+
   }
 );

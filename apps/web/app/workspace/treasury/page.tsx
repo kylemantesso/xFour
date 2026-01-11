@@ -1200,163 +1200,81 @@ function InfoPanel() {
   );
 }
 
-type Transaction = {
-  hash: string;
-  type: "deposit" | "withdrawal" | "payment";
-  amount: string;
-  from: string;
-  to: string;
-  timestamp: number;
-  blockNumber: bigint;
-};
+interface PaymentData {
+  _id: string;
+  invoiceId: string;
+  apiKeyName: string;
+  providerName: string;
+  providerHost: string;
+  amount: number;
+  network: "sepolia" | "mainnet";
+  status: string;
+  createdAt: number;
+  txHash?: string;
+  payTo: string;
+  denialReason?: string;
+}
 
 function TransactionHistory({ 
-  treasuryAddress, 
+  treasuryAddress: _treasuryAddress, 
   network,
-  refreshKey = 0,
+  refreshKey: _refreshKey = 0,
 }: { 
   treasuryAddress: Address;
   network: EthereumNetwork;
   refreshKey?: number;
 }) {
-  const publicClient = usePublicClient({ chainId: CHAIN_IDS[network] });
-  const contracts = getContractAddresses(network);
-  const [transactions, setTransactions] = useState<Array<Transaction>>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Use void to mark params as intentionally unused (for future blockchain-level filtering)
+  void _treasuryAddress;
+  void _refreshKey;
+  
+  const payments = useQuery(api.payments.listPayments, { limit: 50 });
+  const [expanded, setExpanded] = useState<string | null>(null);
+  
+  // Filter to only show payments on the selected network
+  const filteredPayments = payments?.filter(p => p.network === network);
 
   const explorerUrl = network === "mainnet" 
     ? "https://etherscan.io" 
     : "https://sepolia.etherscan.io";
 
-  useEffect(() => {
-    async function fetchTransactions() {
-      if (!publicClient || !contracts.mneeToken) {
-        setIsLoading(false);
-        return;
-      }
+  const statusConfig: Record<string, { color: string; bg: string; label: string }> = {
+    settled: { color: "text-emerald-400", bg: "bg-emerald-900/30", label: "Settled" },
+    allowed: { color: "text-blue-400", bg: "bg-blue-900/30", label: "Pending" },
+    denied: { color: "text-red-400", bg: "bg-red-900/30", label: "Denied" },
+    failed: { color: "text-red-400", bg: "bg-red-900/30", label: "Failed" },
+  };
 
-      setIsLoading(true);
-      setError(null);
+  const formatTime = (timestamp: number) => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
 
-      try {
-        // Get current block number
-        const currentBlock = await publicClient.getBlockNumber();
-        // Look back ~7 days worth of blocks (assuming ~12s per block)
-        const fromBlock = currentBlock - BigInt(50400); // ~7 days
-
-        // Get incoming transfers (deposits)
-        const incomingLogs = await publicClient.getLogs({
-          address: contracts.mneeToken as Address,
-          event: {
-            type: "event",
-            name: "Transfer",
-            inputs: [
-              { type: "address", indexed: true, name: "from" },
-              { type: "address", indexed: true, name: "to" },
-              { type: "uint256", indexed: false, name: "value" },
-            ],
-          },
-          args: {
-            to: treasuryAddress,
-          },
-          fromBlock: fromBlock > BigInt(0) ? fromBlock : BigInt(0),
-          toBlock: "latest",
-        });
-
-        // Get outgoing transfers (withdrawals/payments)
-        const outgoingLogs = await publicClient.getLogs({
-          address: contracts.mneeToken as Address,
-          event: {
-            type: "event",
-            name: "Transfer",
-            inputs: [
-              { type: "address", indexed: true, name: "from" },
-              { type: "address", indexed: true, name: "to" },
-              { type: "uint256", indexed: false, name: "value" },
-            ],
-          },
-          args: {
-            from: treasuryAddress,
-          },
-          fromBlock: fromBlock > BigInt(0) ? fromBlock : BigInt(0),
-          toBlock: "latest",
-        });
-
-        // Combine and process logs
-        const allLogs = [...incomingLogs, ...outgoingLogs];
-        
-        // Get block timestamps for each unique block
-        const blockNumbers = [...new Set(allLogs.map(log => log.blockNumber))];
-        const blockTimestamps: Record<string, number> = {};
-        
-        await Promise.all(
-          blockNumbers.map(async (blockNum) => {
-            if (blockNum) {
-              const block = await publicClient.getBlock({ blockNumber: blockNum });
-              blockTimestamps[blockNum.toString()] = Number(block.timestamp) * 1000;
-            }
-          })
-        );
-
-        // Transform logs into transactions
-        const txs: Array<Transaction> = allLogs.map(log => {
-          const from = log.args.from as string;
-          const to = log.args.to as string;
-          const value = log.args.value as bigint;
-          const isIncoming = to.toLowerCase() === treasuryAddress.toLowerCase();
-          
-          return {
-            hash: log.transactionHash || "",
-            type: isIncoming ? "deposit" : "withdrawal",
-            amount: formatUnits(value, 18),
-            from,
-            to,
-            timestamp: blockTimestamps[log.blockNumber?.toString() || ""] || 0,
-            blockNumber: log.blockNumber || BigInt(0),
-          };
-        });
-
-        // Sort by block number descending (most recent first)
-        txs.sort((a, b) => Number(b.blockNumber - a.blockNumber));
-
-        setTransactions(txs);
-      } catch (err) {
-        console.error("Failed to fetch transactions:", err);
-        setError("Failed to load transaction history");
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    fetchTransactions();
-  }, [publicClient, treasuryAddress, contracts.mneeToken, refreshKey]);
+    if (minutes < 1) return "Just now";
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return new Date(timestamp).toLocaleDateString();
+  };
 
   const formatAddress = (addr: string) => {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-  };
-
-  const formatDate = (timestamp: number) => {
-    if (!timestamp) return "—";
-    return new Date(timestamp).toLocaleString();
   };
 
   return (
     <div className="bg-[#111] border border-[#333] rounded-xl p-6">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-semibold text-white">Transaction History</h2>
-        <span className="text-xs text-[#666]">Last 7 days</span>
+        <span className="text-xs text-[#666]">{network === "mainnet" ? "Mainnet" : "Sepolia"}</span>
       </div>
 
-      {isLoading ? (
+      {!payments ? (
         <div className="flex items-center justify-center py-12">
           <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-500" />
         </div>
-      ) : error ? (
-        <div className="text-center py-12">
-          <p className="text-red-400">{error}</p>
-        </div>
-      ) : transactions.length === 0 ? (
+      ) : !filteredPayments || filteredPayments.length === 0 ? (
         <div className="text-center py-12">
           <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-[#1a1a1a] flex items-center justify-center">
             <svg className="w-6 h-6 text-[#666]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1364,89 +1282,111 @@ function TransactionHistory({
             </svg>
           </div>
           <p className="text-[#888]">No transactions yet</p>
-          <p className="text-sm text-[#666] mt-1">Deposit MNEE to see transactions here</p>
+          <p className="text-sm text-[#666] mt-1">Payments made through the gateway will appear here</p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="text-left text-sm text-[#888] border-b border-[#333]">
-                <th className="pb-3 font-medium">Type</th>
-                <th className="pb-3 font-medium">Amount</th>
-                <th className="pb-3 font-medium">From</th>
-                <th className="pb-3 font-medium">To</th>
-                <th className="pb-3 font-medium">Date</th>
-                <th className="pb-3 font-medium text-right">Transaction</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#222]">
-              {transactions.map((tx, index) => (
-                <tr key={`${tx.hash}-${index}`} className="hover:bg-[#1a1a1a] transition-colors">
-                  <td className="py-4">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                      tx.type === "deposit" 
-                        ? "bg-emerald-900/30 text-emerald-400" 
-                        : "bg-orange-900/30 text-orange-400"
-                    }`}>
-                      {tx.type === "deposit" ? (
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                        </svg>
-                      ) : (
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 10l7-7m0 0l7 7m-7-7v18" />
-                        </svg>
-                      )}
-                      {tx.type === "deposit" ? "Deposit" : "Withdrawal"}
-                    </span>
-                  </td>
-                  <td className="py-4">
-                    <span className={`font-mono text-sm ${
-                      tx.type === "deposit" ? "text-emerald-400" : "text-orange-400"
-                    }`}>
-                      {tx.type === "deposit" ? "+" : "-"}{parseFloat(tx.amount).toFixed(4)} MNEE
-                    </span>
-                  </td>
-                  <td className="py-4">
-                    <a 
-                      href={`${explorerUrl}/address/${tx.from}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-mono text-sm text-[#888] hover:text-indigo-400 transition-colors"
-                    >
-                      {formatAddress(tx.from)}
-                    </a>
-                  </td>
-                  <td className="py-4">
-                    <a 
-                      href={`${explorerUrl}/address/${tx.to}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-mono text-sm text-[#888] hover:text-indigo-400 transition-colors"
-                    >
-                      {formatAddress(tx.to)}
-                    </a>
-                  </td>
-                  <td className="py-4 text-sm text-[#888]">
-                    {formatDate(tx.timestamp)}
-                  </td>
-                  <td className="py-4 text-right">
-                    <a 
-                      href={`${explorerUrl}/tx/${tx.hash}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
-                    >
-                      View
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+        <div className="space-y-2">
+          {filteredPayments.map((payment: PaymentData) => {
+            const status = statusConfig[payment.status] ?? {
+              color: "text-[#888]",
+              bg: "bg-[#1a1a1a]",
+              label: payment.status,
+            };
+            const isExpanded = expanded === payment._id;
+
+            return (
+              <div key={payment._id} className="border border-[#222] rounded-lg overflow-hidden">
+                <div 
+                  className="flex items-center justify-between p-4 hover:bg-[#1a1a1a] cursor-pointer transition-colors"
+                  onClick={() => setExpanded(isExpanded ? null : payment._id)}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-lg bg-[#1a1a1a] flex items-center justify-center">
+                      <svg className="w-5 h-5 text-[#666]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z" />
                       </svg>
-                    </a>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    </div>
+                    <div>
+                      <p className="text-sm text-white font-medium">{payment.providerName}</p>
+                      <p className="text-xs text-[#666]">{payment.apiKeyName}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <p className="text-sm text-white font-mono">
+                        {payment.amount.toLocaleString(undefined, { maximumFractionDigits: 5 })} MNEE
+                      </p>
+                      <p className="text-xs text-[#666]">{formatTime(payment.createdAt)}</p>
+                    </div>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${status.bg} ${status.color}`}>
+                      {status.label}
+                    </span>
+                    <svg 
+                      className={`w-4 h-4 text-[#666] transition-transform ${isExpanded ? "rotate-180" : ""}`} 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+
+                {isExpanded && (
+                  <div className="px-4 py-4 bg-[#0a0a0a] border-t border-[#222]">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <p className="text-[#666] mb-1">Invoice ID</p>
+                        <p className="text-white font-mono text-xs truncate">{payment.invoiceId}</p>
+                      </div>
+                      <div>
+                        <p className="text-[#666] mb-1">Pay To</p>
+                        <a 
+                          href={`${explorerUrl}/address/${payment.payTo}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-indigo-400 hover:text-indigo-300 font-mono text-xs"
+                        >
+                          {formatAddress(payment.payTo)}
+                        </a>
+                      </div>
+                      <div>
+                        <p className="text-[#666] mb-1">Provider Host</p>
+                        <p className="text-white text-xs">{payment.providerHost}</p>
+                      </div>
+                      <div>
+                        <p className="text-[#666] mb-1">Created</p>
+                        <p className="text-white text-xs">{new Date(payment.createdAt).toLocaleString()}</p>
+                      </div>
+                      {payment.txHash && (
+                        <div className="col-span-2 md:col-span-4">
+                          <p className="text-[#666] mb-1">Transaction</p>
+                          <a 
+                            href={`${explorerUrl}/tx/${payment.txHash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-indigo-400 hover:text-indigo-300 font-mono text-xs inline-flex items-center gap-2"
+                          >
+                            {payment.txHash}
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                          </a>
+                        </div>
+                      )}
+                      {payment.denialReason && (
+                        <div className="col-span-2 md:col-span-4">
+                          <p className="text-[#666] mb-1">Denial Reason</p>
+                          <p className="text-red-400 text-xs">{payment.denialReason}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

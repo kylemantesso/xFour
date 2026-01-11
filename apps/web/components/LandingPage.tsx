@@ -1093,13 +1093,15 @@ function HackathonTopBanner() {
           <span className="hidden sm:inline text-white/60">|</span>
           <span className="hidden sm:inline text-white/90">AI & Agent Payments Track</span>
           <span className="text-white/60">|</span>
-          <Link 
-            href="/hackathon" 
+          <a 
+            href="https://devpost.com/software/xfour-xyz-x402-payments-using-mnee" 
+            target="_blank"
+            rel="noopener noreferrer"
             className="font-medium hover:underline flex items-center gap-1"
           >
-            View Submission
+            View on Devpost
             <ArrowRightIcon className="w-3 h-3" />
-          </Link>
+          </a>
           <a 
             href="https://github.com/kylemantesso/x402-gateway" 
             target="_blank" 

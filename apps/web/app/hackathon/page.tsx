@@ -58,7 +58,7 @@ function HeroSection() {
           <TrophyIcon className="w-5 h-5 text-pink-400" />
           <span className="text-sm font-medium text-white">MNEE Hackathon Submission</span>
           <span className="h-4 w-px bg-pink-500/30" />
-          <span className="text-sm font-medium text-pink-400">AI & Agent Payments Track</span>
+          <span className="text-sm font-medium text-pink-400">Programmable Finance & Automation</span>
         </div>
 
         {/* Title */}
@@ -76,7 +76,7 @@ function HeroSection() {
         </p>
 
         {/* Quick Stats */}
-        <div className="flex flex-wrap gap-6">
+        <div className="flex flex-wrap gap-6 mb-8">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded-full bg-emerald-500" />
             <span className="text-[#888]">Live on Ethereum</span>
@@ -90,6 +90,18 @@ function HeroSection() {
             <span className="text-[#888]">Open Source</span>
           </div>
         </div>
+
+        {/* Devpost CTA */}
+        <a 
+          href="https://devpost.com/software/xfour-xyz-x402-payments-using-mnee"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-3 px-6 py-3 bg-gradient-to-r from-pink-500 to-violet-600 hover:from-pink-600 hover:to-violet-700 text-white font-semibold rounded-xl transition-all shadow-lg shadow-pink-500/25 hover:shadow-pink-500/40"
+        >
+          <TrophyIcon className="w-5 h-5" />
+          View on Devpost
+          <ExternalLinkIcon className="w-4 h-4" />
+        </a>
       </div>
     </section>
   );
@@ -163,7 +175,7 @@ function TrackAlignment() {
       <div className="max-w-5xl mx-auto px-4">
         <SectionHeader
           badge="Track Alignment"
-          title="AI & Agent Payments"
+          title="Programmable Finance & Automation"
           description="How xFour fits the hackathon track"
         />
 
@@ -174,7 +186,7 @@ function TrackAlignment() {
             </div>
             <div>
               <h3 className="text-xl font-semibold text-white mb-2">
-                &ldquo;AI & Agent Payments – agents or automated systems paying for services or data&rdquo;
+                &ldquo;Programmable Finance & Automation – automated systems and agents managing payments and financial operations&rdquo;
               </h3>
               <p className="text-[#888]">Official MNEE Hackathon Track Description</p>
             </div>
@@ -511,7 +523,14 @@ function DemoSection() {
           description="Everything you need to evaluate our submission"
         />
 
-        <div className="mt-12 grid md:grid-cols-3 gap-6">
+        <div className="mt-12 grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <DemoCard
+            title="Devpost Entry"
+            description="View our official MNEE Hackathon submission"
+            href="https://devpost.com/software/xfour-xyz-x402-payments-using-mnee"
+            icon={<TrophyIcon className="w-6 h-6" />}
+            gradient="from-pink-500 to-violet-600"
+          />
           <DemoCard
             title="Live Demo"
             description="Try the full xFour platform with test transactions"
@@ -523,7 +542,7 @@ function DemoSection() {
           <DemoCard
             title="Source Code"
             description="View the full open-source codebase on GitHub"
-            href="https://github.com/x402-gateway"
+            href="https://github.com/kylemantesso/x402-gateway"
             icon={<GithubIcon className="w-6 h-6" />}
             gradient="from-[#333] to-[#111]"
           />

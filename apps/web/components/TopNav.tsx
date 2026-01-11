@@ -48,23 +48,16 @@ export function TopNav() {
 
         <div className="flex items-center gap-2">
           <SignedIn>
-            {/* Search */}
-            <SearchButton />
-
             {/* Feedback */}
-            <button className="px-3 py-1.5 text-sm text-[#888] hover:text-white border border-[#333] hover:border-[#555] rounded-md transition-colors">
-              Feedback
-            </button>
-
-            {/* Notifications */}
-            <button className="p-2 text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-md transition-colors">
-              <BellIcon className="w-4 h-4" />
-            </button>
+            <FeedbackButton />
 
             {/* Docs */}
-            <button className="p-2 text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-md transition-colors">
+            <Link 
+              href="/docs"
+              className="p-2 text-[#888] hover:text-white hover:bg-[#1a1a1a] rounded-md transition-colors"
+            >
               <BookIcon className="w-4 h-4" />
-            </button>
+            </Link>
 
             {/* User */}
             <UserButton
@@ -251,11 +244,6 @@ function WorkspaceDropdown() {
           {currentWorkspace?.name || "Workspace"}
         </span>
 
-        {/* Pro Badge */}
-        <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-blue-600 text-white rounded">
-          Pro
-        </span>
-
         {/* Chevron */}
         <ChevronIcon
           className={`w-4 h-4 text-[#666] group-hover:text-[#888] transition-transform ${
@@ -357,15 +345,92 @@ function WorkspaceDropdown() {
   );
 }
 
-function SearchButton() {
+function FeedbackButton() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const submitFeedback = useMutation(api.feedback.submitFeedback);
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (modalRef.current && !modalRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    if (isOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!message.trim()) return;
+    
+    setIsSubmitting(true);
+    try {
+      await submitFeedback({ message: message.trim(), type: "general" });
+      setSubmitted(true);
+      setMessage("");
+      setTimeout(() => {
+        setIsOpen(false);
+        setSubmitted(false);
+      }, 1500);
+    } catch (err) {
+      console.error("Failed to submit feedback:", err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
-    <button className="flex items-center gap-2 px-3 py-1.5 text-sm text-[#666] bg-[#0a0a0a] border border-[#333] hover:border-[#555] rounded-md transition-colors min-w-[180px]">
-      <SearchIcon className="w-4 h-4" />
-      <span className="flex-1 text-left">Find...</span>
-      <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-[#1a1a1a] border border-[#333] rounded">
-        F
-      </kbd>
-    </button>
+    <div className="relative">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="px-3 py-1.5 text-sm text-[#888] hover:text-white border border-[#333] hover:border-[#555] rounded-md transition-colors"
+      >
+        Feedback
+      </button>
+
+      {isOpen && (
+        <div 
+          ref={modalRef}
+          className="absolute top-full right-0 mt-2 w-80 bg-[#0a0a0a] border border-[#333] rounded-lg shadow-2xl z-50 overflow-hidden"
+        >
+          {submitted ? (
+            <div className="p-6 text-center">
+              <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-3">
+                <CheckIcon className="w-6 h-6 text-emerald-400" />
+              </div>
+              <p className="text-white font-medium">Thanks for your feedback!</p>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="p-4">
+              <p className="text-sm font-medium text-white mb-3">Share your feedback</p>
+              <textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Tell us what you think..."
+                rows={4}
+                className="w-full px-3 py-2 text-sm border border-[#333] rounded-md bg-[#0a0a0a] text-white placeholder-[#666] focus:outline-none focus:border-[#555] resize-none"
+                autoFocus
+              />
+              <div className="flex justify-end mt-3">
+                <button
+                  type="submit"
+                  disabled={!message.trim() || isSubmitting}
+                  className="px-4 py-2 text-sm font-medium text-black bg-white hover:bg-gray-200 disabled:bg-[#333] disabled:text-[#666] rounded-md transition-colors"
+                >
+                  {isSubmitting ? "Sending..." : "Send"}
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -380,22 +445,6 @@ function ChevronIcon({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-    </svg>
-  );
-}
-
-function SearchIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-    </svg>
-  );
-}
-
-function BellIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
     </svg>
   );
 }

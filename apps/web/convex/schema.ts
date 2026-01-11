@@ -252,6 +252,7 @@ export default defineSchema(
     .index("by_workspaceId", ["workspaceId"])
     .index("by_apiKeyId", ["apiKeyId"])
     .index("by_invoiceId", ["invoiceId"])
+    .index("by_status", ["status"])
     .index("by_workspace_status", ["workspaceId", "status"])
     .index("by_workspace_created", ["workspaceId", "createdAt"]),
 
@@ -294,6 +295,37 @@ export default defineSchema(
   })
     .index("by_userId", ["userId"])
     .index("by_createdAt", ["createdAt"]),
+
+  // ============================================
+  // CACHED STATS TABLE
+  // ============================================
+
+  // Platform-wide aggregated stats (updated incrementally)
+  // Avoids scanning all payments on every homepage load
+  platformStats: defineTable({
+    key: v.literal("global"), // Single row for global stats
+    totalPayments: v.number(),
+    settledPayments: v.number(),
+    totalVolume: v.number(), // Total MNEE volume
+    activeWorkspaces: v.number(),
+    failedPayments: v.number(),
+    last24hPayments: v.number(),
+    last24hVolume: v.number(),
+    lastUpdated: v.number(),
+  })
+    .index("by_key", ["key"]),
+
+  // ============================================
+  // TEST PAYMENT CONTROL
+  // ============================================
+
+  // Control flag for test payment loop
+  testPaymentControl: defineTable({
+    key: v.literal("loop"), // Single row for loop control
+    isEnabled: v.boolean(),
+    updatedAt: v.number(),
+  })
+    .index("by_key", ["key"]),
 
   }
 );

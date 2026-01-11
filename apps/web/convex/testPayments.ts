@@ -6,10 +6,11 @@ import { internal } from "./_generated/api";
 
 // ============================================
 // TEST PAYMENT RUNNER (Convex Scheduled)
+// Simple loop: one payment every 45 seconds with random amounts (0.001-0.02 MNEE)
 // ============================================
 
 /**
- * Execute a single test payment
+ * Execute a single test payment (random amount between 0.001 and 0.02 MNEE)
  */
 export const runTestPayment = internalAction({
   args: {},
@@ -172,25 +173,19 @@ export const runTestPayment = internalAction({
 
 /**
  * The main loop - runs a payment then reschedules itself
+ * Simple fixed interval: one payment every 45 seconds
  */
 export const paymentLoop = internalAction({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
-    const isEnabled = process.env.TEST_PAYMENTS_ENABLED === "true";
-    const baseIntervalMs = parseInt(process.env.TEST_PAYMENT_INTERVAL_MS || "500", 10); // Faster default
-    const randomDelayMaxMs = parseInt(process.env.TEST_PAYMENT_RANDOM_DELAY_MS || "1500", 10); // Shorter random delay
+    // Check database flag (takes precedence over env var)
+    const isEnabledInDb: boolean = await ctx.runQuery(internal.testPaymentControl.getLoopControl, {});
+    const intervalMs = 45000; // 45 seconds
 
-    if (!isEnabled) {
-      console.log("[TestPayment] Disabled - not rescheduling");
+    if (!isEnabledInDb) {
+      console.log("[TestPayment] Loop disabled in database - not rescheduling");
       return null;
-    }
-
-    // Add random delay before running (0 to randomDelayMaxMs)
-    const randomDelay = Math.floor(Math.random() * randomDelayMaxMs);
-    if (randomDelay > 0) {
-      console.log(`[TestPayment] Waiting ${randomDelay}ms (random delay)...`);
-      await new Promise((resolve) => setTimeout(resolve, randomDelay));
     }
 
     // Run the payment
@@ -202,9 +197,9 @@ export const paymentLoop = internalAction({
       console.log(`[TestPayment] ❌ Failed: ${result.error}`);
     }
 
-    // Schedule next run (base interval only - random delay happens at start of next run)
-    await ctx.scheduler.runAfter(baseIntervalMs, internal.testPayments.paymentLoop, {});
-    console.log(`[TestPayment] Next run scheduled in ${baseIntervalMs}ms + random delay`);
+    // Schedule next run in 45 seconds
+    await ctx.scheduler.runAfter(intervalMs, internal.testPayments.paymentLoop, {});
+    console.log(`[TestPayment] Next run scheduled in 45 seconds`);
 
     return null;
   },
@@ -218,15 +213,13 @@ export const startPaymentLoop = internalAction({
   returns: v.string(),
   handler: async (ctx) => {
     const apiKey = process.env.TEST_PAYMENT_API_KEY;
-    const isEnabled = process.env.TEST_PAYMENTS_ENABLED === "true";
 
     if (!apiKey) {
       return "❌ TEST_PAYMENT_API_KEY not configured";
     }
 
-    if (!isEnabled) {
-      return "❌ TEST_PAYMENTS_ENABLED is not 'true'";
-    }
+    // Enable the loop in database
+    await ctx.runMutation(internal.testPaymentControl.setLoopControl, { isEnabled: true });
 
     // Schedule the first run immediately
     await ctx.scheduler.runAfter(0, internal.testPayments.paymentLoop, {});
@@ -236,15 +229,17 @@ export const startPaymentLoop = internalAction({
 });
 
 /**
- * Stop the payment loop by disabling (you'll need to set env var)
- * Note: Running jobs will complete, but no new ones will schedule
+ * Stop the payment loop immediately
+ * The next scheduled run will check the flag and stop rescheduling
  */
 export const stopPaymentLoop = internalAction({
   args: {},
   returns: v.string(),
-  handler: async () => {
-    // Just returns instructions - actual stopping is via env var
-    return "To stop: Set TEST_PAYMENTS_ENABLED=false in Convex environment variables";
+  handler: async (ctx) => {
+    // Disable the loop in database
+    await ctx.runMutation(internal.testPaymentControl.setLoopControl, { isEnabled: false });
+    
+    return "✅ Payment loop stopped! Any currently running payment will complete, but no new runs will be scheduled.";
   },
 });
 

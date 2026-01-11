@@ -700,7 +700,29 @@ export async function executeGatewayPayment(
       return { txHash: "0x" as Hex, success: false, error: "Nonce collision - retry" };
     }
 
-    // Execute payment
+    // Get the wallet account
+    const [account] = await walletClient.getAddresses();
+
+    // Estimate gas with a 15% buffer to avoid underestimation
+    const gasEstimate = await publicClient.estimateContractGas({
+      address: addresses.x402Gateway,
+      abi: X402_GATEWAY_ABI,
+      functionName: "executePayment",
+      args: [
+        params.treasuryAddress,
+        params.apiKeyHash,
+        params.recipient,
+        parseMneeAmount(params.amount),
+        params.invoiceId,
+        nonce,
+      ],
+      account,
+    });
+
+    // Add 15% buffer to gas estimate
+    const gasLimit = (gasEstimate * BigInt(115)) / BigInt(100);
+
+    // Execute payment with manual gas limit
     const hash = await walletClient.writeContract({
       address: addresses.x402Gateway,
       abi: X402_GATEWAY_ABI,
@@ -713,6 +735,7 @@ export async function executeGatewayPayment(
         params.invoiceId,
         nonce,
       ],
+      gas: gasLimit,
     });
 
     // Wait for confirmation

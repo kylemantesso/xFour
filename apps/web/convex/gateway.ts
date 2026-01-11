@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 import { getCurrentWorkspaceContext, requireRole, ALL_ROLES } from "./lib/auth";
+import { internal } from "./_generated/api";
 
 // ============================================
 // API KEY VALIDATION (for HTTP actions)
@@ -175,6 +176,11 @@ export const createPaymentQuote = internalMutation({
       createdAt: now,
     });
 
+    // Update platform stats incrementally (real-time)
+    await ctx.scheduler.runAfter(0, internal.payments.updatePlatformStatsIncremental, {
+      totalPaymentsDelta: 1,
+    });
+
     return paymentId;
   },
 });
@@ -244,6 +250,8 @@ export const markPaymentSettled = internalMutation({
       return { success: false, error: "Payment not found" };
     }
 
+    const wasNotSettled = payment.status !== "settled" && payment.status !== "completed";
+
     const now = Date.now();
     await ctx.db.patch(args.paymentId, {
       status: "settled",
@@ -251,6 +259,15 @@ export const markPaymentSettled = internalMutation({
       updatedAt: now,
       completedAt: now,
     });
+
+    // Update platform stats incrementally (real-time)
+    // Only increment if payment wasn't already settled
+    if (wasNotSettled) {
+      await ctx.scheduler.runAfter(0, internal.payments.updatePlatformStatsIncremental, {
+        settledPaymentsDelta: 1,
+        volumeDelta: payment.amount,
+      });
+    }
 
     return { success: true };
   },
@@ -270,11 +287,21 @@ export const markPaymentFailed = internalMutation({
       return { success: false, error: "Payment not found" };
     }
 
+    const wasNotFailed = payment.status !== "failed";
+
     await ctx.db.patch(args.paymentId, {
       status: "failed",
       denialReason: args.errorMessage,
       updatedAt: Date.now(),
     });
+
+    // Update platform stats incrementally (real-time)
+    // Only increment if payment wasn't already failed
+    if (wasNotFailed) {
+      await ctx.scheduler.runAfter(0, internal.payments.updatePlatformStatsIncremental, {
+        failedPaymentsDelta: 1,
+      });
+    }
 
     return { success: true };
   },
@@ -302,10 +329,34 @@ export const updatePaymentStatus = internalMutation({
       return { success: false, error: "Payment not found" };
     }
 
+    const oldStatus = payment.status;
+    const newStatus = args.status;
+
     await ctx.db.patch(args.paymentId, {
       status: args.status,
       updatedAt: Date.now(),
     });
+
+    // Update platform stats incrementally based on status change
+    const wasSettled = oldStatus === "settled" || oldStatus === "completed";
+    const isNowSettled = newStatus === "settled" || newStatus === "completed";
+    const wasFailed = oldStatus === "failed";
+    const isNowFailed = newStatus === "failed";
+
+    if (!wasSettled && isNowSettled) {
+      // Payment just became settled
+      await ctx.scheduler.runAfter(0, internal.payments.updatePlatformStatsIncremental, {
+        settledPaymentsDelta: 1,
+        volumeDelta: payment.amount,
+      });
+    }
+
+    if (!wasFailed && isNowFailed) {
+      // Payment just became failed
+      await ctx.scheduler.runAfter(0, internal.payments.updatePlatformStatsIncremental, {
+        failedPaymentsDelta: 1,
+      });
+    }
 
     return { success: true };
   },
@@ -529,6 +580,7 @@ export const listReceivedPayments = query({
 
 /**
  * Get received payment statistics (provider income stats)
+ * Uses streaming to avoid 16MB read limit
  */
 export const getReceivedPaymentStats = query({
   args: {},
@@ -563,53 +615,75 @@ export const getReceivedPaymentStats = query({
       };
     }
 
-    // Get all payments to our receiving addresses
-    const allPayments = await ctx.db.query("payments").collect();
-    
-    const receivedPayments = allPayments.filter((payment) =>
-      receivingAddresses.some(
-        (addr) => addr.address === payment.payTo && addr.network === payment.network
-      )
-    );
-
-    // Calculate stats
-    const totalPayments = receivedPayments.length;
-    const settledPayments = receivedPayments.filter(
-      (p) => p.status === "settled" || p.status === "completed"
-    );
-    const pendingPayments = receivedPayments.filter((p) => p.status === "pending");
-    const failedPayments = receivedPayments.filter((p) => p.status === "failed");
-    const deniedPayments = receivedPayments.filter((p) => p.status === "denied");
-
-    const totalEarned = settledPayments.reduce((sum, p) => sum + p.amount, 0);
-
-    // Calculate today's stats
+    // Calculate time boundaries
     const startOfDay = new Date();
     startOfDay.setUTCHours(0, 0, 0, 0);
-    const todayPayments = receivedPayments.filter((p) => p.createdAt >= startOfDay.getTime());
-    const todayEarned = todayPayments
-      .filter((p) => p.status === "settled" || p.status === "completed")
-      .reduce((sum, p) => sum + p.amount, 0);
-
-    // Calculate this month's stats
     const startOfMonth = new Date();
     startOfMonth.setUTCDate(1);
     startOfMonth.setUTCHours(0, 0, 0, 0);
-    const monthPayments = receivedPayments.filter((p) => p.createdAt >= startOfMonth.getTime());
-    const monthEarned = monthPayments
-      .filter((p) => p.status === "settled" || p.status === "completed")
-      .reduce((sum, p) => sum + p.amount, 0);
+
+    // Use streaming to avoid 16MB limit
+    let totalPayments = 0;
+    let settledCount = 0;
+    let pendingCount = 0;
+    let failedCount = 0;
+    let deniedCount = 0;
+    let totalEarned = 0;
+    let todayPaymentsCount = 0;
+    let todayEarned = 0;
+    let monthPaymentsCount = 0;
+    let monthEarned = 0;
+
+    for await (const payment of ctx.db.query("payments")) {
+      // Check if payment is to one of our receiving addresses
+      const isReceived = receivingAddresses.some(
+        (addr) => addr.address === payment.payTo && addr.network === payment.network
+      );
+
+      if (!isReceived) continue;
+
+      totalPayments++;
+
+      const isSettled = payment.status === "settled" || payment.status === "completed";
+      
+      if (isSettled) {
+        settledCount++;
+        totalEarned += payment.amount;
+      } else if (payment.status === "pending") {
+        pendingCount++;
+      } else if (payment.status === "failed") {
+        failedCount++;
+      } else if (payment.status === "denied") {
+        deniedCount++;
+      }
+
+      // Today stats
+      if (payment.createdAt >= startOfDay.getTime()) {
+        todayPaymentsCount++;
+        if (isSettled) {
+          todayEarned += payment.amount;
+        }
+      }
+
+      // Month stats
+      if (payment.createdAt >= startOfMonth.getTime()) {
+        monthPaymentsCount++;
+        if (isSettled) {
+          monthEarned += payment.amount;
+        }
+      }
+    }
 
     return {
       totalPayments,
-      settledCount: settledPayments.length,
-      pendingCount: pendingPayments.length,
-      failedCount: failedPayments.length,
-      deniedCount: deniedPayments.length,
+      settledCount,
+      pendingCount,
+      failedCount,
+      deniedCount,
       totalEarned,
-      todayPayments: todayPayments.length,
+      todayPayments: todayPaymentsCount,
       todayEarned,
-      monthPayments: monthPayments.length,
+      monthPayments: monthPaymentsCount,
       monthEarned,
     };
   },
@@ -695,6 +769,7 @@ export const listAllPaymentsForAdmin = query({
 
 /**
  * Get payment statistics for admin dashboard
+ * Uses streaming to avoid 16MB read limit
  */
 export const getPaymentStatsForAdmin = query({
   args: {},
@@ -714,33 +789,49 @@ export const getPaymentStatsForAdmin = query({
       throw new Error("Not authorized - admin access required");
     }
 
-    const allPayments = await ctx.db.query("payments").collect();
-
-    // Calculate stats
-    const totalPayments = allPayments.length;
-    const settledPayments = allPayments.filter(
-      (p) => p.status === "settled" || p.status === "completed"
-    );
-    const pendingPayments = allPayments.filter((p) => p.status === "pending");
-    const failedPayments = allPayments.filter((p) => p.status === "failed");
-
-    const totalRevenue = settledPayments.reduce((sum, p) => sum + p.amount, 0);
-
-    // Calculate today's stats
+    // Calculate time boundaries
     const startOfDay = new Date();
     startOfDay.setUTCHours(0, 0, 0, 0);
-    const todayPayments = allPayments.filter((p) => p.createdAt >= startOfDay.getTime());
-    const todayRevenue = todayPayments
-      .filter((p) => p.status === "settled" || p.status === "completed")
-      .reduce((sum, p) => sum + p.amount, 0);
+
+    // Use streaming to avoid 16MB limit
+    let totalPayments = 0;
+    let settledCount = 0;
+    let pendingCount = 0;
+    let failedCount = 0;
+    let totalRevenue = 0;
+    let todayPaymentsCount = 0;
+    let todayRevenue = 0;
+
+    for await (const payment of ctx.db.query("payments")) {
+      totalPayments++;
+
+      const isSettled = payment.status === "settled" || payment.status === "completed";
+      
+      if (isSettled) {
+        settledCount++;
+        totalRevenue += payment.amount;
+      } else if (payment.status === "pending") {
+        pendingCount++;
+      } else if (payment.status === "failed") {
+        failedCount++;
+      }
+
+      // Today stats
+      if (payment.createdAt >= startOfDay.getTime()) {
+        todayPaymentsCount++;
+        if (isSettled) {
+          todayRevenue += payment.amount;
+        }
+      }
+    }
 
     return {
       totalPayments,
-      settledCount: settledPayments.length,
-      pendingCount: pendingPayments.length,
-      failedCount: failedPayments.length,
+      settledCount,
+      pendingCount,
+      failedCount,
       totalRevenue,
-      todayPayments: todayPayments.length,
+      todayPayments: todayPaymentsCount,
       todayRevenue,
     };
   },

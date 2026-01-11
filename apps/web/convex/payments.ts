@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { query, internalMutation } from "./_generated/server";
 import { getCurrentWorkspaceContext, requireRole, ALL_ROLES } from "./lib/auth";
 
 /**
@@ -179,6 +179,7 @@ export const getPaymentStats = query({
 /**
  * Get platform-wide public statistics (MNEE-only)
  * No authentication required - for landing page
+ * Reads from cached platformStats table (instant!)
  */
 export const getPublicStats = query({
   args: {},
@@ -192,55 +193,39 @@ export const getPublicStats = query({
     last24hVolume: v.number(),
   }),
   handler: async (ctx) => {
-    // Get all payments across all workspaces
-    const payments = await ctx.db.query("payments").collect();
+    // Read from cached stats - instant, no scanning
+    const stats = await ctx.db
+      .query("platformStats")
+      .withIndex("by_key", (q) => q.eq("key", "global"))
+      .unique();
 
-    const totalPayments = payments.length;
-    const settledPayments = payments.filter(
-      (p) => p.status === "settled" || p.status === "completed"
-    );
-    const settledCount = settledPayments.length;
-    const totalVolume = settledPayments.reduce(
-      (sum, p) => sum + p.amount,
-      0
-    );
+    if (!stats) {
+      // Return zeros if stats haven't been built yet
+      return {
+        totalPayments: 0,
+        settledPayments: 0,
+        totalVolume: 0,
+        activeWorkspaces: 0,
+        successRate: 100,
+        last24hPayments: 0,
+        last24hVolume: 0,
+      };
+    }
 
-    // Count unique workspaces with payments
-    const uniqueWorkspaces = new Set(payments.map((p) => p.workspaceId));
-    const activeWorkspaces = uniqueWorkspaces.size;
-
-    // Calculate success rate
-    // Successful payments: settled, completed, and denied (policy decisions are successful)
-    // Failed payments: only actual errors (status === "failed")
-    const successfulPayments = payments.filter(
-      (p) => p.status === "settled" || p.status === "completed" || p.status === "denied"
-    );
-    const failedPayments = payments.filter((p) => p.status === "failed");
-    const paymentsWithOutcome = successfulPayments.length + failedPayments.length;
     const successRate =
-      paymentsWithOutcome > 0
-        ? (successfulPayments.length / paymentsWithOutcome) * 100
+      stats.totalPayments > 0
+        ? ((stats.settledPayments + (stats.totalPayments - stats.settledPayments - stats.failedPayments)) / 
+           (stats.totalPayments - stats.failedPayments || 1)) * 100
         : 100;
 
-    // Get payments from last 24 hours
-    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
-    const recentPayments = payments.filter((p) => p.createdAt > oneDayAgo);
-    const recentSettled = recentPayments.filter(
-      (p) => p.status === "settled" || p.status === "completed"
-    );
-    const last24hVolume = recentSettled.reduce(
-      (sum, p) => sum + p.amount,
-      0
-    );
-
     return {
-      totalPayments,
-      settledPayments: settledCount,
-      totalVolume: Math.round(totalVolume * 100000) / 100000,
-      activeWorkspaces,
+      totalPayments: stats.totalPayments,
+      settledPayments: stats.settledPayments,
+      totalVolume: Math.round(stats.totalVolume * 100000) / 100000,
+      activeWorkspaces: stats.activeWorkspaces,
       successRate: Math.round(successRate * 10) / 10,
-      last24hPayments: recentPayments.length,
-      last24hVolume: Math.round(last24hVolume * 100000) / 100000,
+      last24hPayments: stats.last24hPayments,
+      last24hVolume: Math.round(stats.last24hVolume * 100000) / 100000,
     };
   },
 });
@@ -369,6 +354,228 @@ export const getPublicActivityTimeline = query({
         denied,
       },
       maxAmount,
+    };
+  },
+});
+
+// ============================================
+// PLATFORM STATS INCREMENTAL UPDATES
+// ============================================
+
+/**
+ * Update platform stats incrementally (called by payment mutations)
+ * This provides real-time stats updates without scanning all payments
+ */
+export const updatePlatformStatsIncremental = internalMutation({
+  args: {
+    totalPaymentsDelta: v.optional(v.number()), // +1 when payment created
+    settledPaymentsDelta: v.optional(v.number()), // +1 when payment settled
+    volumeDelta: v.optional(v.number()), // Amount when payment settled
+    failedPaymentsDelta: v.optional(v.number()), // +1 when payment failed
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    // Get existing stats
+    const existing = await ctx.db
+      .query("platformStats")
+      .withIndex("by_key", (q) => q.eq("key", "global"))
+      .unique();
+
+    if (!existing) {
+      // First time - initialize with the deltas
+      await ctx.db.insert("platformStats", {
+        key: "global",
+        totalPayments: args.totalPaymentsDelta ?? 0,
+        settledPayments: args.settledPaymentsDelta ?? 0,
+        totalVolume: args.volumeDelta ?? 0,
+        activeWorkspaces: 0, // Will be updated by cron
+        failedPayments: args.failedPaymentsDelta ?? 0,
+        last24hPayments: 0, // Will be updated by cron
+        last24hVolume: 0, // Will be updated by cron
+        lastUpdated: Date.now(),
+      });
+      return null;
+    }
+
+    // Update existing stats incrementally
+    const updates: Record<string, number> = {
+      lastUpdated: Date.now(),
+    };
+
+    if (args.totalPaymentsDelta) {
+      updates.totalPayments = existing.totalPayments + args.totalPaymentsDelta;
+    }
+    if (args.settledPaymentsDelta) {
+      updates.settledPayments = existing.settledPayments + args.settledPaymentsDelta;
+    }
+    if (args.volumeDelta) {
+      updates.totalVolume = existing.totalVolume + args.volumeDelta;
+    }
+    if (args.failedPaymentsDelta) {
+      updates.failedPayments = existing.failedPayments + args.failedPaymentsDelta;
+    }
+
+    await ctx.db.patch(existing._id, updates);
+    return null;
+  },
+});
+
+/**
+ * Update 24h stats and active workspaces (called by cron periodically)
+ * These stats require scanning recent data, so we update them separately
+ */
+export const updatePlatformStatsTimeBased = internalMutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    const uniqueWorkspaces = new Set<string>();
+    let last24hPayments = 0;
+    let last24hVolume = 0;
+
+    // Stream through recent payments (last 24h) and all workspaces
+    for await (const payment of ctx.db.query("payments")) {
+      // Track unique workspaces
+      uniqueWorkspaces.add(payment.workspaceId);
+
+      // Track 24h stats
+      if (payment.createdAt > oneDayAgo) {
+        last24hPayments++;
+        if (payment.status === "settled" || payment.status === "completed") {
+          last24hVolume += payment.amount;
+        }
+      }
+    }
+
+    // Update the stats
+    const existing = await ctx.db
+      .query("platformStats")
+      .withIndex("by_key", (q) => q.eq("key", "global"))
+      .unique();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        activeWorkspaces: uniqueWorkspaces.size,
+        last24hPayments,
+        last24hVolume,
+        lastUpdated: Date.now(),
+      });
+    }
+
+    return null;
+  },
+});
+
+// ============================================
+// ADMIN MUTATIONS (Internal only)
+// ============================================
+
+/**
+ * Delete failed payments - run multiple times until done
+ * Usage: while true; do result=$(npx convex run --prod payments:deleteFailedPayments); echo "$result"; [[ "$result" == *'"done":true'* ]] && break; done
+ */
+export const deleteFailedPayments = internalMutation({
+  args: {},
+  returns: v.object({
+    deleted: v.number(),
+    done: v.boolean(),
+  }),
+  handler: async (ctx) => {
+    const batch = await ctx.db
+      .query("payments")
+      .withIndex("by_status", (q) => q.eq("status", "failed"))
+      .take(500);
+
+    for (const payment of batch) {
+      await ctx.db.delete(payment._id);
+    }
+
+    return {
+      deleted: batch.length,
+      done: batch.length === 0,
+    };
+  },
+});
+
+/**
+ * Rebuild platform stats from scratch - LEGACY / MIGRATION TOOL
+ * 
+ * This function is now only needed:
+ * - During initial deployment to populate stats
+ * - If stats get out of sync and need to be recalculated
+ * 
+ * Normal operation: Stats are updated in real-time by payment mutations
+ * and time-based stats are updated every 15 minutes by a cron job
+ * 
+ * Usage: npx convex run --prod payments:rebuildPlatformStats
+ */
+export const rebuildPlatformStats = internalMutation({
+  args: {},
+  returns: v.object({
+    totalPayments: v.number(),
+    message: v.string(),
+  }),
+  handler: async (ctx) => {
+    let totalPayments = 0;
+    let settledCount = 0;
+    let totalVolume = 0;
+    let failedCount = 0;
+    let last24hPayments = 0;
+    let last24hVolume = 0;
+    const uniqueWorkspaces = new Set<string>();
+
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+
+    // Stream through all payments
+    for await (const payment of ctx.db.query("payments")) {
+      totalPayments++;
+      uniqueWorkspaces.add(payment.workspaceId);
+
+      const isSettled = payment.status === "settled" || payment.status === "completed";
+      const isFailed = payment.status === "failed";
+
+      if (isSettled) {
+        settledCount++;
+        totalVolume += payment.amount;
+      }
+      if (isFailed) {
+        failedCount++;
+      }
+
+      if (payment.createdAt > oneDayAgo) {
+        last24hPayments++;
+        if (isSettled) {
+          last24hVolume += payment.amount;
+        }
+      }
+    }
+
+    // Delete existing stats
+    const existing = await ctx.db
+      .query("platformStats")
+      .withIndex("by_key", (q) => q.eq("key", "global"))
+      .unique();
+    
+    if (existing) {
+      await ctx.db.delete(existing._id);
+    }
+
+    // Insert new stats
+    await ctx.db.insert("platformStats", {
+      key: "global",
+      totalPayments,
+      settledPayments: settledCount,
+      totalVolume,
+      activeWorkspaces: uniqueWorkspaces.size,
+      failedPayments: failedCount,
+      last24hPayments,
+      last24hVolume,
+      lastUpdated: Date.now(),
+    });
+
+    return {
+      totalPayments,
+      message: `Rebuilt stats: ${totalPayments} payments, ${settledCount} settled, ${uniqueWorkspaces.size} workspaces`,
     };
   },
 });
